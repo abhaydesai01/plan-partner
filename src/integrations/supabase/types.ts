@@ -162,6 +162,50 @@ export type Database = {
           },
         ]
       }
+      link_requests: {
+        Row: {
+          created_at: string
+          doctor_id: string
+          id: string
+          linked_patient_id: string | null
+          message: string | null
+          patient_name: string
+          patient_user_id: string
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          doctor_id: string
+          id?: string
+          linked_patient_id?: string | null
+          message?: string | null
+          patient_name: string
+          patient_user_id: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          doctor_id?: string
+          id?: string
+          linked_patient_id?: string | null
+          message?: string | null
+          patient_name?: string
+          patient_user_id?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_requests_linked_patient_id_fkey"
+            columns: ["linked_patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           category: string
@@ -306,6 +350,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          doctor_code: string | null
           full_name: string
           id: string
           phone: string | null
@@ -316,6 +361,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          doctor_code?: string | null
           full_name?: string
           id?: string
           phone?: string | null
@@ -326,6 +372,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          doctor_code?: string | null
           full_name?: string
           id?: string
           phone?: string | null
