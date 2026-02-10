@@ -20,6 +20,7 @@ import DoctorLabResults from "./pages/DoctorLabResults";
 import DoctorDocuments from "./pages/DoctorDocuments";
 import ComplianceReports from "./pages/ComplianceReports";
 import DoctorLinkRequests from "./pages/DoctorLinkRequests";
+import Alerts from "./pages/Alerts";
 import ClinicSetup from "./pages/ClinicSetup";
 import ClinicSettings from "./pages/ClinicSettings";
 import JoinClinic from "./pages/JoinClinic";
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/dashboard/link-requests" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLinkRequests /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/clinic" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ClinicSettings /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/alerts" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Alerts /></DashboardLayout></ProtectedRoute>} />
             
             {/* Patient Portal */}
             <Route path="/patient" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
