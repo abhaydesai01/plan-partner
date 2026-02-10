@@ -37,7 +37,7 @@ const automations = [
 const AIAgentsFlowSection = () => (
   <section className="py-24 px-4 bg-card border-y border-border overflow-hidden">
     <div className="container mx-auto">
-      <div className="text-center mb-16 space-y-3">
+      <div className="text-center mb-16 space-y-3 animate-fade-up">
         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-sm font-medium text-accent border border-accent/20">
           <Bot className="w-3.5 h-3.5" />
           Fully Autonomous
@@ -52,13 +52,20 @@ const AIAgentsFlowSection = () => (
 
       {/* Visual Flow Diagram */}
       <div className="relative max-w-4xl mx-auto mb-20">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
           {flowSteps.map((step, i) => (
-            <div key={step.label} className="relative flex flex-col items-center text-center group">
-              {/* Connector arrow (hidden on first item and on mobile) */}
+            <div
+              key={step.label}
+              className="relative flex flex-col items-center text-center group opacity-0 animate-fade-up"
+              style={{ animationDelay: `${i * 200}ms`, animationFillMode: "forwards" }}
+            >
+              {/* Connector arrow */}
               {i > 0 && (
-                <div className="hidden lg:flex absolute -left-3 top-8 z-10">
-                  <ArrowRight className="w-6 h-6 text-primary/40" />
+                <div
+                  className="hidden lg:flex absolute -left-3 top-8 z-10 opacity-0 animate-fade-in"
+                  style={{ animationDelay: `${i * 200 + 100}ms`, animationFillMode: "forwards" }}
+                >
+                  <ArrowRight className="w-6 h-6 text-primary/50" />
                 </div>
               )}
               <div className={`w-16 h-16 rounded-2xl ${step.color} flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
@@ -74,20 +81,22 @@ const AIAgentsFlowSection = () => (
           ))}
         </div>
 
-        {/* Connecting line behind the icons (desktop only) */}
-        <div className="hidden lg:block absolute top-8 left-[12%] right-[12%] h-0.5 bg-gradient-to-r from-[hsl(var(--whatsapp))] via-primary to-accent -z-0 opacity-20" />
+        {/* Pulsing connector line (desktop only) */}
+        <div className="hidden lg:block absolute top-8 left-[12%] right-[12%] h-0.5 bg-gradient-to-r from-[hsl(var(--whatsapp))] via-primary to-accent animate-pulse-glow" />
+        <div className="hidden lg:block absolute top-[30px] left-[12%] right-[12%] h-1 bg-gradient-to-r from-[hsl(var(--whatsapp)/0.3)] via-primary/30 to-accent/30 rounded-full blur-sm animate-pulse-glow" style={{ animationDelay: "0.5s" }} />
       </div>
 
       {/* What gets automated */}
       <div className="max-w-4xl mx-auto">
-        <h3 className="text-center text-lg font-heading font-bold text-foreground mb-8">
+        <h3 className="text-center text-lg font-heading font-bold text-foreground mb-8 animate-fade-up" style={{ animationDelay: "0.6s", animationFillMode: "forwards" }}>
           What runs on autopilot — <span className="text-accent">zero manual work</span>
         </h3>
         <div className="grid sm:grid-cols-2 gap-4">
-          {automations.map((item) => (
+          {automations.map((item, i) => (
             <div
               key={item.title}
-              className="flex items-start gap-4 rounded-xl border border-border bg-background p-5 hover:shadow-md transition-shadow"
+              className="flex items-start gap-4 rounded-xl border border-border bg-background p-5 hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 opacity-0 animate-fade-up"
+              style={{ animationDelay: `${800 + i * 150}ms`, animationFillMode: "forwards" }}
             >
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <item.icon className="w-5 h-5 text-primary" />
