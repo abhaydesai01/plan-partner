@@ -6,6 +6,7 @@ import {
   Users,
   Layers,
   UserPlus,
+  CalendarDays,
   LogOut,
   MessageSquare,
   Menu,
@@ -18,6 +19,7 @@ const navItems = [
   { to: "/dashboard/patients", icon: Users, label: "Patients" },
   { to: "/dashboard/programs", icon: Layers, label: "Programs" },
   { to: "/dashboard/enrollments", icon: UserPlus, label: "Enrollments" },
+  { to: "/dashboard/appointments", icon: CalendarDays, label: "Appointments" },
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
