@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import heroImage from "@/assets/hero-illustration.png";
 import ContactDialog, { type ContactType } from "@/components/ContactDialog";
 import AIAgentsFlowSection from "@/components/landing/AIAgentsFlowSection";
+import TestimonialsSection from "@/components/landing/TestimonialsSection";
 
 const Navbar = ({ onContact }: { onContact: (type: ContactType) => void }) => (
   <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b">
@@ -335,6 +336,7 @@ const Index = () => {
         <FeaturesSection />
         <AIAgentsFlowSection />
         <HowItWorksSection />
+        <TestimonialsSection />
         <PricingSection onContact={openContact} />
         <CTASection onContact={openContact} />
       </main>
