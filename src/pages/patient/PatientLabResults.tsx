@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { usePatientRecord } from "@/hooks/usePatientRecord";
 import { format } from "date-fns";
 import { FileText, Plus, X } from "lucide-react";
 
@@ -14,9 +15,9 @@ const statusColors: Record<string, string> = {
 const PatientLabResults = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { patientId, loading: patientLoading } = usePatientRecord();
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [patientId, setPatientId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [testName, setTestName] = useState("");
   const [resultValue, setResultValue] = useState("");
@@ -26,16 +27,13 @@ const PatientLabResults = () => {
   const [saving, setSaving] = useState(false);
 
   const fetchResults = async () => {
-    if (!user) return;
-    const { data: patient } = await supabase.from("patients").select("id").eq("patient_user_id", user.id).maybeSingle();
-    if (!patient) { setLoading(false); return; }
-    setPatientId(patient.id);
-    const { data } = await supabase.from("lab_results").select("*").eq("patient_id", patient.id).order("tested_at", { ascending: false });
+    if (!patientId) { setLoading(false); return; }
+    const { data } = await supabase.from("lab_results").select("*").eq("patient_id", patientId).order("tested_at", { ascending: false });
     setResults(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetchResults(); }, [user]);
+  useEffect(() => { if (!patientLoading) fetchResults(); }, [patientId, patientLoading]);
 
   const handleAdd = async () => {
     if (!patientId || !user || !testName.trim() || !resultValue.trim()) return;
