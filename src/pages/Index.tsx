@@ -1,4 +1,5 @@
 import { MessageSquare, Calendar, Activity, Shield, BarChart3, Phone } from "lucide-react";
+import { Link } from "react-router-dom";
 import heroImage from "@/assets/hero-illustration.png";
 
 const Navbar = () => (
@@ -16,12 +17,12 @@ const Navbar = () => (
         <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
       </div>
       <div className="flex items-center gap-3">
-        <button className="hidden sm:inline-flex text-sm font-medium text-foreground hover:text-primary transition-colors">
+        <Link to="/auth" className="hidden sm:inline-flex text-sm font-medium text-foreground hover:text-primary transition-colors">
           Log In
-        </button>
-        <button className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
+        </Link>
+        <Link to="/auth" className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
           Get Started
-        </button>
+        </Link>
       </div>
     </div>
   </nav>

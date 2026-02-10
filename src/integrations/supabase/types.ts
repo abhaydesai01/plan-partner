@@ -14,7 +14,174 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      enrollments: {
+        Row: {
+          adherence_pct: number | null
+          completed_at: string | null
+          created_at: string
+          doctor_id: string
+          enrolled_at: string
+          id: string
+          patient_id: string
+          program_id: string
+          status: string
+        }
+        Insert: {
+          adherence_pct?: number | null
+          completed_at?: string | null
+          created_at?: string
+          doctor_id: string
+          enrolled_at?: string
+          id?: string
+          patient_id: string
+          program_id: string
+          status?: string
+        }
+        Update: {
+          adherence_pct?: number | null
+          completed_at?: string | null
+          created_at?: string
+          doctor_id?: string
+          enrolled_at?: string
+          id?: string
+          patient_id?: string
+          program_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      patients: {
+        Row: {
+          age: number | null
+          conditions: string[] | null
+          created_at: string
+          doctor_id: string
+          emergency_contact: string | null
+          full_name: string
+          gender: string | null
+          id: string
+          last_check_in: string | null
+          medications: string[] | null
+          phone: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          age?: number | null
+          conditions?: string[] | null
+          created_at?: string
+          doctor_id: string
+          emergency_contact?: string | null
+          full_name: string
+          gender?: string | null
+          id?: string
+          last_check_in?: string | null
+          medications?: string[] | null
+          phone?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          age?: number | null
+          conditions?: string[] | null
+          created_at?: string
+          doctor_id?: string
+          emergency_contact?: string | null
+          full_name?: string
+          gender?: string | null
+          id?: string
+          last_check_in?: string | null
+          medications?: string[] | null
+          phone?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string
+          id: string
+          phone: string | null
+          specialties: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          specialties?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          specialties?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      programs: {
+        Row: {
+          created_at: string
+          description: string | null
+          doctor_id: string
+          duration_days: number
+          id: string
+          is_active: boolean
+          name: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          doctor_id: string
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          doctor_id?: string
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
