@@ -19,6 +19,7 @@ import DoctorVitals from "./pages/DoctorVitals";
 import DoctorLabResults from "./pages/DoctorLabResults";
 import DoctorDocuments from "./pages/DoctorDocuments";
 import ComplianceReports from "./pages/ComplianceReports";
+import DoctorLinkRequests from "./pages/DoctorLinkRequests";
 import PatientOverview from "./pages/patient/PatientOverview";
 import PatientVitals from "./pages/patient/PatientVitals";
 import PatientLabResults from "./pages/patient/PatientLabResults";
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/dashboard/vitals" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVitals /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/lab-results" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLabResults /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/documents" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorDocuments /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/link-requests" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLinkRequests /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
             
             {/* Patient Portal */}

@@ -28,6 +28,7 @@ const navItems = [
   { to: "/dashboard/vitals", icon: Activity, label: "Vitals" },
   { to: "/dashboard/lab-results", icon: FileText, label: "Lab Results" },
   { to: "/dashboard/documents", icon: Upload, label: "Documents" },
+  { to: "/dashboard/link-requests", icon: Users, label: "Link Requests" },
   { to: "/dashboard/compliance", icon: ClipboardCheck, label: "Compliance" },
 ];
 
