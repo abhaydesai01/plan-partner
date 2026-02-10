@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Users,
   Layers,
+  UserPlus,
   LogOut,
   MessageSquare,
   Menu,
@@ -16,6 +17,7 @@ const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/dashboard/patients", icon: Users, label: "Patients" },
   { to: "/dashboard/programs", icon: Layers, label: "Programs" },
+  { to: "/dashboard/enrollments", icon: UserPlus, label: "Enrollments" },
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
