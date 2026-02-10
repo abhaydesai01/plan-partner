@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface Stats {
@@ -39,15 +40,31 @@ const CHART_COLORS = [
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({ totalPatients: 0, activePrograms: 0, activeEnrollments: 0, atRiskPatients: 0 });
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasClinic, setHasClinic] = useState<boolean | null>(null);
+  const [clinicName, setClinicName] = useState("");
 
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
+      // Check clinic membership
+      const { data: membership } = await supabase
+        .from("clinic_members")
+        .select("clinic_id, clinics(name)")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      
+      setHasClinic(!!membership);
+      if (membership) {
+        setClinicName((membership.clinics as any)?.name || "");
+      }
+
       const [patients, progs, enrolls, atRisk, appts] = await Promise.all([
         supabase.from("patients").select("id", { count: "exact", head: true }).eq("doctor_id", user.id),
         supabase.from("programs").select("id, name, type").eq("doctor_id", user.id),
@@ -147,9 +164,34 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-heading font-bold text-foreground">Welcome back, Doctor</h1>
+        <h1 className="text-2xl font-heading font-bold text-foreground">
+          {clinicName ? `${clinicName}` : "Welcome back, Doctor"}
+        </h1>
         <p className="text-muted-foreground text-sm mt-1">Here's your practice overview</p>
       </div>
+
+      {/* Clinic Setup Prompt */}
+      {hasClinic === false && (
+        <div className="glass-card rounded-xl p-5 border-2 border-dashed border-primary/30 bg-primary/5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-heading font-semibold text-foreground">Set Up Your Clinic</h3>
+              <p className="text-sm text-muted-foreground">Create a clinic to manage your team, or join an existing one with an invite code.</p>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button onClick={() => navigate("/clinic-setup")} className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
+                <Plus className="w-4 h-4" /> Create
+              </button>
+              <button onClick={() => navigate("/join-clinic")} className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-muted text-muted-foreground font-semibold text-sm hover:bg-muted/80 transition-colors">
+                Join <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
