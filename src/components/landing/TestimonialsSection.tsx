@@ -84,13 +84,13 @@ const TestimonialsSection = () => (
         <p className="text-center text-xs text-muted-foreground uppercase tracking-widest mb-8 font-medium">
           Powering clinics & hospitals
         </p>
-        <div className="flex flex-wrap justify-center items-center gap-x-10 gap-y-6">
+        <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-8">
           {logos.map((logo) => (
             <img
               key={logo.name}
               src={logo.src}
               alt={logo.name}
-              className="h-12 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity duration-300 grayscale hover:grayscale-0"
+              className="h-20 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity duration-300 grayscale hover:grayscale-0 mix-blend-multiply"
             />
           ))}
         </div>
