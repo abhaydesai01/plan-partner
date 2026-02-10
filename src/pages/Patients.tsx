@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Plus, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 interface Patient {
   id: string;
@@ -144,7 +145,9 @@ const Patients = () => {
               <tbody>
                 {filtered.map((p) => (
                   <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">{p.full_name}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">
+                      <Link to={`/dashboard/patients/${p.id}`} className="hover:text-primary hover:underline transition-colors">{p.full_name}</Link>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{p.phone}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{p.age ?? "—"}</td>
                     <td className="px-4 py-3 hidden lg:table-cell">

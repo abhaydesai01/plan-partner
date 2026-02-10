@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
+import PatientDetail from "./pages/PatientDetail";
 import Programs from "./pages/Programs";
 import Enrollments from "./pages/Enrollments";
 import Appointments from "./pages/Appointments";
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/patients" element={<ProtectedRoute><DashboardLayout><Patients /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/patients/:id" element={<ProtectedRoute><DashboardLayout><PatientDetail /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/programs" element={<ProtectedRoute><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/enrollments" element={<ProtectedRoute><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/appointments" element={<ProtectedRoute><DashboardLayout><Appointments /></DashboardLayout></ProtectedRoute>} />
