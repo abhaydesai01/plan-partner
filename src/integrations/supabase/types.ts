@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          description: string
+          doctor_id: string
+          id: string
+          patient_id: string
+          related_id: string | null
+          related_type: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+          title: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          description?: string
+          doctor_id: string
+          id?: string
+          patient_id: string
+          related_id?: string | null
+          related_type?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          title: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          description?: string
+          doctor_id?: string
+          id?: string
+          patient_id?: string
+          related_id?: string | null
+          related_type?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           created_at: string
