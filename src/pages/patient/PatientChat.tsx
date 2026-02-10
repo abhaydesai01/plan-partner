@@ -157,9 +157,9 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 lg:px-6 h-14 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30">
+      <header className="flex items-center justify-between px-4 lg:px-6 h-14 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onOpenMenu}
@@ -182,111 +182,147 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
         </a>
       </header>
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col w-full">
+      {/* Chat Area - full height */}
+      <div className="flex-1 flex flex-col min-h-0">
         {!hasMessages ? (
-          /* Empty state - centered greeting */
-          <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8">
-            <h1 className="text-3xl sm:text-4xl font-heading font-light text-muted-foreground/60 mb-8 text-center">
+          /* Empty state - vertically centered greeting + input */
+          <div className="flex-1 flex flex-col items-center justify-center px-4">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-heading font-light text-muted-foreground/40 mb-10 text-center">
               How are you feeling today{patientName ? `, ${patientName}` : ""}?
             </h1>
+
+            {/* Large centered input */}
+            <div className="w-full max-w-3xl">
+              <div className="relative border border-border/60 rounded-3xl bg-card shadow-lg focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoResize();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  placeholder="Ask anything about your symptoms, treatment or health"
+                  rows={2}
+                  className="w-full resize-none bg-transparent pl-5 pr-16 pt-5 pb-14 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                />
+                <div className="absolute bottom-3 left-4 flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-primary/60" />
+                  <span className="text-xs text-primary/60 font-medium">Connect Records</span>
+                </div>
+                <button
+                  onClick={() => send()}
+                  disabled={!input.trim() || isLoading}
+                  className="absolute right-3 bottom-3 w-10 h-10 rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Quick action chips */}
+              <div className="flex flex-wrap justify-center gap-2 mt-4">
+                {[
+                  { label: "💊 My medications", query: "What medications am I currently taking?" },
+                  { label: "📅 Next appointment", query: "When is my next appointment?" },
+                  { label: "🧪 Latest lab results", query: "Show me my latest lab results" },
+                  { label: "❤️ My vitals", query: "How are my recent vitals looking?" },
+                  { label: "📋 My conditions", query: "What conditions do I have on record?" },
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    onClick={() => send(chip.query)}
+                    className="px-3 py-1.5 text-xs rounded-full border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-muted-foreground/50">
+                <Shield className="w-3 h-3" />
+                <span>HIPAA Compliant · Encrypted & Private</span>
+              </div>
+            </div>
           </div>
         ) : (
           /* Messages */
-          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-muted text-foreground rounded-bl-md"
-                  }`}
-                >
-                  {msg.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none dark:prose-invert [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+          <>
+            <div className="flex-1 overflow-y-auto px-4 py-6">
+              <div className="max-w-3xl mx-auto space-y-6">
+                {messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground rounded-br-md"
+                          : "bg-muted text-foreground rounded-bl-md"
+                      }`}
+                    >
+                      {msg.role === "assistant" ? (
+                        <div className="prose prose-sm max-w-none dark:prose-invert [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
-                </div>
+                ))}
+                {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-
-        {/* Input Area */}
-        <div className={`px-4 ${hasMessages ? "pb-4" : "pb-8"}`}>
-          <div className="relative border border-border rounded-2xl bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                autoResize();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="Ask anything about your symptoms, treatment or health"
-              rows={1}
-              className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
-            />
-            <button
-              onClick={() => send()}
-              disabled={!input.trim() || isLoading}
-              className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Quick action chips */}
-          {!hasMessages && (
-            <div className="flex flex-wrap justify-center gap-2 mt-3">
-              {[
-                { label: "💊 My medications", query: "What medications am I currently taking?" },
-                { label: "📅 Next appointment", query: "When is my next appointment?" },
-                { label: "🧪 Latest lab results", query: "Show me my latest lab results" },
-                { label: "❤️ My vitals", query: "How are my recent vitals looking?" },
-                { label: "📋 My conditions", query: "What conditions do I have on record?" },
-              ].map((chip) => (
-                <button
-                  key={chip.label}
-                  onClick={() => send(chip.query)}
-                  className="px-3 py-1.5 text-xs rounded-full border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {chip.label}
-                </button>
-              ))}
             </div>
-          )}
 
-          {/* Footer */}
-          <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-muted-foreground/50">
-            <Shield className="w-3 h-3" />
-            <span>Encrypted & Private · Not medical advice</span>
-          </div>
-        </div>
+            {/* Input at bottom when chatting */}
+            <div className="flex-shrink-0 px-4 pb-4 pt-2 border-t border-border/30">
+              <div className="max-w-3xl mx-auto relative border border-border rounded-2xl bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoResize();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  placeholder="Ask anything about your symptoms, treatment or health"
+                  rows={1}
+                  className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+                />
+                <button
+                  onClick={() => send()}
+                  disabled={!input.trim() || isLoading}
+                  className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
