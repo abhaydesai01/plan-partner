@@ -187,7 +187,7 @@ const HowItWorksSection = () => (
 const pricingTiers = [
   {
     name: "Starter",
-    price: "₹10,000",
+    price: "₹999",
     period: "/month",
     description: "For small clinics getting started",
     features: ["Up to 5 doctors", "200 patients", "WhatsApp engagement", "Appointment reminders", "Patient health vault"],
@@ -195,7 +195,7 @@ const pricingTiers = [
   },
   {
     name: "Growth",
-    price: "₹25,000",
+    price: "₹4,999",
     period: "/month",
     description: "For growing multi-specialty clinics",
     features: ["Up to 20 doctors", "1,000 patients", "All Starter features", "Analytics dashboard", "Program templates", "Bulk patient import"],
