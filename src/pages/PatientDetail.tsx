@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import {
   ArrowLeft, Phone, User, Calendar, Activity, TrendingUp, AlertTriangle,
-  FileText, FlaskConical, Heart, ClipboardList, Stethoscope
+  FileText, FlaskConical, Heart, ClipboardList, Stethoscope, UtensilsCrossed
 } from "lucide-react";
 import DoctorCopilot from "@/components/DoctorCopilot";
 import { format } from "date-fns";
@@ -13,6 +13,7 @@ import PatientVitalsTab from "@/components/patient-detail/PatientVitalsTab";
 import PatientLabsTab from "@/components/patient-detail/PatientLabsTab";
 import PatientDocsTab from "@/components/patient-detail/PatientDocsTab";
 import PatientAlertsTab from "@/components/patient-detail/PatientAlertsTab";
+import PatientFoodTab from "@/components/patient-detail/PatientFoodTab";
 
 interface Patient {
   id: string;
@@ -67,12 +68,12 @@ const PatientDetail = () => {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [counts, setCounts] = useState({ vitals: 0, labs: 0, docs: 0, alerts: 0 });
+  const [counts, setCounts] = useState({ vitals: 0, labs: 0, docs: 0, alerts: 0, food: 0 });
 
   useEffect(() => {
     if (!user || !id) return;
     const fetchAll = async () => {
-      const [patientRes, enrollRes, apptRes, programRes, vitalsCount, labsCount, docsCount, alertsCount] = await Promise.all([
+      const [patientRes, enrollRes, apptRes, programRes, vitalsCount, labsCount, docsCount, alertsCount, foodCount] = await Promise.all([
         supabase.from("patients").select("*").eq("id", id).eq("doctor_id", user.id).maybeSingle(),
         supabase.from("enrollments").select("*").eq("patient_id", id).eq("doctor_id", user.id).order("enrolled_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("patient_id", id).eq("doctor_id", user.id).order("scheduled_at", { ascending: false }),
@@ -81,6 +82,7 @@ const PatientDetail = () => {
         supabase.from("lab_results").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
         supabase.from("patient_documents").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
         supabase.from("alerts").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id).eq("status", "open"),
+        supabase.from("food_logs").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
       ]);
 
       if (patientRes.data) setPatient(patientRes.data as Patient);
@@ -89,6 +91,7 @@ const PatientDetail = () => {
         labs: labsCount.count ?? 0,
         docs: docsCount.count ?? 0,
         alerts: alertsCount.count ?? 0,
+        food: foodCount.count ?? 0,
       });
 
       const programMap: Record<string, { name: string; type: string }> = {};
@@ -184,7 +187,7 @@ const PatientDetail = () => {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-7 gap-3">
         <div className="glass-card rounded-xl p-3 text-center">
           <Activity className="w-4 h-4 text-primary mx-auto mb-1" />
           <p className="text-lg font-heading font-bold text-foreground">{enrollments.length}</p>
@@ -215,6 +218,11 @@ const PatientDetail = () => {
           <p className="text-lg font-heading font-bold text-foreground">{counts.alerts}</p>
           <p className="text-[10px] text-muted-foreground">Open Alerts</p>
         </div>
+        <div className="glass-card rounded-xl p-3 text-center">
+          <UtensilsCrossed className="w-4 h-4 text-primary mx-auto mb-1" />
+          <p className="text-lg font-heading font-bold text-foreground">{counts.food}</p>
+          <p className="text-[10px] text-muted-foreground">Food Logs</p>
+        </div>
       </div>
 
       {/* Tabbed Content */}
@@ -237,6 +245,9 @@ const PatientDetail = () => {
           </TabsTrigger>
           <TabsTrigger value="alerts" className="flex-1 gap-1.5 text-xs sm:text-sm">
             <AlertTriangle className="w-3.5 h-3.5 hidden sm:block" /> Alerts
+          </TabsTrigger>
+          <TabsTrigger value="food" className="flex-1 gap-1.5 text-xs sm:text-sm">
+            <UtensilsCrossed className="w-3.5 h-3.5 hidden sm:block" /> Food
           </TabsTrigger>
         </TabsList>
 
@@ -372,6 +383,11 @@ const PatientDetail = () => {
         {/* Alerts Tab */}
         <TabsContent value="alerts">
           <PatientAlertsTab patientId={patient.id} doctorId={user!.id} />
+        </TabsContent>
+
+        {/* Food Tab */}
+        <TabsContent value="food">
+          <PatientFoodTab patientId={patient.id} doctorId={user!.id} />
         </TabsContent>
       </Tabs>
 

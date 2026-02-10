@@ -295,6 +295,65 @@ export type Database = {
           },
         ]
       }
+      food_logs: {
+        Row: {
+          created_at: string
+          doctor_id: string
+          food_items: Json
+          id: string
+          logged_at: string
+          meal_type: string
+          notes: string | null
+          patient_id: string
+          raw_message: string | null
+          source: string
+          total_calories: number | null
+          total_carbs: number | null
+          total_fat: number | null
+          total_protein: number | null
+        }
+        Insert: {
+          created_at?: string
+          doctor_id: string
+          food_items?: Json
+          id?: string
+          logged_at?: string
+          meal_type?: string
+          notes?: string | null
+          patient_id: string
+          raw_message?: string | null
+          source?: string
+          total_calories?: number | null
+          total_carbs?: number | null
+          total_fat?: number | null
+          total_protein?: number | null
+        }
+        Update: {
+          created_at?: string
+          doctor_id?: string
+          food_items?: Json
+          id?: string
+          logged_at?: string
+          meal_type?: string
+          notes?: string | null
+          patient_id?: string
+          raw_message?: string | null
+          source?: string
+          total_calories?: number | null
+          total_carbs?: number | null
+          total_fat?: number | null
+          total_protein?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_logs_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lab_results: {
         Row: {
           created_at: string
