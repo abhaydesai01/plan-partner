@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { usePatientRecord } from "@/hooks/usePatientRecord";
 import { format } from "date-fns";
 import { Activity, Plus, X } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -18,10 +19,10 @@ const VITAL_TYPES = [
 const PatientVitals = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { patientId, loading: patientLoading } = usePatientRecord();
   const [vitals, setVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState("all");
-  const [patientId, setPatientId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [addType, setAddType] = useState("blood_pressure");
   const [addValue, setAddValue] = useState("");
@@ -29,16 +30,13 @@ const PatientVitals = () => {
   const [saving, setSaving] = useState(false);
 
   const fetchVitals = async () => {
-    if (!user) return;
-    const { data: patient } = await supabase.from("patients").select("id").eq("patient_user_id", user.id).maybeSingle();
-    if (!patient) { setLoading(false); return; }
-    setPatientId(patient.id);
-    const { data } = await supabase.from("vitals").select("*").eq("patient_id", patient.id).order("recorded_at", { ascending: false });
+    if (!patientId) { setLoading(false); return; }
+    const { data } = await supabase.from("vitals").select("*").eq("patient_id", patientId).order("recorded_at", { ascending: false });
     setVitals(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetchVitals(); }, [user]);
+  useEffect(() => { if (!patientLoading) fetchVitals(); }, [patientId, patientLoading]);
 
   const handleAddVital = async () => {
     if (!patientId || !user || !addValue.trim()) return;

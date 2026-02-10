@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePatientRecord } from "@/hooks/usePatientRecord";
 import { format } from "date-fns";
 import { Upload, FileText, Download, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -16,9 +17,8 @@ const categoryColors: Record<string, string> = {
 const PatientDocuments = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { patientId, loading: patientLoading } = usePatientRecord();
   const [documents, setDocuments] = useState<any[]>([]);
-  const [patientId, setPatientId] = useState<string | null>(null);
-  const [doctorId, setDoctorId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -26,24 +26,20 @@ const PatientDocuments = () => {
   const [uploadNotes, setUploadNotes] = useState("");
 
   const fetchDocuments = async () => {
-    if (!user) return;
-    const { data: patient } = await supabase.from("patients").select("id, doctor_id").eq("patient_user_id", user.id).maybeSingle();
-    if (!patient) { setLoading(false); return; }
-    setPatientId(patient.id);
-    setDoctorId(patient.doctor_id);
-    const { data } = await supabase.from("patient_documents").select("*").eq("patient_id", patient.id).order("created_at", { ascending: false });
+    if (!patientId) { setLoading(false); return; }
+    const { data } = await supabase.from("patient_documents").select("*").eq("patient_id", patientId).order("created_at", { ascending: false });
     setDocuments(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetchDocuments(); }, [user]);
+  useEffect(() => { if (!patientLoading) fetchDocuments(); }, [patientId, patientLoading]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !patientId || !doctorId || !user) return;
+    if (!file || !patientId || !user) return;
     setUploading(true);
 
-    const filePath = `${doctorId}/${patientId}/${Date.now()}_${file.name}`;
+    const filePath = `${user.id}/${patientId}/${Date.now()}_${file.name}`;
     const { error: uploadError } = await supabase.storage.from("patient-documents").upload(filePath, file);
 
     if (uploadError) {
@@ -54,7 +50,7 @@ const PatientDocuments = () => {
 
     const { error: dbError } = await supabase.from("patient_documents").insert({
       patient_id: patientId,
-      doctor_id: doctorId,
+      doctor_id: user.id,
       uploaded_by: user.id,
       file_name: file.name,
       file_path: filePath,
