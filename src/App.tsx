@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
 import Programs from "./pages/Programs";
+import Enrollments from "./pages/Enrollments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/patients" element={<ProtectedRoute><DashboardLayout><Patients /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/programs" element={<ProtectedRoute><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/enrollments" element={<ProtectedRoute><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
