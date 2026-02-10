@@ -5,6 +5,7 @@ import heroImage from "@/assets/hero-illustration.png";
 import ContactDialog, { type ContactType } from "@/components/ContactDialog";
 import AIAgentsFlowSection from "@/components/landing/AIAgentsFlowSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
+import FAQSection from "@/components/landing/FAQSection";
 
 const Navbar = ({ onContact }: { onContact: (type: ContactType) => void }) => (
   <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b">
@@ -338,6 +339,7 @@ const Index = () => {
         <HowItWorksSection />
         <TestimonialsSection />
         <PricingSection onContact={openContact} />
+        <FAQSection />
         <CTASection onContact={openContact} />
       </main>
       <Footer />
