@@ -61,6 +61,130 @@ export type Database = {
           },
         ]
       }
+      clinic_invites: {
+        Row: {
+          accepted_at: string | null
+          clinic_id: string
+          created_at: string
+          email: string
+          id: string
+          invite_code: string
+          invited_by: string
+          role: Database["public"]["Enums"]["clinic_role"]
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          clinic_id: string
+          created_at?: string
+          email: string
+          id?: string
+          invite_code?: string
+          invited_by: string
+          role?: Database["public"]["Enums"]["clinic_role"]
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          clinic_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          invite_code?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["clinic_role"]
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_invites_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_members: {
+        Row: {
+          clinic_id: string
+          id: string
+          joined_at: string
+          role: Database["public"]["Enums"]["clinic_role"]
+          user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["clinic_role"]
+          user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["clinic_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_members_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinics: {
+        Row: {
+          address: string | null
+          bed_count: number | null
+          created_at: string
+          created_by: string
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          opd_capacity: number | null
+          phone: string | null
+          specialties: string[] | null
+          updated_at: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          address?: string | null
+          bed_count?: number | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          opd_capacity?: number | null
+          phone?: string | null
+          specialties?: string[] | null
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          address?: string | null
+          bed_count?: number | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          opd_capacity?: number | null
+          phone?: string | null
+          specialties?: string[] | null
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: []
+      }
       enrollments: {
         Row: {
           adherence_pct: number | null
@@ -298,6 +422,7 @@ export type Database = {
       patients: {
         Row: {
           age: number | null
+          clinic_id: string | null
           conditions: string[] | null
           created_at: string
           doctor_id: string
@@ -314,6 +439,7 @@ export type Database = {
         }
         Insert: {
           age?: number | null
+          clinic_id?: string | null
           conditions?: string[] | null
           created_at?: string
           doctor_id: string
@@ -330,6 +456,7 @@ export type Database = {
         }
         Update: {
           age?: number | null
+          clinic_id?: string | null
           conditions?: string[] | null
           created_at?: string
           doctor_id?: string
@@ -344,7 +471,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "patients_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -488,6 +623,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_clinic_ids: { Args: { _user_id: string }; Returns: string[] }
+      has_clinic_role: {
+        Args: {
+          _clinic_id: string
+          _role: Database["public"]["Enums"]["clinic_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -495,9 +639,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_clinic_member: {
+        Args: { _clinic_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "doctor" | "patient"
+      clinic_role: "owner" | "admin" | "doctor" | "nurse" | "staff"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -626,6 +775,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["doctor", "patient"],
+      clinic_role: ["owner", "admin", "doctor", "nurse", "staff"],
     },
   },
 } as const

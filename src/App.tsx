@@ -20,6 +20,9 @@ import DoctorLabResults from "./pages/DoctorLabResults";
 import DoctorDocuments from "./pages/DoctorDocuments";
 import ComplianceReports from "./pages/ComplianceReports";
 import DoctorLinkRequests from "./pages/DoctorLinkRequests";
+import ClinicSetup from "./pages/ClinicSetup";
+import ClinicSettings from "./pages/ClinicSettings";
+import JoinClinic from "./pages/JoinClinic";
 import PatientOverview from "./pages/patient/PatientOverview";
 import PatientVitals from "./pages/patient/PatientVitals";
 import PatientLabResults from "./pages/patient/PatientLabResults";
@@ -40,6 +43,10 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             
+            {/* Clinic Setup */}
+            <Route path="/clinic-setup" element={<ProtectedRoute allowedRole="doctor"><ClinicSetup /></ProtectedRoute>} />
+            <Route path="/join-clinic" element={<ProtectedRoute allowedRole="doctor"><JoinClinic /></ProtectedRoute>} />
+            
             {/* Doctor Portal */}
             <Route path="/dashboard" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/patients" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Patients /></DashboardLayout></ProtectedRoute>} />
@@ -51,6 +58,7 @@ const App = () => (
             <Route path="/dashboard/lab-results" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLabResults /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/documents" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorDocuments /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/link-requests" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLinkRequests /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/clinic" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ClinicSettings /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
             
             {/* Patient Portal */}
