@@ -2,3 +2,6 @@ project_id = "lmvlraszpufqzhtpnavg"
 
 [functions.check-alerts]
 verify_jwt = false
+
+[functions.patient-enroll]
+verify_jwt = false

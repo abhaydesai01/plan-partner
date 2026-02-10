@@ -21,6 +21,7 @@ import DoctorDocuments from "./pages/DoctorDocuments";
 import ComplianceReports from "./pages/ComplianceReports";
 import DoctorLinkRequests from "./pages/DoctorLinkRequests";
 import Alerts from "./pages/Alerts";
+import PublicEnroll from "./pages/PublicEnroll";
 import ClinicSetup from "./pages/ClinicSetup";
 import ClinicSettings from "./pages/ClinicSettings";
 import JoinClinic from "./pages/JoinClinic";
@@ -43,6 +44,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/enroll/:doctorCode" element={<PublicEnroll />} />
             
             {/* Clinic Setup */}
             <Route path="/clinic-setup" element={<ProtectedRoute allowedRole="doctor"><ClinicSetup /></ProtectedRoute>} />

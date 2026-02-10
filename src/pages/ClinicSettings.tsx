@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope } from "lucide-react";
+import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon } from "lucide-react";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   owner: Crown,
@@ -33,6 +33,7 @@ const ClinicSettings = () => {
   const [inviteRole, setInviteRole] = useState("doctor");
   const [sending, setSending] = useState(false);
   const [myRole, setMyRole] = useState<string | null>(null);
+  const [doctorCode, setDoctorCode] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -57,6 +58,15 @@ const ClinicSettings = () => {
     setClinic(clinicRes.data);
     setMembers(membersRes.data || []);
     setInvites(invitesRes.data || []);
+
+    // Fetch doctor code for enrollment link
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("doctor_code")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setDoctorCode(profileData?.doctor_code || null);
+
     setLoading(false);
   };
 
@@ -148,6 +158,64 @@ const ClinicSettings = () => {
           )}
         </div>
       </div>
+
+      {/* Patient Enrollment Link */}
+      {doctorCode && (
+        <div className="glass-card rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-whatsapp/10 flex items-center justify-center">
+              <QrCode className="w-5 h-5 text-whatsapp" />
+            </div>
+            <div>
+              <h3 className="font-heading font-semibold text-foreground">Patient Enrollment Link</h3>
+              <p className="text-xs text-muted-foreground">Share this link or QR code so patients can self-enroll</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-4 py-2.5 rounded-lg bg-muted text-sm text-foreground font-mono truncate">
+              {window.location.origin}/enroll/{doctorCode}
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/enroll/${doctorCode}`);
+                toast({ title: "Copied!", description: "Enrollment link copied to clipboard." });
+              }}
+              className="p-2.5 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+            >
+              <Copy className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <a
+              href={`/enroll/${doctorCode}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+            >
+              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+            </a>
+          </div>
+          <div className="bg-muted/50 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">
+              <strong>How it works:</strong> Patients visit this link, give consent, fill their health profile, optionally select a care program, and get enrolled automatically. You'll receive a notification when a new patient enrolls.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <img 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/enroll/${doctorCode}`)}`}
+              alt="Enrollment QR Code"
+              className="w-32 h-32 rounded-lg border border-border"
+            />
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Print this QR code on:</p>
+              <ul className="list-disc list-inside">
+                <li>Clinic visiting cards</li>
+                <li>Reception desk standees</li>
+                <li>Patient discharge sheets</li>
+                <li>Promotional materials</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Team Members */}
       <div className="space-y-3">

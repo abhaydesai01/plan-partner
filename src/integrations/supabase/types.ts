@@ -483,12 +483,15 @@ export type Database = {
           age: number | null
           clinic_id: string | null
           conditions: string[] | null
+          consent_given_at: string | null
+          consent_ip: string | null
           created_at: string
           doctor_id: string
           emergency_contact: string | null
           full_name: string
           gender: string | null
           id: string
+          language_preference: string | null
           last_check_in: string | null
           medications: string[] | null
           patient_user_id: string | null
@@ -500,12 +503,15 @@ export type Database = {
           age?: number | null
           clinic_id?: string | null
           conditions?: string[] | null
+          consent_given_at?: string | null
+          consent_ip?: string | null
           created_at?: string
           doctor_id: string
           emergency_contact?: string | null
           full_name: string
           gender?: string | null
           id?: string
+          language_preference?: string | null
           last_check_in?: string | null
           medications?: string[] | null
           patient_user_id?: string | null
@@ -517,12 +523,15 @@ export type Database = {
           age?: number | null
           clinic_id?: string | null
           conditions?: string[] | null
+          consent_given_at?: string | null
+          consent_ip?: string | null
           created_at?: string
           doctor_id?: string
           emergency_contact?: string | null
           full_name?: string
           gender?: string | null
           id?: string
+          language_preference?: string | null
           last_check_in?: string | null
           medications?: string[] | null
           patient_user_id?: string | null
