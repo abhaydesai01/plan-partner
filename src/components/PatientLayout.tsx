@@ -1,37 +1,28 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { NotificationCenter } from "@/components/NotificationCenter";
 import {
-  LayoutDashboard,
-  Users,
-  Layers,
-  UserPlus,
+  Heart,
+  FileText,
+  Activity,
   CalendarDays,
+  Upload,
   LogOut,
   MessageSquare,
   Menu,
   X,
-  Activity,
-  FileText,
-  Upload,
-  ClipboardCheck,
+  Home,
 } from "lucide-react";
-import { useState } from "react";
 
 const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/dashboard/patients", icon: Users, label: "Patients" },
-  { to: "/dashboard/programs", icon: Layers, label: "Programs" },
-  { to: "/dashboard/enrollments", icon: UserPlus, label: "Enrollments" },
-  { to: "/dashboard/appointments", icon: CalendarDays, label: "Appointments" },
-  { to: "/dashboard/vitals", icon: Activity, label: "Vitals" },
-  { to: "/dashboard/lab-results", icon: FileText, label: "Lab Results" },
-  { to: "/dashboard/documents", icon: Upload, label: "Documents" },
-  { to: "/dashboard/compliance", icon: ClipboardCheck, label: "Compliance" },
+  { to: "/patient", icon: Home, label: "Overview" },
+  { to: "/patient/vitals", icon: Activity, label: "Vitals" },
+  { to: "/patient/lab-results", icon: FileText, label: "Lab Results" },
+  { to: "/patient/documents", icon: Upload, label: "Documents" },
+  { to: "/patient/appointments", icon: CalendarDays, label: "Appointments" },
 ];
 
-export function DashboardLayout({ children }: { children: ReactNode }) {
+export function PatientLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -50,18 +41,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="h-16 flex items-center justify-between px-5 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <MessageSquare className="w-4 h-4 text-primary-foreground" />
+              <Heart className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-heading font-bold text-foreground">FlyCure</span>
+            <span className="text-lg font-heading font-bold text-foreground">My Health</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.to || (item.to !== "/dashboard" && location.pathname.startsWith(item.to));
+            const isActive = location.pathname === item.to || (item.to !== "/patient" && location.pathname.startsWith(item.to));
             return (
               <NavLink
                 key={item.to}
@@ -92,16 +83,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
-          <div className="flex items-center">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden mr-3 text-muted-foreground">
-              <Menu className="w-5 h-5" />
-            </button>
-            <h2 className="text-lg font-heading font-semibold text-foreground">
-              {navItems.find((i) => location.pathname === i.to || (i.to !== "/dashboard" && location.pathname.startsWith(i.to)))?.label || "Dashboard"}
-            </h2>
-          </div>
-          <NotificationCenter />
+        <header className="h-16 border-b border-border bg-card flex items-center px-4 lg:px-6 sticky top-0 z-30">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden mr-3 text-muted-foreground">
+            <Menu className="w-5 h-5" />
+          </button>
+          <h2 className="text-lg font-heading font-semibold text-foreground">
+            {navItems.find((i) => location.pathname === i.to || (i.to !== "/patient" && location.pathname.startsWith(i.to)))?.label || "My Health"}
+          </h2>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { PatientLayout } from "@/components/PatientLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -14,6 +15,15 @@ import PatientDetail from "./pages/PatientDetail";
 import Programs from "./pages/Programs";
 import Enrollments from "./pages/Enrollments";
 import Appointments from "./pages/Appointments";
+import DoctorVitals from "./pages/DoctorVitals";
+import DoctorLabResults from "./pages/DoctorLabResults";
+import DoctorDocuments from "./pages/DoctorDocuments";
+import ComplianceReports from "./pages/ComplianceReports";
+import PatientOverview from "./pages/patient/PatientOverview";
+import PatientVitals from "./pages/patient/PatientVitals";
+import PatientLabResults from "./pages/patient/PatientLabResults";
+import PatientDocuments from "./pages/patient/PatientDocuments";
+import PatientAppointments from "./pages/patient/PatientAppointments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,12 +38,26 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/patients" element={<ProtectedRoute><DashboardLayout><Patients /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/patients/:id" element={<ProtectedRoute><DashboardLayout><PatientDetail /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/programs" element={<ProtectedRoute><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/enrollments" element={<ProtectedRoute><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/appointments" element={<ProtectedRoute><DashboardLayout><Appointments /></DashboardLayout></ProtectedRoute>} />
+            
+            {/* Doctor Portal */}
+            <Route path="/dashboard" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/patients" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Patients /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/patients/:id" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><PatientDetail /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/programs" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/enrollments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/appointments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Appointments /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/vitals" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVitals /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/lab-results" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLabResults /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/documents" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorDocuments /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
+            
+            {/* Patient Portal */}
+            <Route path="/patient" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/vitals" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVitals /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/lab-results" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientLabResults /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/documents" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientDocuments /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/appointments" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientAppointments /></PatientLayout></ProtectedRoute>} />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
