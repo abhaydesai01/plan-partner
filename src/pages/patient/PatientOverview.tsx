@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send } from "lucide-react";
+import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send, Edit3, Save, X } from "lucide-react";
 import { format } from "date-fns";
 
 const PatientOverview = () => {
@@ -14,6 +14,11 @@ const PatientOverview = () => {
   const [recentVitals, setRecentVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [linkRequest, setLinkRequest] = useState<any>(null);
+
+  // Health profile editing
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ medications: "", conditions: "", emergency_contact: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Link request form state
   const [doctorCode, setDoctorCode] = useState("");
@@ -212,27 +217,127 @@ const PatientOverview = () => {
         </div>
       </div>
 
-      {/* Health Info */}
+      {/* Health Info - Editable */}
       <div className="glass-card rounded-xl p-5">
-        <h3 className="font-heading font-semibold text-foreground mb-3">Health Profile</h3>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Conditions</p>
-            <div className="flex flex-wrap gap-1.5">
-              {patientData.conditions?.length ? patientData.conditions.map((c: string) => (
-                <span key={c} className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">{c}</span>
-              )) : <span className="text-sm text-muted-foreground">None recorded</span>}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-heading font-semibold text-foreground">Health Profile</h3>
+          {!editingProfile ? (
+            <button
+              onClick={() => {
+                setProfileForm({
+                  medications: patientData.medications?.join("; ") || "",
+                  conditions: patientData.conditions?.join("; ") || "",
+                  emergency_contact: patientData.emergency_contact || "",
+                });
+                setEditingProfile(true);
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              <Edit3 className="w-3 h-3" /> Edit
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingProfile(false)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <X className="w-3 h-3" /> Cancel
+              </button>
+              <button
+                disabled={savingProfile}
+                onClick={async () => {
+                  if (!patientData?.id) return;
+                  setSavingProfile(true);
+                  const { error } = await supabase
+                    .from("patients")
+                    .update({
+                      medications: profileForm.medications ? profileForm.medications.split(";").map(m => m.trim()).filter(Boolean) : [],
+                      conditions: profileForm.conditions ? profileForm.conditions.split(";").map(c => c.trim()).filter(Boolean) : [],
+                      emergency_contact: profileForm.emergency_contact || null,
+                    })
+                    .eq("id", patientData.id);
+                  if (error) {
+                    toast({ title: "Error", description: error.message, variant: "destructive" });
+                  } else {
+                    toast({ title: "Profile updated" });
+                    setPatientData({
+                      ...patientData,
+                      medications: profileForm.medications ? profileForm.medications.split(";").map(m => m.trim()).filter(Boolean) : [],
+                      conditions: profileForm.conditions ? profileForm.conditions.split(";").map(c => c.trim()).filter(Boolean) : [],
+                      emergency_contact: profileForm.emergency_contact || null,
+                    });
+                    setEditingProfile(false);
+                  }
+                  setSavingProfile(false);
+                }}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                <Save className="w-3 h-3" /> {savingProfile ? "Saving..." : "Save"}
+              </button>
             </div>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Medications</p>
-            <div className="flex flex-wrap gap-1.5">
-              {patientData.medications?.length ? patientData.medications.map((m: string) => (
-                <span key={m} className="px-2.5 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium">{m}</span>
-              )) : <span className="text-sm text-muted-foreground">None recorded</span>}
-            </div>
-          </div>
+          )}
         </div>
+
+        {editingProfile ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Conditions (semicolon-separated)</label>
+              <input
+                value={profileForm.conditions}
+                onChange={(e) => setProfileForm({ ...profileForm, conditions: e.target.value })}
+                placeholder="e.g. Diabetes; Hypertension"
+                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Medications (semicolon-separated)</label>
+              <input
+                value={profileForm.medications}
+                onChange={(e) => setProfileForm({ ...profileForm, medications: e.target.value })}
+                placeholder="e.g. Metformin 500mg; Amlodipine 5mg"
+                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Emergency Contact</label>
+              <input
+                value={profileForm.emergency_contact}
+                onChange={(e) => setProfileForm({ ...profileForm, emergency_contact: e.target.value })}
+                placeholder="e.g. Rahul Sharma - 9876543210"
+                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Conditions</p>
+              <div className="flex flex-wrap gap-1.5">
+                {patientData.conditions?.length ? patientData.conditions.map((c: string) => (
+                  <span key={c} className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">{c}</span>
+                )) : <span className="text-sm text-muted-foreground">None recorded</span>}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Medications</p>
+              <div className="flex flex-wrap gap-1.5">
+                {patientData.medications?.length ? patientData.medications.map((m: string) => (
+                  <span key={m} className="px-2.5 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium">{m}</span>
+                )) : <span className="text-sm text-muted-foreground">None recorded</span>}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Emergency Contact</p>
+              <p className="text-sm text-foreground">{patientData.emergency_contact || <span className="text-muted-foreground">Not set</span>}</p>
+            </div>
+            {patientData.consent_given_at && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Consent</p>
+                <p className="text-xs text-whatsapp font-medium">✓ Given on {format(new Date(patientData.consent_given_at), "MMM d, yyyy")}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
