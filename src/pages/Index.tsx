@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { MessageSquare, Calendar, Activity, Shield, BarChart3, Phone } from "lucide-react";
 import { Link } from "react-router-dom";
 import heroImage from "@/assets/hero-illustration.png";
+import ContactDialog, { type ContactType } from "@/components/ContactDialog";
 
-const Navbar = () => (
+const Navbar = ({ onContact }: { onContact: (type: ContactType) => void }) => (
   <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b">
     <div className="container mx-auto flex items-center justify-between h-16 px-4">
       <div className="flex items-center gap-2">
@@ -20,15 +22,15 @@ const Navbar = () => (
         <Link to="/auth" className="hidden sm:inline-flex text-sm font-medium text-foreground hover:text-primary transition-colors">
           Log In
         </Link>
-        <Link to="/auth" className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
+        <button onClick={() => onContact("free_trial")} className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
           Get Started
-        </Link>
+        </button>
       </div>
     </div>
   </nav>
 );
 
-const HeroSection = () => (
+const HeroSection = ({ onContact }: { onContact: (type: ContactType) => void }) => (
   <section className="pt-32 pb-20 px-4 overflow-hidden">
     <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center">
       <div className="space-y-6 animate-fade-up">
@@ -44,10 +46,10 @@ const HeroSection = () => (
           Automate follow-ups, manage NCD programs, and reduce no-shows by 60% — all through the platform your patients already use every day.
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
-          <button className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25">
+          <button onClick={() => onContact("free_trial")} className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25">
             Start Free Trial
           </button>
-          <button className="px-6 py-3 rounded-lg border border-border text-foreground font-semibold hover:bg-muted transition-colors">
+          <button onClick={() => onContact("demo")} className="px-6 py-3 rounded-lg border border-border text-foreground font-semibold hover:bg-muted transition-colors">
             Book a Demo
           </button>
         </div>
@@ -209,7 +211,7 @@ const pricingTiers = [
   },
 ];
 
-const PricingSection = () => (
+const PricingSection = ({ onContact }: { onContact: (type: ContactType) => void }) => (
   <section id="pricing" className="py-24 px-4">
     <div className="container mx-auto">
       <div className="text-center mb-16 space-y-3">
@@ -253,13 +255,14 @@ const PricingSection = () => (
               ))}
             </ul>
             <button
+              onClick={() => onContact("pricing")}
               className={`w-full py-3 rounded-lg font-semibold text-sm transition-opacity hover:opacity-90 ${
                 tier.highlighted
                   ? "bg-accent text-accent-foreground"
                   : "bg-primary text-primary-foreground"
               }`}
             >
-              {tier.price === "Custom" ? "Contact Sales" : "Start Free Trial"}
+              Contact Us
             </button>
           </div>
         ))}
@@ -268,7 +271,7 @@ const PricingSection = () => (
   </section>
 );
 
-const CTASection = () => (
+const CTASection = ({ onContact }: { onContact: (type: ContactType) => void }) => (
   <section className="py-24 px-4">
     <div className="container mx-auto">
       <div className="relative rounded-3xl bg-gradient-to-br from-primary to-primary/80 p-12 md:p-20 text-center overflow-hidden">
@@ -281,10 +284,10 @@ const CTASection = () => (
             Join clinics across India using Mediimate to reduce no-shows, improve adherence, and grow revenue through WhatsApp.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <button className="px-8 py-3 rounded-lg bg-accent text-accent-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg">
+            <button onClick={() => onContact("free_trial")} className="px-8 py-3 rounded-lg bg-accent text-accent-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg">
               Get Started Free
             </button>
-            <button className="px-8 py-3 rounded-lg border border-primary-foreground/30 text-primary-foreground font-semibold hover:bg-primary-foreground/10 transition-colors">
+            <button onClick={() => onContact("demo")} className="px-8 py-3 rounded-lg border border-primary-foreground/30 text-primary-foreground font-semibold hover:bg-primary-foreground/10 transition-colors">
               Schedule Demo
             </button>
           </div>
@@ -314,18 +317,27 @@ const Footer = () => (
 );
 
 const Index = () => {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [contactType, setContactType] = useState<ContactType>("contact");
+
+  const openContact = (type: ContactType) => {
+    setContactType(type);
+    setDialogOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <Navbar onContact={openContact} />
       <main>
-        <HeroSection />
+        <HeroSection onContact={openContact} />
         <StatsSection />
         <FeaturesSection />
         <HowItWorksSection />
-        <PricingSection />
-        <CTASection />
+        <PricingSection onContact={openContact} />
+        <CTASection onContact={openContact} />
       </main>
       <Footer />
+      <ContactDialog open={dialogOpen} onOpenChange={setDialogOpen} type={contactType} />
     </div>
   );
 };
