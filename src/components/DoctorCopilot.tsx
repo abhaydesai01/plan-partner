@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Bot, Send, X, Sparkles } from "lucide-react";
+import { Bot, Send, X, Sparkles, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doctor-chat`;
+const EVIDENCE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clinical-evidence`;
+
+const EVIDENCE_QUERY_KEY = "__EVIDENCE__";
 
 const QUICK_QUERIES = [
   { label: "📋 Summarize patient", query: "Give me a full clinical summary of this patient." },
@@ -14,6 +17,7 @@ const QUICK_QUERIES = [
   { label: "📈 Trends", query: "Analyze trends in this patient's vitals and lab results over time." },
   { label: "💊 Med review", query: "Review this patient's current medications against their conditions." },
   { label: "🔍 Risk assessment", query: "What clinical risks should I be aware of for this patient?" },
+  { label: "📚 Find evidence", query: EVIDENCE_QUERY_KEY },
 ];
 
 interface DoctorCopilotProps {
@@ -42,9 +46,50 @@ const DoctorCopilot = ({ patientId, patientName }: DoctorCopilotProps) => {
     }
   };
 
+  const fetchEvidence = async () => {
+    const userMsg: Msg = { role: "user", content: "Find relevant clinical evidence for this patient's conditions." };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const resp = await fetch(EVIDENCE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ patient_id: patientId }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Failed to search evidence" }));
+        toast({ title: "Error", description: err.error || "Evidence search failed", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+
+      const data = await resp.json();
+      setMessages((prev) => [...prev, { role: "assistant", content: data.content }]);
+    } catch (e) {
+      console.error("Evidence search error:", e);
+      toast({ title: "Error", description: "Failed to search evidence", variant: "destructive" });
+    }
+
+    setIsLoading(false);
+  };
+
   const send = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
     if (!text || isLoading) return;
+
+    if (text === EVIDENCE_QUERY_KEY) {
+      fetchEvidence();
+      return;
+    }
 
     const userMsg: Msg = { role: "user", content: text };
     const updatedMessages = [...messages, userMsg];
