@@ -209,12 +209,8 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                   }}
                   placeholder="Ask anything about your symptoms, treatment or health"
                   rows={2}
-                  className="w-full resize-none bg-transparent pl-5 pr-16 pt-5 pb-14 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                  className="w-full resize-none bg-transparent pl-5 pr-16 py-5 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
                 />
-                <div className="absolute bottom-3 left-4 flex items-center gap-2">
-                  <Heart className="w-4 h-4 text-primary/60" />
-                  <span className="text-xs text-primary/60 font-medium">Connect Records</span>
-                </div>
                 <button
                   onClick={() => send()}
                   disabled={!input.trim() || isLoading}
