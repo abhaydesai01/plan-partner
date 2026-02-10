@@ -36,14 +36,14 @@ const HeroSection = ({ onContact }: { onContact: (type: ContactType) => void }) 
       <div className="space-y-6 animate-fade-up">
         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-whatsapp/10 text-sm font-medium text-whatsapp border border-whatsapp/20">
           <MessageSquare className="w-3.5 h-3.5" />
-          WhatsApp-First Healthcare
+          AI-Powered • Zero Manual Work
         </span>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-heading font-extrabold leading-tight text-foreground">
-          Patient care that meets them on{" "}
+          AI agents that run your clinic on{" "}
           <span className="text-gradient">WhatsApp</span>
         </h1>
         <p className="text-lg text-muted-foreground max-w-lg leading-relaxed">
-          Automate follow-ups, manage NCD programs, and reduce no-shows by 60% — all through the platform your patients already use every day.
+          No manual follow-ups, no missed reminders. Our AI agents handle patient engagement, care programs, and scheduling automatically — zero staff effort required.
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
           <button onClick={() => onContact("free_trial")} className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25">
@@ -55,8 +55,8 @@ const HeroSection = ({ onContact }: { onContact: (type: ContactType) => void }) 
         </div>
         <div className="flex items-center gap-6 pt-4 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5"><Shield className="w-4 h-4 text-primary" /> HIPAA Ready</span>
-          <span className="flex items-center gap-1.5"><Activity className="w-4 h-4 text-primary" /> 92% Adherence</span>
-          <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-primary" /> 60% Fewer No-shows</span>
+          <span className="flex items-center gap-1.5"><Activity className="w-4 h-4 text-primary" /> 100% Automated</span>
+          <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-primary" /> Zero Manual Work</span>
         </div>
       </div>
       <div className="relative animate-fade-in" style={{ animationDelay: "0.3s" }}>
@@ -94,33 +94,33 @@ const StatsSection = () => (
 const features = [
   {
     icon: MessageSquare,
-    title: "WhatsApp Engagement",
-    description: "Automated reminders, 2-way messaging, appointment booking — all inside WhatsApp.",
+    title: "AI WhatsApp Agent",
+    description: "An AI agent handles reminders, 2-way messaging, and appointment booking — no staff needed.",
   },
   {
     icon: Activity,
-    title: "Care Programs",
-    description: "NCD management, post-discharge care, and elder-care with structured 90-day workflows.",
+    title: "Autonomous Care Programs",
+    description: "AI agents run NCD management, post-discharge care, and elder-care workflows end-to-end, automatically.",
   },
   {
     icon: Phone,
-    title: "Voice-AI Check-ins",
-    description: "Automated IVR calls for medication compliance, symptom assessment, and escalation.",
+    title: "AI Voice Check-ins",
+    description: "AI-powered voice calls for medication compliance, symptom assessment, and auto-escalation to doctors.",
   },
   {
     icon: BarChart3,
-    title: "Doctor Dashboard",
-    description: "Real-time analytics, patient compliance reports, and program management in one view.",
+    title: "AI-Powered Insights",
+    description: "AI analyzes patient data in real-time, flags risks, and generates compliance reports — zero manual review.",
   },
   {
     icon: Shield,
     title: "Patient Health Vault",
-    description: "Centralized records — appointments, labs, medications, vitals — all securely stored.",
+    description: "Centralized records — appointments, labs, medications, vitals — auto-organized by AI agents.",
   },
   {
     icon: Calendar,
-    title: "Smart Scheduling",
-    description: "Automated appointment reminders with confirm/reschedule via WhatsApp replies.",
+    title: "AI Scheduling Agent",
+    description: "AI handles appointment reminders, confirmations, and rescheduling via WhatsApp — fully autonomous.",
   },
 ];
 
@@ -129,10 +129,10 @@ const FeaturesSection = () => (
     <div className="container mx-auto">
       <div className="text-center mb-16 space-y-3">
         <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-foreground">
-          Everything your clinic needs
+          AI agents that replace manual work
         </h2>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          From patient engagement to clinical analytics — one platform, powered by WhatsApp.
+          Every follow-up, reminder, and check-in is handled by AI — your staff focuses on what matters.
         </p>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -156,8 +156,8 @@ const FeaturesSection = () => (
 const steps = [
   { step: "01", title: "Onboard Your Clinic", desc: "Sign up, connect WhatsApp Business, and add your doctors in under 10 minutes." },
   { step: "02", title: "Enroll Patients", desc: "Bulk import via CSV or let patients self-enroll through QR codes and WhatsApp links." },
-  { step: "03", title: "Automate Care", desc: "Programs run automatically — reminders, check-ins, voice calls, and escalations." },
-  { step: "04", title: "Track & Grow", desc: "Monitor adherence, revenue, and outcomes from your analytics dashboard." },
+  { step: "03", title: "AI Takes Over", desc: "AI agents handle all follow-ups, reminders, check-ins, voice calls, and escalations — zero manual effort." },
+  { step: "04", title: "Track & Grow", desc: "AI surfaces insights, flags at-risk patients, and helps you grow revenue on autopilot." },
 ];
 
 const HowItWorksSection = () => (
