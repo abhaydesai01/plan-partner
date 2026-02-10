@@ -32,6 +32,9 @@ import PatientLabResults from "./pages/patient/PatientLabResults";
 import PatientDocuments from "./pages/patient/PatientDocuments";
 import PatientAppointments from "./pages/patient/PatientAppointments";
 import NotFound from "./pages/NotFound";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Contact from "./pages/Contact";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +49,9 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/enroll/:doctorCode" element={<PublicEnroll />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/contact" element={<Contact />} />
             
             {/* Clinic Setup */}
             <Route path="/clinic-setup" element={<ProtectedRoute allowedRole="doctor"><ClinicSetup /></ProtectedRoute>} />
