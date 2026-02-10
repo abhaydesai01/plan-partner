@@ -43,8 +43,8 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
     }
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || isLoading) return;
 
     const userMsg: Msg = { role: "user", content: text };
@@ -252,13 +252,34 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
               className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             />
             <button
-              onClick={send}
+              onClick={() => send()}
               disabled={!input.trim() || isLoading}
               className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all"
             >
               <Send className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Quick action chips */}
+          {!hasMessages && (
+            <div className="flex flex-wrap justify-center gap-2 mt-3">
+              {[
+                { label: "💊 My medications", query: "What medications am I currently taking?" },
+                { label: "📅 Next appointment", query: "When is my next appointment?" },
+                { label: "🧪 Latest lab results", query: "Show me my latest lab results" },
+                { label: "❤️ My vitals", query: "How are my recent vitals looking?" },
+                { label: "📋 My conditions", query: "What conditions do I have on record?" },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  onClick={() => send(chip.query)}
+                  className="px-3 py-1.5 text-xs rounded-full border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-muted-foreground/50">
