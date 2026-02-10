@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.patient-enroll]
 verify_jwt = false
+
+[functions.clinical-evidence]
+verify_jwt = false
+
+[functions.doctor-chat]
+verify_jwt = false
