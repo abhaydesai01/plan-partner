@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { PatientLayout } from "@/components/PatientLayout";
+import { PatientLayout, PatientLayoutWithChat } from "@/components/PatientLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -25,6 +25,7 @@ import PublicEnroll from "./pages/PublicEnroll";
 import ClinicSetup from "./pages/ClinicSetup";
 import ClinicSettings from "./pages/ClinicSettings";
 import JoinClinic from "./pages/JoinClinic";
+import PatientChat from "./pages/patient/PatientChat";
 import PatientOverview from "./pages/patient/PatientOverview";
 import PatientVitals from "./pages/patient/PatientVitals";
 import PatientLabResults from "./pages/patient/PatientLabResults";
@@ -65,8 +66,15 @@ const App = () => (
             <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/alerts" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Alerts /></DashboardLayout></ProtectedRoute>} />
             
-            {/* Patient Portal */}
-            <Route path="/patient" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
+            {/* Patient Portal - Chat is the landing page */}
+            <Route path="/patient" element={
+              <ProtectedRoute allowedRole="patient">
+                <PatientLayoutWithChat>
+                  {(onOpenMenu) => <PatientChat onOpenMenu={onOpenMenu} />}
+                </PatientLayoutWithChat>
+              </ProtectedRoute>
+            } />
+            <Route path="/patient/overview" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/vitals" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVitals /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/lab-results" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientLabResults /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/documents" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientDocuments /></PatientLayout></ProtectedRoute>} />
