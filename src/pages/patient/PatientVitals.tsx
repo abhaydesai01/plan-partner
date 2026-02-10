@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Activity } from "lucide-react";
+import { Activity, Plus, X } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 const VITAL_TYPES = [
@@ -16,21 +17,54 @@ const VITAL_TYPES = [
 
 const PatientVitals = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [vitals, setVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState("all");
+  const [patientId, setPatientId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addType, setAddType] = useState("blood_pressure");
+  const [addValue, setAddValue] = useState("");
+  const [addNotes, setAddNotes] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  const fetchVitals = async () => {
     if (!user) return;
-    const fetch = async () => {
-      const { data: patient } = await supabase.from("patients").select("id").eq("patient_user_id", user.id).maybeSingle();
-      if (!patient) { setLoading(false); return; }
-      const { data } = await supabase.from("vitals").select("*").eq("patient_id", patient.id).order("recorded_at", { ascending: false });
-      setVitals(data || []);
-      setLoading(false);
-    };
-    fetch();
-  }, [user]);
+    const { data: patient } = await supabase.from("patients").select("id").eq("patient_user_id", user.id).maybeSingle();
+    if (!patient) { setLoading(false); return; }
+    setPatientId(patient.id);
+    const { data } = await supabase.from("vitals").select("*").eq("patient_id", patient.id).order("recorded_at", { ascending: false });
+    setVitals(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchVitals(); }, [user]);
+
+  const handleAddVital = async () => {
+    if (!patientId || !user || !addValue.trim()) return;
+    setSaving(true);
+    const vitalInfo = VITAL_TYPES.find(t => t.value === addType);
+    const numericVal = parseFloat(addValue);
+    const { error } = await supabase.from("vitals").insert({
+      patient_id: patientId,
+      doctor_id: user.id,
+      vital_type: addType,
+      value_text: addValue,
+      value_numeric: isNaN(numericVal) ? null : numericVal,
+      unit: vitalInfo?.unit || null,
+      notes: addNotes || null,
+    });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Vital added" });
+      setShowAdd(false);
+      setAddValue("");
+      setAddNotes("");
+      fetchVitals();
+    }
+    setSaving(false);
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
 
@@ -46,10 +80,39 @@ const PatientVitals = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold text-foreground">Vitals</h1>
-        <p className="text-muted-foreground text-sm">Your recorded vital signs</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-heading font-bold text-foreground">Vitals</h1>
+          <p className="text-muted-foreground text-sm">Your recorded vital signs</p>
+        </div>
+        {patientId && (
+          <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
+            <Plus className="w-4 h-4" /> Add Vital
+          </button>
+        )}
       </div>
+
+      {/* Add Vital Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
+          <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-heading font-bold text-foreground">Add Vital</h2>
+              <button onClick={() => setShowAdd(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <select value={addType} onChange={e => setAddType(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                {VITAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label} ({t.unit})</option>)}
+              </select>
+              <input placeholder="Value" value={addValue} onChange={e => setAddValue(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+              <input placeholder="Notes (optional)" value={addNotes} onChange={e => setAddNotes(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+              <button onClick={handleAddVital} disabled={!addValue.trim() || saving} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity">
+                {saving ? "Saving..." : "Save Vital"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter */}
       <div className="flex flex-wrap gap-2">

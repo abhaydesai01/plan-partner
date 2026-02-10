@@ -13,6 +13,7 @@ import {
   Home,
   MessageSquare,
   FlaskConical,
+  Shield,
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { to: "/patient/lab-results", icon: FlaskConical, label: "Lab Results" },
   { to: "/patient/documents", icon: Upload, label: "Documents" },
   { to: "/patient/appointments", icon: CalendarDays, label: "Appointments" },
+  { to: "/patient/vault", icon: Shield, label: "Health Vault" },
 ];
 
 export function PatientLayout({ children }: { children: ReactNode }) {

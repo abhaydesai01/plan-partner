@@ -487,6 +487,36 @@ export type Database = {
         }
         Relationships: []
       }
+      patient_doctor_links: {
+        Row: {
+          doctor_name: string | null
+          doctor_user_id: string
+          id: string
+          patient_user_id: string
+          requested_at: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          doctor_name?: string | null
+          doctor_user_id: string
+          id?: string
+          patient_user_id: string
+          requested_at?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          doctor_name?: string | null
+          doctor_user_id?: string
+          id?: string
+          patient_user_id?: string
+          requested_at?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       patient_documents: {
         Row: {
           category: string
@@ -536,6 +566,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      patient_vault_codes: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          patient_user_id: string
+          vault_code: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          patient_user_id: string
+          vault_code?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          patient_user_id?: string
+          vault_code?: string
+        }
+        Relationships: []
       }
       patients: {
         Row: {
