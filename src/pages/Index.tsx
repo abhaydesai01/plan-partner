@@ -307,9 +307,9 @@ const Footer = () => (
         <span className="font-heading font-bold text-foreground">Mediimate</span>
       </div>
       <div className="flex gap-6 text-sm text-muted-foreground">
-        <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
-        <a href="#" className="hover:text-foreground transition-colors">Terms</a>
-        <a href="#" className="hover:text-foreground transition-colors">Contact</a>
+        <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+        <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
+        <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
       </div>
       <p className="text-xs text-muted-foreground">© 2026 Mediimate. All rights reserved.</p>
     </div>
