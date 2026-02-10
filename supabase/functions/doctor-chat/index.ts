@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
       contextParts.push("CLINICAL ALERTS: None.");
     }
 
-    const systemPrompt = `You are FlyCure Clinical Copilot, an AI assistant designed ONLY to help licensed doctors analyze a specific patient's medical data.
+    const systemPrompt = `You are Mediimate Clinical Copilot, an AI assistant designed ONLY to help licensed doctors analyze a specific patient's medical data.
 
 You are NOT a general chatbot.
 You MUST answer ONLY using the patient data provided in the context.
