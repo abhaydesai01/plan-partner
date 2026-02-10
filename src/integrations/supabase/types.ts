@@ -112,6 +112,145 @@ export type Database = {
           },
         ]
       }
+      lab_results: {
+        Row: {
+          created_at: string
+          doctor_id: string
+          id: string
+          notes: string | null
+          patient_id: string
+          reference_range: string | null
+          result_value: string
+          status: string
+          test_name: string
+          tested_at: string
+          unit: string | null
+        }
+        Insert: {
+          created_at?: string
+          doctor_id: string
+          id?: string
+          notes?: string | null
+          patient_id: string
+          reference_range?: string | null
+          result_value: string
+          status?: string
+          test_name: string
+          tested_at?: string
+          unit?: string | null
+        }
+        Update: {
+          created_at?: string
+          doctor_id?: string
+          id?: string
+          notes?: string | null
+          patient_id?: string
+          reference_range?: string | null
+          result_value?: string
+          status?: string
+          test_name?: string
+          tested_at?: string
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lab_results_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          related_id: string | null
+          related_type: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          related_id?: string | null
+          related_type?: string | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          related_id?: string | null
+          related_type?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      patient_documents: {
+        Row: {
+          category: string
+          created_at: string
+          doctor_id: string
+          file_name: string
+          file_path: string
+          file_size_bytes: number | null
+          file_type: string | null
+          id: string
+          notes: string | null
+          patient_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          doctor_id: string
+          file_name: string
+          file_path: string
+          file_size_bytes?: number | null
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          patient_id: string
+          uploaded_by: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          doctor_id?: string
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number | null
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          patient_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_documents_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patients: {
         Row: {
           age: number | null
@@ -124,6 +263,7 @@ export type Database = {
           id: string
           last_check_in: string | null
           medications: string[] | null
+          patient_user_id: string | null
           phone: string
           status: string
           updated_at: string
@@ -139,6 +279,7 @@ export type Database = {
           id?: string
           last_check_in?: string | null
           medications?: string[] | null
+          patient_user_id?: string | null
           phone?: string
           status?: string
           updated_at?: string
@@ -154,6 +295,7 @@ export type Database = {
           id?: string
           last_check_in?: string | null
           medications?: string[] | null
+          patient_user_id?: string | null
           phone?: string
           status?: string
           updated_at?: string
@@ -229,15 +371,86 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vitals: {
+        Row: {
+          created_at: string
+          doctor_id: string
+          id: string
+          notes: string | null
+          patient_id: string
+          recorded_at: string
+          unit: string | null
+          value_numeric: number | null
+          value_text: string
+          vital_type: string
+        }
+        Insert: {
+          created_at?: string
+          doctor_id: string
+          id?: string
+          notes?: string | null
+          patient_id: string
+          recorded_at?: string
+          unit?: string | null
+          value_numeric?: number | null
+          value_text: string
+          vital_type: string
+        }
+        Update: {
+          created_at?: string
+          doctor_id?: string
+          id?: string
+          notes?: string | null
+          patient_id?: string
+          recorded_at?: string
+          unit?: string | null
+          value_numeric?: number | null
+          value_text?: string
+          vital_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vitals_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "doctor" | "patient"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -364,6 +577,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["doctor", "patient"],
+    },
   },
 } as const
