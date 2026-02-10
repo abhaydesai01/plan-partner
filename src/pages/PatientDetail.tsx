@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { ArrowLeft, Phone, User, Calendar, Activity, TrendingUp, AlertTriangle } from "lucide-react";
+import DoctorCopilot from "@/components/DoctorCopilot";
 import { format } from "date-fns";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
@@ -296,6 +297,9 @@ const PatientDetail = () => {
           )}
         </div>
       </div>
+
+      {/* Clinical Copilot FAB */}
+      <DoctorCopilot patientId={patient.id} patientName={patient.full_name} />
     </div>
   );
 };
