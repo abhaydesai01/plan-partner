@@ -171,7 +171,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
               <Heart className="w-3.5 h-3.5 text-primary" />
             </div>
-            <span className="font-heading font-bold text-foreground">FlyCure AI</span>
+            <span className="font-heading font-bold text-foreground">Mediimate AI</span>
           </div>
         </div>
         <a

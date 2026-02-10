@@ -47,7 +47,7 @@ const Auth = () => {
             {isLogin ? "Welcome back" : "Create your account"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isLogin ? "Sign in to your FlyCure dashboard" : "Start using FlyCure"}
+            {isLogin ? "Sign in to your Mediimate dashboard" : "Start using Mediimate"}
           </p>
         </div>
 

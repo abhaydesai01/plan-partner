@@ -9,7 +9,7 @@ const Navbar = () => (
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
           <MessageSquare className="w-4 h-4 text-primary-foreground" />
         </div>
-        <span className="text-xl font-heading font-bold text-foreground">FlyCure</span>
+        <span className="text-xl font-heading font-bold text-foreground">Mediimate</span>
       </div>
       <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
         <a href="#features" className="hover:text-foreground transition-colors">Features</a>
@@ -61,7 +61,7 @@ const HeroSection = () => (
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/10 rounded-3xl blur-3xl -z-10" />
         <img
           src={heroImage}
-          alt="FlyCure platform showing WhatsApp patient engagement connected to doctor dashboard"
+          alt="Mediimate platform showing WhatsApp patient engagement connected to doctor dashboard"
           className="w-full rounded-2xl shadow-2xl animate-float"
         />
       </div>
@@ -278,7 +278,7 @@ const CTASection = () => (
             Ready to transform patient engagement?
           </h2>
           <p className="text-primary-foreground/80 text-lg">
-            Join clinics across India using FlyCure to reduce no-shows, improve adherence, and grow revenue through WhatsApp.
+            Join clinics across India using Mediimate to reduce no-shows, improve adherence, and grow revenue through WhatsApp.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <button className="px-8 py-3 rounded-lg bg-accent text-accent-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg">
@@ -301,14 +301,14 @@ const Footer = () => (
         <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
           <MessageSquare className="w-3.5 h-3.5 text-primary-foreground" />
         </div>
-        <span className="font-heading font-bold text-foreground">FlyCure</span>
+        <span className="font-heading font-bold text-foreground">Mediimate</span>
       </div>
       <div className="flex gap-6 text-sm text-muted-foreground">
         <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
         <a href="#" className="hover:text-foreground transition-colors">Terms</a>
         <a href="#" className="hover:text-foreground transition-colors">Contact</a>
       </div>
-      <p className="text-xs text-muted-foreground">© 2026 FlyCure. All rights reserved.</p>
+      <p className="text-xs text-muted-foreground">© 2026 Mediimate. All rights reserved.</p>
     </div>
   </footer>
 );
