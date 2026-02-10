@@ -157,7 +157,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen w-full flex-1 flex flex-col bg-background overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-4 lg:px-6 h-14 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 flex-shrink-0">
         <div className="flex items-center gap-3">
