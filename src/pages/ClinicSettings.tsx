@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon } from "lucide-react";
+import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon, Share2 } from "lucide-react";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   owner: Crown,
@@ -34,6 +34,7 @@ const ClinicSettings = () => {
   const [sending, setSending] = useState(false);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [doctorCode, setDoctorCode] = useState<string | null>(null);
+  const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -244,44 +245,91 @@ const ClinicSettings = () => {
                 {members.map(m => {
                   const RoleIcon = ROLE_ICONS[m.role] || Users;
                   const profileData = m.profiles as any;
-                  return (
-                    <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                       <td className="px-4 py-3">
-                         <p className="font-medium text-foreground">{profileData?.full_name || "—"}</p>
-                         {profileData?.phone && <p className="text-xs text-muted-foreground">{profileData.phone}</p>}
-                       </td>
-                       <td className="px-4 py-3">
-                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
-                           <RoleIcon className="w-3 h-3" /> {m.role}
-                         </span>
-                       </td>
-                       <td className="px-4 py-3 hidden md:table-cell">
-                         {profileData?.doctor_code ? (
-                           <button
-                             onClick={() => copyCode(profileData.doctor_code)}
-                             className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors group"
-                           >
-                             <code className="text-xs font-mono text-foreground">{profileData.doctor_code}</code>
-                             <Copy className="w-3 h-3 text-muted-foreground group-hover:text-foreground" />
-                           </button>
-                         ) : (
-                           <span className="text-xs text-muted-foreground">—</span>
-                         )}
-                       </td>
-                       <td className="px-4 py-3 hidden lg:table-cell">
-                         {profileData?.specialties?.length > 0 ? (
-                           <div className="flex flex-wrap gap-1">
-                             {profileData.specialties.map((s: string) => (
-                               <span key={s} className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs">{s}</span>
-                             ))}
-                           </div>
-                         ) : (
-                           <span className="text-xs text-muted-foreground">—</span>
-                         )}
-                       </td>
-                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
-                     </tr>
-                  );
+                    return (
+                      <>
+                        <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => profileData?.doctor_code && setExpandedDoctor(expandedDoctor === m.id ? null : m.id)}>
+                         <td className="px-4 py-3">
+                           <p className="font-medium text-foreground">{profileData?.full_name || "—"}</p>
+                           {profileData?.phone && <p className="text-xs text-muted-foreground">{profileData.phone}</p>}
+                         </td>
+                         <td className="px-4 py-3">
+                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
+                             <RoleIcon className="w-3 h-3" /> {m.role}
+                           </span>
+                         </td>
+                         <td className="px-4 py-3 hidden md:table-cell">
+                           {profileData?.doctor_code ? (
+                             <button
+                               onClick={(e) => { e.stopPropagation(); copyCode(profileData.doctor_code); }}
+                               className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors group"
+                             >
+                               <code className="text-xs font-mono text-foreground">{profileData.doctor_code}</code>
+                               <Copy className="w-3 h-3 text-muted-foreground group-hover:text-foreground" />
+                             </button>
+                           ) : (
+                             <span className="text-xs text-muted-foreground">—</span>
+                           )}
+                         </td>
+                         <td className="px-4 py-3 hidden lg:table-cell">
+                           {profileData?.specialties?.length > 0 ? (
+                             <div className="flex flex-wrap gap-1">
+                               {profileData.specialties.map((s: string) => (
+                                 <span key={s} className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs">{s}</span>
+                               ))}
+                             </div>
+                           ) : (
+                             <span className="text-xs text-muted-foreground">—</span>
+                           )}
+                         </td>
+                         <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
+                       </tr>
+                       {expandedDoctor === m.id && profileData?.doctor_code && (
+                         <tr key={`${m.id}-link`} className="border-b border-border/50 bg-muted/20">
+                           <td colSpan={5} className="px-4 py-4">
+                             <div className="flex flex-col sm:flex-row gap-4">
+                               <div className="flex-1 space-y-2">
+                                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                   <Share2 className="w-3.5 h-3.5" /> Patient Enrollment Link for {profileData.full_name}
+                                 </p>
+                                 <div className="flex items-center gap-2">
+                                   <div className="flex-1 px-3 py-2 rounded-lg bg-muted text-xs text-foreground font-mono truncate">
+                                     {window.location.origin}/enroll/{profileData.doctor_code}
+                                   </div>
+                                   <button
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       navigator.clipboard.writeText(`${window.location.origin}/enroll/${profileData.doctor_code}`);
+                                       toast({ title: "Copied!", description: "Enrollment link copied." });
+                                     }}
+                                     className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+                                   >
+                                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                   </button>
+                                   <a
+                                     href={`/enroll/${profileData.doctor_code}`}
+                                     target="_blank"
+                                     rel="noopener noreferrer"
+                                     onClick={(e) => e.stopPropagation()}
+                                     className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+                                   >
+                                     <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                                   </a>
+                                 </div>
+                                 <p className="text-[11px] text-muted-foreground">
+                                   Patients enrolled via this link are automatically associated with <strong>{clinic.name}</strong> and <strong>{profileData.full_name}</strong>.
+                                 </p>
+                               </div>
+                               <img
+                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/enroll/${profileData.doctor_code}`)}`}
+                                 alt="QR Code"
+                                 className="w-24 h-24 rounded-lg border border-border self-center"
+                               />
+                             </div>
+                           </td>
+                         </tr>
+                       )}
+                      </>
+                    );
                 })}
               </tbody>
             </table>
