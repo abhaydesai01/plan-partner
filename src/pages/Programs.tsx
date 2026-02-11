@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Plus, X, Layers } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,26 +42,19 @@ const Programs = () => {
 
   const fetchPrograms = async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("programs")
-      .select("*")
-      .eq("doctor_id", user.id)
-      .order("created_at", { ascending: false });
-    if (!error && data) {
-      setPrograms(data as Program[]);
-      // Fetch enrollment counts
-      const { data: enrollments } = await supabase
-        .from("enrollments")
-        .select("program_id")
-        .eq("doctor_id", user.id)
-        .eq("status", "active");
-      if (enrollments) {
-        const counts: Record<string, number> = {};
-        enrollments.forEach((e: { program_id: string }) => {
-          counts[e.program_id] = (counts[e.program_id] || 0) + 1;
-        });
-        setEnrollmentCounts(counts);
-      }
+    try {
+      const [data, enrolls] = await Promise.all([
+        api.get<Program[]>("programs"),
+        api.get<{ program_id: string }[]>("enrollments"),
+      ]);
+      setPrograms(data || []);
+      const counts: Record<string, number> = {};
+      (enrolls || []).filter((e: { program_id: string; status?: string }) => e.status === "active").forEach((e) => {
+        counts[e.program_id] = (counts[e.program_id] || 0) + 1;
+      });
+      setEnrollmentCounts(counts);
+    } catch {
+      setPrograms([]);
     }
     setLoading(false);
   };
@@ -72,20 +65,19 @@ const Programs = () => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("programs").insert({
-      doctor_id: user.id,
-      name: form.name,
-      type: form.type,
-      duration_days: parseInt(form.duration_days),
-      description: form.description,
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.post("programs", {
+        name: form.name,
+        type: form.type,
+        duration_days: parseInt(form.duration_days),
+        description: form.description,
+      });
       toast({ title: "Program created" });
       setShowForm(false);
       setForm({ name: "", type: "ncd", duration_days: "90", description: "" });
       fetchPrograms();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setSaving(false);
   };

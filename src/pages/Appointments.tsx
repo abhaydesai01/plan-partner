@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Plus, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from "date-fns";
@@ -48,22 +48,22 @@ const Appointments = () => {
     if (!user) return;
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
-
-    const [apptRes, patientRes] = await Promise.all([
-      supabase.from("appointments").select("*").eq("doctor_id", user.id)
-        .gte("scheduled_at", monthStart.toISOString())
-        .lte("scheduled_at", monthEnd.toISOString())
-        .order("scheduled_at"),
-      supabase.from("patients").select("id, full_name").eq("doctor_id", user.id).order("full_name"),
-    ]);
-
-    const patientMap: Record<string, string> = {};
-    if (patientRes.data) {
-      setPatients(patientRes.data);
-      patientRes.data.forEach((p) => { patientMap[p.id] = p.full_name; });
-    }
-    if (apptRes.data) {
-      setAppointments(apptRes.data.map((a) => ({ ...a, patient_name: patientMap[a.patient_id] || "Unknown" })));
+    try {
+      const [apptList, patientList] = await Promise.all([
+        api.get<Appointment[]>("appointments"),
+        api.get<Patient[]>("patients"),
+      ]);
+      const patientMap: Record<string, string> = {};
+      (patientList || []).forEach((p) => { patientMap[p.id] = p.full_name; });
+      setPatients(patientList || []);
+      const inRange = (apptList || []).filter((a) => {
+        const d = new Date(a.scheduled_at);
+        return d >= monthStart && d <= monthEnd;
+      }).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+      setAppointments(inRange.map((a) => ({ ...a, patient_name: patientMap[a.patient_id] || "Unknown" })));
+    } catch (_) {
+      setAppointments([]);
+      setPatients([]);
     }
     setLoading(false);
   };
@@ -75,31 +75,42 @@ const Appointments = () => {
     if (!user) return;
     setSaving(true);
     const scheduledAt = new Date(`${form.date}T${form.time}`).toISOString();
-    const { error } = await supabase.from("appointments").insert({
-      doctor_id: user.id,
-      patient_id: form.patient_id,
-      title: form.title,
-      scheduled_at: scheduledAt,
-      duration_minutes: parseInt(form.duration_minutes),
-      notes: form.notes || null,
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.post("appointments", {
+        patient_id: form.patient_id,
+        title: form.title,
+        scheduled_at: scheduledAt,
+        duration_minutes: parseInt(form.duration_minutes),
+        notes: form.notes || null,
+      });
       toast({ title: "Appointment scheduled" });
       setShowForm(false);
       setForm({ patient_id: "", title: "", date: "", time: "10:00", duration_minutes: "30", notes: "" });
       fetchData();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setSaving(false);
   };
 
+<<<<<<< Updated upstream
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+=======
+  const updateStatus = async (id: string, status: string, appointment?: Appointment) => {
+    if (status === "completed" && appointment) {
+      setCompletingAppointment(appointment);
+      return;
+    }
+    try {
+      await api.patch("appointments/" + id, { status });
+>>>>>>> Stashed changes
       fetchData();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
   };
 

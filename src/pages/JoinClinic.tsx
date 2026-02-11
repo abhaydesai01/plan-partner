@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Building2, ArrowRight } from "lucide-react";
@@ -14,55 +14,39 @@ const JoinClinic = () => {
   const [invite, setInvite] = useState<any>(null);
   const [clinicName, setClinicName] = useState("");
 
+  const apiBase = import.meta.env.VITE_API_URL || "";
+
   const handleLookup = async () => {
     if (!code.trim()) return;
     setLoading(true);
-
-    const { data, error } = await supabase
-      .from("clinic_invites")
-      .select("*, clinics(name)")
-      .eq("invite_code", code.trim().toUpperCase())
-      .eq("status", "pending")
-      .maybeSingle();
-
-    if (error || !data) {
-      toast({ title: "Invalid code", description: "No pending invite found with that code.", variant: "destructive" });
-      setLoading(false);
-      return;
+    try {
+      const res = await fetch(`${apiBase}/clinic-invite-by-code?code=${encodeURIComponent(code.trim())}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Invalid code", description: (err as { error?: string }).error || "No pending invite found.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      setInvite({ id: data.id, clinic_id: data.clinic_id, role: data.role });
+      setClinicName(data.clinic_name || "Unknown Clinic");
+    } catch {
+      toast({ title: "Invalid code", description: "No pending invite found.", variant: "destructive" });
     }
-
-    setInvite(data);
-    setClinicName((data.clinics as any)?.name || "Unknown Clinic");
     setLoading(false);
   };
 
   const handleAccept = async () => {
     if (!invite || !user) return;
     setLoading(true);
-
-    // Add as member
-    const { error: memberError } = await supabase
-      .from("clinic_members")
-      .insert({
-        clinic_id: invite.clinic_id,
-        user_id: user.id,
-        role: invite.role,
-      });
-
-    if (memberError) {
-      toast({ title: "Error", description: memberError.message, variant: "destructive" });
-      setLoading(false);
-      return;
+    try {
+      await api.post("clinic_members", { clinic_id: invite.clinic_id, user_id: user.id, role: invite.role });
+      await api.patch("clinic_invites/" + invite.id, { status: "accepted", accepted_at: new Date().toISOString() });
+      toast({ title: "Joined clinic!", description: `Welcome to ${clinicName}.` });
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
-
-    // Mark invite as accepted
-    await supabase
-      .from("clinic_invites")
-      .update({ status: "accepted", accepted_at: new Date().toISOString() })
-      .eq("id", invite.id);
-
-    toast({ title: "Joined clinic!", description: `Welcome to ${clinicName}.` });
-    navigate("/dashboard");
     setLoading(false);
   };
 

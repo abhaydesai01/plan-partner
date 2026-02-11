@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { Heart, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
@@ -37,14 +37,12 @@ const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase
-        .from("vitals")
-        .select("*")
-        .eq("patient_id", patientId)
-        .eq("doctor_id", doctorId)
-        .order("recorded_at", { ascending: false })
-        .limit(100);
-      setVitals(data || []);
+      try {
+        const data = await api.get<Vital[]>("vitals", { patient_id: patientId });
+        setVitals(Array.isArray(data) ? data : []);
+      } catch {
+        setVitals([]);
+      }
       setLoading(false);
     };
     fetch();

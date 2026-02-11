@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import {
   ArrowLeft, Phone, User, Calendar, Activity, TrendingUp, AlertTriangle,
   FileText, FlaskConical, Heart, ClipboardList, Stethoscope, UtensilsCrossed
@@ -9,6 +9,13 @@ import {
 import DoctorCopilot from "@/components/DoctorCopilot";
 import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+function formatDate(value: string | Date | null | undefined, fmt: string): string {
+  if (value == null || value === "") return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return format(d, fmt);
+}
 import PatientVitalsTab from "@/components/patient-detail/PatientVitalsTab";
 import PatientLabsTab from "@/components/patient-detail/PatientLabsTab";
 import PatientDocsTab from "@/components/patient-detail/PatientDocsTab";
@@ -63,56 +70,79 @@ const statusColors: Record<string, string> = {
 
 const PatientDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState({ vitals: 0, labs: 0, docs: 0, alerts: 0, food: 0 });
 
   useEffect(() => {
-    if (!user || !id) return;
+    setError(null);
+    if (!id) {
+      setLoading(false);
+      setError("Invalid patient ID");
+      return;
+    }
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     const fetchAll = async () => {
-      const [patientRes, enrollRes, apptRes, programRes, vitalsCount, labsCount, docsCount, alertsCount, foodCount] = await Promise.all([
-        supabase.from("patients").select("*").eq("id", id).eq("doctor_id", user.id).maybeSingle(),
-        supabase.from("enrollments").select("*").eq("patient_id", id).eq("doctor_id", user.id).order("enrolled_at", { ascending: false }),
-        supabase.from("appointments").select("*").eq("patient_id", id).eq("doctor_id", user.id).order("scheduled_at", { ascending: false }),
-        supabase.from("programs").select("id, name, type").eq("doctor_id", user.id),
-        supabase.from("vitals").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
-        supabase.from("lab_results").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
-        supabase.from("patient_documents").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
-        supabase.from("alerts").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id).eq("status", "open"),
-        supabase.from("food_logs").select("id", { count: "exact", head: true }).eq("patient_id", id).eq("doctor_id", user.id),
-      ]);
+      setLoading(true);
+      try {
+        const patientRes = await api.get<Patient>("patients/" + id);
+        setPatient(patientRes);
 
-      if (patientRes.data) setPatient(patientRes.data as Patient);
-      setCounts({
-        vitals: vitalsCount.count ?? 0,
-        labs: labsCount.count ?? 0,
-        docs: docsCount.count ?? 0,
-        alerts: alertsCount.count ?? 0,
-        food: foodCount.count ?? 0,
-      });
-
-      const programMap: Record<string, { name: string; type: string }> = {};
-      programRes.data?.forEach((p) => { programMap[p.id] = { name: p.name, type: p.type }; });
-
-      if (enrollRes.data) {
-        setEnrollments(enrollRes.data.map((e) => ({
-          ...e,
-          adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null,
-          program_name: programMap[e.program_id]?.name || "Unknown",
-          program_type: programMap[e.program_id]?.type || "",
-        })));
+        const [enrollRes, apptRes, programRes, vitalsCount, labsCount, docsCount, alertsCount, foodCount] = await Promise.all([
+          api.get<Enrollment[]>("enrollments", { patient_id: id }).catch(() => []),
+          api.get<Appointment[]>("appointments", { patient_id: id }).catch(() => []),
+          api.get<{ id: string; name: string; type: string }[]>("programs").catch(() => []),
+          api.get<{ count: number }>("vitals", { patient_id: id, count: "true" }).catch(() => ({ count: 0 })),
+          api.get<{ count: number }>("lab_results", { patient_id: id, count: "true" }).catch(() => ({ count: 0 })),
+          api.get<{ count: number }>("patient_documents", { patient_id: id, count: "true" }).catch(() => ({ count: 0 })),
+          api.get<{ count: number }>("alerts", { patient_id: id, status: "open", count: "true" }).catch(() => ({ count: 0 })),
+          api.get<{ count: number }>("food_logs", { patient_id: id, count: "true" }).catch(() => ({ count: 0 })),
+        ]);
+        setCounts({
+          vitals: (vitalsCount as { count?: number })?.count ?? 0,
+          labs: (labsCount as { count?: number })?.count ?? 0,
+          docs: (docsCount as { count?: number })?.count ?? 0,
+          alerts: (alertsCount as { count?: number })?.count ?? 0,
+          food: (foodCount as { count?: number })?.count ?? 0,
+        });
+        const programMap: Record<string, { name: string; type: string }> = {};
+        (programRes || []).forEach((p) => { programMap[p.id] = { name: p.name, type: p.type }; });
+        if (enrollRes?.length) {
+          setEnrollments(enrollRes.map((e) => ({
+            ...e,
+            adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null,
+            program_name: programMap[e.program_id]?.name || "Unknown",
+            program_type: programMap[e.program_id]?.type || "",
+          })));
+        }
+        if (apptRes?.length) setAppointments(apptRes);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not load patient.";
+        if (msg.includes("401") || msg.toLowerCase().includes("unauthorized")) setError("Please log in again.");
+        else if (msg.includes("404") || msg.toLowerCase().includes("not found")) setError("Patient not found.");
+        else setError("Could not load patient. Is the API server running? (npm run dev:server)");
       }
-      if (apptRes.data) setAppointments(apptRes.data);
       setLoading(false);
     };
     fetchAll();
-  }, [user, id]);
+  }, [user, id, authLoading]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
-  if (!patient) return <div className="text-center py-12 text-muted-foreground">Patient not found.</div>;
+  if (error || !patient) return (
+    <div className="text-center py-12 space-y-4 max-w-md mx-auto">
+      <p className="text-muted-foreground">{error || "Patient not found."}</p>
+      <p className="text-sm text-muted-foreground">Ensure the API server is running (npm run dev:server) and you’re logged in as the doctor who owns this patient.</p>
+      <Link to="/dashboard/patients" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">← Back to Patients</Link>
+    </div>
+  );
 
   const avgAdherence = enrollments.length > 0
     ? Math.round(enrollments.reduce((s, e) => s + (e.adherence_pct ?? 0), 0) / enrollments.length)
@@ -154,8 +184,8 @@ const PatientDetail = () => {
             </div>
           </div>
           <div className="text-sm text-muted-foreground">
-            <p>Added {format(new Date(patient.created_at), "MMM d, yyyy")}</p>
-            {patient.last_check_in && <p>Last check-in: {format(new Date(patient.last_check_in), "MMM d, yyyy")}</p>}
+            <p>Added {formatDate(patient.created_at, "MMM d, yyyy")}</p>
+            {patient.last_check_in && <p>Last check-in: {formatDate(patient.last_check_in, "MMM d, yyyy")}</p>}
           </div>
         </div>
 
@@ -270,7 +300,7 @@ const PatientDetail = () => {
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[e.status] || ""}`}>{e.status}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Enrolled {format(new Date(e.enrolled_at), "MMM d, yyyy")}</span>
+                        <span>Enrolled {formatDate(e.enrolled_at, "MMM d, yyyy")}</span>
                         <span className={`font-medium ${(e.adherence_pct ?? 0) >= 80 ? "text-whatsapp" : (e.adherence_pct ?? 0) >= 50 ? "text-primary" : "text-destructive"}`}>
                           {e.adherence_pct ?? 0}% adherence
                         </span>
@@ -302,7 +332,7 @@ const PatientDetail = () => {
                         <span className="font-medium text-sm text-foreground">{a.title}</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[a.status] || ""}`}>{a.status}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">{format(new Date(a.scheduled_at), "MMM d, yyyy 'at' HH:mm")} • {a.duration_minutes} min</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(a.scheduled_at, "MMM d, yyyy 'at' HH:mm")} • {a.duration_minutes} min</p>
                     </div>
                   ))}
                   {pastAppts.slice(0, 3).map((a) => (
@@ -311,7 +341,7 @@ const PatientDetail = () => {
                         <span className="font-medium text-sm text-foreground">{a.title}</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[a.status] || ""}`}>{a.status.replace("_", " ")}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">{format(new Date(a.scheduled_at), "MMM d, yyyy 'at' HH:mm")} • {a.duration_minutes} min</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(a.scheduled_at, "MMM d, yyyy 'at' HH:mm")} • {a.duration_minutes} min</p>
                     </div>
                   ))}
                 </div>
@@ -353,7 +383,7 @@ const PatientDetail = () => {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[a.status] || ""}`}>{a.status}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{format(new Date(a.scheduled_at), "MMM d, yyyy 'at' HH:mm")}</span>
+                      <span>{formatDate(a.scheduled_at, "MMM d, yyyy 'at' HH:mm")}</span>
                       <span>{a.duration_minutes} min</span>
                     </div>
                     {a.notes && <p className="text-xs text-muted-foreground">{a.notes}</p>}
@@ -369,7 +399,7 @@ const PatientDetail = () => {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[a.status] || ""}`}>{a.status.replace("_", " ")}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{format(new Date(a.scheduled_at), "MMM d, yyyy 'at' HH:mm")}</span>
+                      <span>{formatDate(a.scheduled_at, "MMM d, yyyy 'at' HH:mm")}</span>
                       <span>{a.duration_minutes} min</span>
                     </div>
                     {a.notes && <p className="text-xs text-muted-foreground">{a.notes}</p>}

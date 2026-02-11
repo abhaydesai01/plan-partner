@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { UtensilsCrossed, Flame, Beef, Wheat, Droplets, Send, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
@@ -49,14 +49,12 @@ const PatientFoodTab = ({ patientId, doctorId }: Props) => {
   const [parsing, setParsing] = useState(false);
 
   const fetchLogs = async () => {
-    const { data } = await supabase
-      .from("food_logs")
-      .select("*")
-      .eq("patient_id", patientId)
-      .eq("doctor_id", doctorId)
-      .order("logged_at", { ascending: false })
-      .limit(100);
-    if (data) setLogs(data as FoodLog[]);
+    try {
+      const data = await api.get<FoodLog[]>("food_logs", { patient_id: patientId });
+      setLogs(Array.isArray(data) ? data : []);
+    } catch {
+      setLogs([]);
+    }
     setLoading(false);
   };
 
@@ -68,28 +66,17 @@ const PatientFoodTab = ({ patientId, doctorId }: Props) => {
     if (!message.trim()) return;
     setParsing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-food-log`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ message: message.trim(), patient_id: patientId, doctor_id: doctorId }),
-        }
-      );
-      const result = await res.json();
-      if (result.success) {
-        toast.success("Food log added successfully!");
-        setMessage("");
-        fetchLogs();
-      } else {
-        toast.error(result.error || "Failed to parse food log");
-      }
-    } catch (e) {
-      toast.error("Failed to process food log");
+      await api.post("food_logs", {
+        patient_id: patientId,
+        meal_type: "other",
+        raw_message: message.trim(),
+        source: "manual",
+      });
+      toast.success("Food log added!");
+      setMessage("");
+      fetchLogs();
+    } catch {
+      toast.error("Failed to add food log");
     }
     setParsing(false);
   };

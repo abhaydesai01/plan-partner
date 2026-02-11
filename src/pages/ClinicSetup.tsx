@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Building2, ArrowRight, Check } from "lucide-react";
@@ -39,11 +39,8 @@ const ClinicSetup = () => {
   const handleSubmit = async () => {
     if (!user) return;
     setSaving(true);
-
-    // Create clinic
-    const { data: clinic, error: clinicError } = await supabase
-      .from("clinics")
-      .insert({
+    try {
+      await api.post("clinics", {
         name: form.name,
         address: form.address || null,
         phone: form.phone || null,
@@ -51,31 +48,11 @@ const ClinicSetup = () => {
         specialties: form.specialties,
         bed_count: form.bed_count ? parseInt(form.bed_count) : null,
         opd_capacity: form.opd_capacity ? parseInt(form.opd_capacity) : null,
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
-
-    if (clinicError) {
-      toast({ title: "Error", description: clinicError.message, variant: "destructive" });
-      setSaving(false);
-      return;
-    }
-
-    // Add creator as owner
-    const { error: memberError } = await supabase
-      .from("clinic_members")
-      .insert({
-        clinic_id: clinic.id,
-        user_id: user.id,
-        role: "owner",
       });
-
-    if (memberError) {
-      toast({ title: "Error adding you as member", description: memberError.message, variant: "destructive" });
-    } else {
       toast({ title: "Clinic created!", description: `${form.name} is ready.` });
       navigate("/dashboard");
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setSaving(false);
   };

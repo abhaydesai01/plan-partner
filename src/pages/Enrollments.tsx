@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Plus, X, UserPlus, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,27 +50,20 @@ const Enrollments = () => {
 
   const fetchData = async () => {
     if (!user) return;
-
-    const [enrollRes, patientRes, programRes] = await Promise.all([
-      supabase.from("enrollments").select("*").eq("doctor_id", user.id).order("enrolled_at", { ascending: false }),
-      supabase.from("patients").select("id, full_name").eq("doctor_id", user.id).order("full_name"),
-      supabase.from("programs").select("id, name, type").eq("doctor_id", user.id).eq("is_active", true).order("name"),
-    ]);
-
-    const patientMap: Record<string, string> = {};
-    const programMap: Record<string, { name: string; type: string }> = {};
-
-    if (patientRes.data) {
-      setPatients(patientRes.data);
-      patientRes.data.forEach((p) => { patientMap[p.id] = p.full_name; });
-    }
-    if (programRes.data) {
-      setPrograms(programRes.data);
-      programRes.data.forEach((p) => { programMap[p.id] = { name: p.name, type: p.type }; });
-    }
-    if (enrollRes.data) {
+    try {
+      const [enrollRes, patientRes, programRes] = await Promise.all([
+        api.get<Enrollment[]>("enrollments"),
+        api.get<Patient[]>("patients"),
+        api.get<Program[]>("programs", { is_active: "true" }),
+      ]);
+      const patientMap: Record<string, string> = {};
+      const programMap: Record<string, { name: string; type: string }> = {};
+      (patientRes || []).forEach((p) => { patientMap[p.id] = p.full_name; });
+      (programRes || []).forEach((p) => { programMap[p.id] = { name: p.name, type: p.type }; });
+      setPatients(patientRes || []);
+      setPrograms(programRes || []);
       setEnrollments(
-        enrollRes.data.map((e) => ({
+        (enrollRes || []).map((e) => ({
           ...e,
           adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null,
           patient_name: patientMap[e.patient_id] || "Unknown",
@@ -78,6 +71,10 @@ const Enrollments = () => {
           program_type: programMap[e.program_id]?.type || "",
         }))
       );
+    } catch {
+      setEnrollments([]);
+      setPatients([]);
+      setPrograms([]);
     }
     setLoading(false);
   };
@@ -88,30 +85,26 @@ const Enrollments = () => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("enrollments").insert({
-      doctor_id: user.id,
-      patient_id: form.patient_id,
-      program_id: form.program_id,
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.post("enrollments", { patient_id: form.patient_id, program_id: form.program_id });
       toast({ title: "Patient enrolled successfully" });
       setShowForm(false);
       setForm({ patient_id: "", program_id: "" });
       fetchData();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setSaving(false);
   };
 
   const updateStatus = async (id: string, status: string) => {
     const updates: Record<string, unknown> = { status };
-    if (status === "completed") updates.completed_at = new Date().toISOString();
-    const { error } = await supabase.from("enrollments").update(updates).eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    if (status === "completed") (updates as any).completed_at = new Date().toISOString();
+    try {
+      await api.patch("enrollments/" + id, updates);
       fetchData();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
   };
 
@@ -121,13 +114,13 @@ const Enrollments = () => {
       toast({ title: "Invalid value", description: "Enter a number between 0 and 100", variant: "destructive" });
       return;
     }
-    const { error } = await supabase.from("enrollments").update({ adherence_pct: val }).eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.patch("enrollments/" + id, { adherence_pct: val });
       setEditingAdherence(null);
       setAdherenceValue("");
       fetchData();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
   };
 

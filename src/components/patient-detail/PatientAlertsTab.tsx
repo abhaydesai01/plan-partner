@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 
@@ -32,14 +32,12 @@ const PatientAlertsTab = ({ patientId, doctorId }: Props) => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase
-        .from("alerts")
-        .select("*")
-        .eq("patient_id", patientId)
-        .eq("doctor_id", doctorId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      setAlerts(data || []);
+      try {
+        const data = await api.get<Alert[]>("alerts", { patient_id: patientId });
+        setAlerts(Array.isArray(data) ? data : []);
+      } catch {
+        setAlerts([]);
+      }
       setLoading(false);
     };
     fetch();

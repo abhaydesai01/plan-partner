@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -52,39 +52,30 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
-      // Check clinic membership
-      const { data: membership } = await supabase
-        .from("clinic_members")
-        .select("clinic_id, clinics(name)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      
-      setHasClinic(!!membership);
-      if (membership) {
-        setClinicName((membership.clinics as any)?.name || "");
+      try {
+        const [clinics, patientsCount, progs, enrolls, atRiskCount, appts] = await Promise.all([
+          api.get<{ id: string; name: string }[]>("clinics"),
+          api.get<{ count: number }>("patients", { count: "true" }),
+          api.get<Program[]>("programs"),
+          api.get<Enrollment[]>("enrollments"),
+          api.get<{ count: number }>("patients", { status: "at_risk", count: "true" }),
+          api.get<Appointment[]>("appointments"),
+        ]);
+        setHasClinic(Array.isArray(clinics) && clinics.length > 0);
+        setClinicName(clinics?.[0]?.name || "");
+        const activeEnrolls = (enrolls || []).filter((e) => e.status === "active");
+        setStats({
+          totalPatients: (patientsCount as { count?: number })?.count ?? 0,
+          activePrograms: (progs || []).length,
+          activeEnrollments: activeEnrolls.length,
+          atRiskPatients: (atRiskCount as { count?: number })?.count ?? 0,
+        });
+        setPrograms(progs || []);
+        setEnrollments(enrolls || []);
+        setAppointments(appts || []);
+      } catch (_) {
+        // ignore
       }
-
-      const [patients, progs, enrolls, atRisk, appts] = await Promise.all([
-        supabase.from("patients").select("id", { count: "exact", head: true }).eq("doctor_id", user.id),
-        supabase.from("programs").select("id, name, type").eq("doctor_id", user.id),
-        supabase.from("enrollments").select("enrolled_at, adherence_pct, status, program_id").eq("doctor_id", user.id),
-        supabase.from("patients").select("id", { count: "exact", head: true }).eq("doctor_id", user.id).eq("status", "at_risk"),
-        supabase.from("appointments").select("scheduled_at, status").eq("doctor_id", user.id),
-      ]);
-
-      const activeProgs = progs.data?.filter((p) => true) || [];
-      const activeEnrolls = enrolls.data?.filter((e) => e.status === "active") || [];
-
-      setStats({
-        totalPatients: patients.count ?? 0,
-        activePrograms: activeProgs.length,
-        activeEnrollments: activeEnrolls.length,
-        atRiskPatients: atRisk.count ?? 0,
-      });
-      setPrograms(progs.data || []);
-      setEnrollments(enrolls.data || []);
-      setAppointments(appts.data || []);
       setLoading(false);
     };
     fetchAll();
@@ -312,4 +303,47 @@ const Dashboard = () => {
   );
 };
 
+<<<<<<< Updated upstream
+=======
+function DoctorCodeCard({ userId }: { userId?: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    api.get<{ doctor_code?: string }[]>("profiles", { user_id: userId }).then((data) => {
+      setCode(data?.[0]?.doctor_code || null);
+    }).catch(() => setCode(null));
+  }, [userId]);
+
+  if (!code) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const enrollUrl = `${window.location.origin}/enroll/${code}`;
+
+  return (
+    <div className="glass-card rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+        <Users className="w-5 h-5 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-heading font-semibold text-foreground text-sm">Your Doctor Code</h3>
+        <p className="text-xs text-muted-foreground">Share this with patients so they can link their account or self-enroll</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <code className="text-xl font-heading font-bold tracking-widest text-primary bg-primary/10 px-4 py-2 rounded-lg">{code}</code>
+        <button onClick={handleCopy} className="p-2 rounded-lg border border-border hover:bg-muted transition-colors" title="Copy code">
+          {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+>>>>>>> Stashed changes
 export default Dashboard;

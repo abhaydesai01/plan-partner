@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { FileText, Download, Eye } from "lucide-react";
 
@@ -34,13 +34,12 @@ const PatientDocsTab = ({ patientId, doctorId }: Props) => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase
-        .from("patient_documents")
-        .select("*")
-        .eq("patient_id", patientId)
-        .eq("doctor_id", doctorId)
-        .order("created_at", { ascending: false });
-      setDocs(data || []);
+      try {
+        const data = await api.get<Doc[]>("patient_documents", { patient_id: patientId });
+        setDocs(Array.isArray(data) ? data : []);
+      } catch {
+        setDocs([]);
+      }
       setLoading(false);
     };
     fetch();

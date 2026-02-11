@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertTriangle,
@@ -67,23 +67,18 @@ const Alerts = () => {
   const fetchAlerts = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-
-    let query = supabase
-      .from("alerts")
-      .select("*, patients(full_name)")
-      .eq("doctor_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (filterStatus !== "all") {
-      query = query.eq("status", filterStatus);
+    try {
+      const params: Record<string, string> = {};
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (filterType !== "all") params.alert_type = filterType;
+      const data = await api.get<Alert[]>("alerts", params);
+      const patients = await api.get<{ id: string; full_name: string }[]>("patients").catch(() => []);
+      const patientMap: Record<string, string> = {};
+      (patients || []).forEach((p) => { patientMap[p.id] = p.full_name; });
+      setAlerts((data || []).map((a) => ({ ...a, patients: a.patient_id ? { full_name: patientMap[a.patient_id] || "Unknown" } : null })));
+    } catch {
+      setAlerts([]);
     }
-    if (filterType !== "all") {
-      query = query.eq("alert_type", filterType);
-    }
-
-    const { data } = await query;
-    setAlerts((data as Alert[]) || []);
     setLoading(false);
   }, [user, filterType, filterStatus]);
 
@@ -91,53 +86,28 @@ const Alerts = () => {
     fetchAlerts();
   }, [fetchAlerts]);
 
-  // Realtime subscription
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel("alerts-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "alerts", filter: `doctor_id=eq.${user.id}` },
-        () => {
-          fetchAlerts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, fetchAlerts]);
-
   const runScan = async () => {
     setScanning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("check-alerts");
-      if (error) throw error;
-      toast({ title: "Scan complete", description: `${data.alerts_created} new alerts found.` });
-      fetchAlerts();
-    } catch (err: any) {
-      toast({ title: "Scan failed", description: err.message, variant: "destructive" });
-    }
+    toast({ title: "Scan", description: "Alert scan can be run from the backend." });
+    fetchAlerts();
     setScanning(false);
   };
 
   const updateStatus = async (id: string, status: string, notes?: string) => {
-    const update: any = { status };
+    const update: Record<string, unknown> = { status };
     if (status === "resolved") {
-      update.resolved_at = new Date().toISOString();
-      update.resolved_by = user?.id;
-      if (notes) update.resolution_notes = notes;
+      (update as any).resolved_at = new Date().toISOString();
+      (update as any).resolved_by = user?.id;
+      if (notes) (update as any).resolution_notes = notes;
     }
-    const { error } = await supabase.from("alerts").update(update).eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.patch("alerts/" + id, update);
       toast({ title: `Alert ${status}` });
       setResolvingId(null);
       setResolveNotes("");
       fetchAlerts();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
   };
 

@@ -1,0 +1,31 @@
+{
+  "name": "plan-partner-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch index.ts",
+    "dev:server": "tsx watch index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "clear-db": "tsx scripts/clear-db.ts",
+    "seed": "tsx scripts/seed-db.ts",
+    "remove-duplicates": "tsx scripts/remove-duplicates.ts",
+    "test:api": "NODE_ENV=test tsx scripts/test-api.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "mongoose": "^8.8.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.16.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}

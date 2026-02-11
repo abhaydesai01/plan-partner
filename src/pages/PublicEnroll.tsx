@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import {
   CheckCircle,
   User,
@@ -44,62 +43,48 @@ const PublicEnroll = () => {
   const [submitError, setSubmitError] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
 
+  const apiBase = import.meta.env.VITE_API_URL || "";
+
   useEffect(() => {
     const fetchDoctor = async () => {
       if (!doctorCode) return;
-      const { data, error: fnError } = await supabase.functions.invoke("patient-enroll", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        body: undefined,
-      });
-
-      // Use fetch directly since invoke doesn't support GET query params well
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-enroll?code=${doctorCode}`;
-      const res = await fetch(url, {
-        headers: {
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.error || "Doctor not found");
-        setLoading(false);
-        return;
+      try {
+        const res = await fetch(`${apiBase}/patient-enroll?code=${encodeURIComponent(doctorCode)}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setError((err as { error?: string }).error || "Doctor not found");
+          setLoading(false);
+          return;
+        }
+        const result = await res.json();
+        setInfo(result);
+      } catch {
+        setError("Doctor not found");
       }
-
-      const result = await res.json();
-      setInfo(result);
       setLoading(false);
     };
     fetchDoctor();
-  }, [doctorCode]);
+  }, [doctorCode, apiBase]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError("");
-
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-enroll`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      body: JSON.stringify({
-        doctor_code: doctorCode,
-        ...form,
-      }),
-    });
-
-    const result = await res.json();
-    if (!res.ok) {
-      setSubmitError(result.error || "Failed to enroll");
-      setSubmitting(false);
-      return;
+    try {
+      const res = await fetch(`${apiBase}/patient-enroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doctor_code: doctorCode, ...form }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setSubmitError((result as { error?: string }).error || "Failed to enroll");
+        setSubmitting(false);
+        return;
+      }
+      setStep(4);
+    } catch {
+      setSubmitError("Failed to enroll");
     }
-
-    setStep(4);
     setSubmitting(false);
   };
 

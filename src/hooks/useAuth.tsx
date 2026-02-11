@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
 type AppRole = "doctor" | "patient";
 
@@ -23,12 +24,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setRole((data?.role as AppRole) ?? null);
+    try {
+      let data = await api.get<{ role: string }[]>("user_roles", { user_id: userId });
+      if (!data?.length) {
+        await api.post("ensure-user").catch(() => {});
+        data = await api.get<{ role: string }[]>("user_roles", { user_id: userId });
+      }
+      setRole((data?.[0]?.role as AppRole) ?? null);
+    } catch {
+      setRole(null);
+    }
   };
 
   useEffect(() => {

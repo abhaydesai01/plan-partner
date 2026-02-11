@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Plus, Search, X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
@@ -91,12 +91,12 @@ const Patients = () => {
 
   const fetchPatients = async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("patients")
-      .select("*")
-      .eq("doctor_id", user.id)
-      .order("created_at", { ascending: false });
-    if (!error && data) setPatients(data as Patient[]);
+    try {
+      const data = await api.get<Patient[]>("patients");
+      setPatients(data || []);
+    } catch {
+      setPatients([]);
+    }
     setLoading(false);
   };
 
@@ -106,21 +106,20 @@ const Patients = () => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("patients").insert({
-      doctor_id: user.id,
-      full_name: form.full_name,
-      phone: form.phone,
-      age: form.age ? parseInt(form.age) : null,
-      gender: form.gender,
-      conditions: form.conditions ? form.conditions.split(",").map((c) => c.trim()) : [],
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.post("patients", {
+        full_name: form.full_name,
+        phone: form.phone,
+        age: form.age ? parseInt(form.age) : null,
+        gender: form.gender,
+        conditions: form.conditions ? form.conditions.split(",").map((c) => c.trim()) : [],
+      });
       toast({ title: "Patient added" });
       setShowForm(false);
       setForm({ full_name: "", phone: "", age: "", gender: "male", conditions: "" });
       fetchPatients();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setSaving(false);
   };
@@ -193,14 +192,13 @@ const Patients = () => {
     }
 
     let imported = 0;
-    // Insert in batches of 50
     for (let i = 0; i < toInsert.length; i += 50) {
-      const batch = toInsert.slice(i, i + 50);
-      const { error } = await supabase.from("patients").insert(batch);
-      if (error) {
-        errors.push(`Batch ${Math.floor(i / 50) + 1}: ${error.message}`);
-      } else {
+      const batch = toInsert.slice(i, i + 50).map(({ doctor_id: _, ...rest }) => rest);
+      try {
+        await api.post("patients/bulk", batch);
         imported += batch.length;
+      } catch (err: unknown) {
+        errors.push(`Batch ${Math.floor(i / 50) + 1}: ${(err as Error).message}`);
       }
     }
 

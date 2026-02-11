@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { FlaskConical, AlertCircle, CheckCircle2 } from "lucide-react";
 import {
@@ -28,14 +28,12 @@ const PatientLabsTab = ({ patientId, doctorId }: Props) => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase
-        .from("lab_results")
-        .select("*")
-        .eq("patient_id", patientId)
-        .eq("doctor_id", doctorId)
-        .order("tested_at", { ascending: false })
-        .limit(100);
-      setLabs(data || []);
+      try {
+        const data = await api.get<LabResult[]>("lab_results", { patient_id: patientId });
+        setLabs(Array.isArray(data) ? data : []);
+      } catch {
+        setLabs([]);
+      }
       setLoading(false);
     };
     fetch();
