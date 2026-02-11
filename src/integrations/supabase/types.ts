@@ -438,6 +438,147 @@ export type Database = {
           },
         ]
       }
+      feedback_requests: {
+        Row: {
+          appointment_id: string
+          clinic_id: string | null
+          completion_remarks: string | null
+          created_at: string
+          doctor_id: string
+          expires_at: string
+          id: string
+          patient_id: string
+          status: string
+          submitted_at: string | null
+          token: string
+        }
+        Insert: {
+          appointment_id: string
+          clinic_id?: string | null
+          completion_remarks?: string | null
+          created_at?: string
+          doctor_id: string
+          expires_at?: string
+          id?: string
+          patient_id: string
+          status?: string
+          submitted_at?: string | null
+          token?: string
+        }
+        Update: {
+          appointment_id?: string
+          clinic_id?: string | null
+          completion_remarks?: string | null
+          created_at?: string
+          doctor_id?: string
+          expires_at?: string
+          id?: string
+          patient_id?: string
+          status?: string
+          submitted_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_requests_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_requests_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_requests_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedbacks: {
+        Row: {
+          appointment_id: string
+          clinic_id: string | null
+          clinic_rating: number | null
+          consent_to_publish: boolean
+          created_at: string
+          doctor_id: string
+          doctor_rating: number | null
+          feedback_request_id: string
+          id: string
+          is_testimonial: boolean
+          patient_id: string
+          review_text: string | null
+          video_url: string | null
+        }
+        Insert: {
+          appointment_id: string
+          clinic_id?: string | null
+          clinic_rating?: number | null
+          consent_to_publish?: boolean
+          created_at?: string
+          doctor_id: string
+          doctor_rating?: number | null
+          feedback_request_id: string
+          id?: string
+          is_testimonial?: boolean
+          patient_id: string
+          review_text?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          clinic_id?: string | null
+          clinic_rating?: number | null
+          consent_to_publish?: boolean
+          created_at?: string
+          doctor_id?: string
+          doctor_rating?: number | null
+          feedback_request_id?: string
+          id?: string
+          is_testimonial?: boolean
+          patient_id?: string
+          review_text?: string | null
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_feedback_request_id_fkey"
+            columns: ["feedback_request_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       follow_up_suggestions: {
         Row: {
           appointment_id: string
