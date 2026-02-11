@@ -12,12 +12,14 @@ const EVIDENCE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clinical
 const EVIDENCE_QUERY_KEY = "__EVIDENCE__";
 
 const QUICK_QUERIES = [
-  { label: "📋 Summarize patient", query: "Give me a full clinical summary of this patient." },
+  { label: "📋 Summary", query: "Give me a full clinical summary of this patient." },
   { label: "⚠️ Abnormalities", query: "Are there any abnormal vitals or lab results?" },
   { label: "📈 Trends", query: "Analyze trends in this patient's vitals and lab results over time." },
-  { label: "💊 Med review", query: "Review this patient's current medications against their conditions." },
-  { label: "🔍 Risk assessment", query: "What clinical risks should I be aware of for this patient?" },
-  { label: "📚 Find evidence", query: EVIDENCE_QUERY_KEY },
+  { label: "💊 Medications", query: "Review this patient's current medications, dosages, and any potential interactions or contraindications." },
+  { label: "🔍 Risks", query: "What clinical risks should I be aware of for this patient?" },
+  { label: "🍽️ Nutrition", query: "Analyze this patient's recent food logs and nutritional intake. Any dietary concerns?" },
+  { label: "📅 Care plan", query: "Suggest a care plan for this patient based on their current conditions and data." },
+  { label: "📚 Evidence", query: EVIDENCE_QUERY_KEY },
 ];
 
 interface DoctorCopilotProps {
@@ -226,34 +228,28 @@ const DoctorCopilot = ({ patientId, patientName }: DoctorCopilotProps) => {
         {!hasMessages && (
           <div className="text-center py-6">
             <Bot className="w-10 h-10 text-primary/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-muted-foreground">
               Ask anything about <span className="font-medium text-foreground">{patientName}</span>'s records
             </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {QUICK_QUERIES.map((q) => (
-                <button
-                  key={q.label}
-                  onClick={() => send(q.query)}
-                  className="px-2.5 py-1.5 text-xs rounded-full border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {q.label}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-2`}>
+            {msg.role === "assistant" && (
+              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
+                <Sparkles className="w-3 h-3 text-primary" />
+              </div>
+            )}
             <div
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${
                 msg.role === "user"
                   ? "bg-primary text-primary-foreground rounded-br-md"
-                  : "bg-muted text-foreground rounded-bl-md"
+                  : "bg-muted/60 border border-border/40 text-foreground rounded-bl-md"
               }`}
             >
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>h1]:text-base [&>h2]:text-sm [&>h3]:text-sm">
+                <div className="prose prose-sm max-w-none dark:prose-invert [&>p]:my-1.5 [&>ul]:my-1.5 [&>ol]:my-1.5 [&>h1]:text-base [&>h1]:font-bold [&>h1]:mt-2 [&>h1]:mb-1 [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:mt-2 [&>h2]:mb-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-1.5 [&>h3]:mb-0.5 [&>ul]:pl-4 [&>ol]:pl-4 [&_li]:my-0.5 [&_strong]:text-foreground [&_code]:text-xs [&_code]:bg-primary/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
               ) : (
@@ -264,8 +260,11 @@ const DoctorCopilot = ({ patientId, patientName }: DoctorCopilotProps) => {
         ))}
 
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-          <div className="flex justify-start">
-            <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
+          <div className="flex justify-start gap-2">
+            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
+              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
+            </div>
+            <div className="bg-muted/60 border border-border/40 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
                 <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -275,6 +274,20 @@ const DoctorCopilot = ({ patientId, patientName }: DoctorCopilotProps) => {
           </div>
         )}
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Persistent Quick Queries */}
+      <div className="px-3 pb-1 pt-1 flex flex-wrap gap-1.5 border-t border-border/30">
+        {QUICK_QUERIES.map((q) => (
+          <button
+            key={q.label}
+            onClick={() => send(q.query)}
+            disabled={isLoading}
+            className="px-2 py-1 text-[10px] rounded-full border border-border/60 bg-background hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+          >
+            {q.label}
+          </button>
+        ))}
       </div>
 
       {/* Input */}
