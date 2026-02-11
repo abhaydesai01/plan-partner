@@ -34,9 +34,16 @@ interface AvailabilitySlot {
   clinic_id: string | null;
 }
 
+interface ClinicInfo {
+  id: string;
+  name: string;
+}
+
 interface TimeSlot {
   time: string;
   display: string;
+  clinic_id: string | null;
+  clinic_name: string | null;
 }
 
 type BookingStep = "list" | "select-doctor" | "select-date" | "select-slot" | "confirm" | "done";
@@ -57,12 +64,16 @@ const PatientAppointments = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(addDays(new Date(), 1));
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>("in_person");
+  const [selectedClinicId, setSelectedClinicId] = useState<string | null>(null);
+  const [selectedClinicName, setSelectedClinicName] = useState<string | null>(null);
   const [bookingTitle, setBookingTitle] = useState("Consultation");
   const [bookingNotes, setBookingNotes] = useState("");
   const [booking, setBooking] = useState(false);
+  const [clinicMap, setClinicMap] = useState<Record<string, string>>({});
 
   // Checkin state
   const [checkins, setCheckins] = useState<any[]>([]);
+  const [appointmentClinics, setAppointmentClinics] = useState<Record<string, string>>({});
 
   const fetchAppointments = async () => {
     if (!user) return;
@@ -75,8 +86,19 @@ const PatientAppointments = () => {
       supabase.from("appointments").select("*").eq("patient_id", patient.id).order("scheduled_at", { ascending: false }),
       supabase.from("appointment_checkins").select("*").eq("patient_id", patient.id).order("checked_in_at", { ascending: false }).limit(5),
     ]);
-    setAppointments(apptRes.data || []);
+    const appts = apptRes.data || [];
+    setAppointments(appts);
     setCheckins(checkinRes.data || []);
+
+    // Fetch clinic names for appointments
+    const apptClinicIds = [...new Set(appts.map((a: any) => a.clinic_id).filter(Boolean))];
+    if (apptClinicIds.length > 0) {
+      const { data: cData } = await supabase.from("clinics").select("id, name").in("id", apptClinicIds);
+      const map: Record<string, string> = {};
+      (cData || []).forEach((c: any) => { map[c.id] = c.name; });
+      setAppointmentClinics(map);
+    }
+
     setLoading(false);
   };
 
@@ -170,6 +192,20 @@ const PatientAppointments = () => {
       .eq("doctor_id", doctorId)
       .eq("is_active", true);
     setAvailability((data as any[]) || []);
+
+    // Fetch clinic names for all clinic_ids in availability
+    const clinicIds = [...new Set((data || []).map((a: any) => a.clinic_id).filter(Boolean))];
+    if (clinicIds.length > 0) {
+      const { data: clinicsData } = await supabase
+        .from("clinics")
+        .select("id, name")
+        .in("id", clinicIds);
+      const map: Record<string, string> = {};
+      (clinicsData || []).forEach((c: any) => { map[c.id] = c.name; });
+      setClinicMap(map);
+    } else {
+      setClinicMap({});
+    }
   };
 
   const startBooking = async () => {
@@ -200,7 +236,7 @@ const PatientAppointments = () => {
         const min = m % 60;
         const time = `${h.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
         const display = format(new Date(2000, 0, 1, h, min), "h:mm a");
-        slots.push({ time, display });
+        slots.push({ time, display, clinic_id: avail.clinic_id, clinic_name: avail.clinic_id ? (clinicMap[avail.clinic_id] || null) : null });
       }
     }
 
@@ -229,6 +265,7 @@ const PatientAppointments = () => {
       appointment_type: selectedType,
       notes: bookingNotes || null,
       status: "scheduled",
+      clinic_id: selectedClinicId || null,
     } as any);
 
     if (error) {
@@ -294,6 +331,8 @@ const PatientAppointments = () => {
     setSelectedDoctor(null);
     setSelectedTime(null);
     setSelectedType("in_person");
+    setSelectedClinicId(null);
+    setSelectedClinicName(null);
     setBookingTitle("Consultation");
     setBookingNotes("");
   };
@@ -460,17 +499,22 @@ const PatientAppointments = () => {
                 No available slots for this date and type. Try another date.
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {dateSlots.map(slot => (
                   <button
-                    key={slot.time}
-                    onClick={() => { setSelectedTime(slot.time); setStep("confirm"); }}
+                    key={`${slot.time}-${slot.clinic_id}`}
+                    onClick={() => { setSelectedTime(slot.time); setSelectedClinicId(slot.clinic_id); setSelectedClinicName(slot.clinic_name); setStep("confirm"); }}
                     className={`p-3 rounded-xl border text-center transition-colors hover:bg-primary/5 hover:border-primary ${
-                      selectedTime === slot.time ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground"
+                      selectedTime === slot.time && selectedClinicId === slot.clinic_id ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground"
                     }`}
                   >
                     <Clock className="w-4 h-4 mx-auto mb-1 opacity-60" />
                     <p className="text-sm font-medium">{slot.display}</p>
+                    {slot.clinic_name && (
+                      <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5 mt-1">
+                        <MapPin className="w-2.5 h-2.5" /> {slot.clinic_name}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -488,7 +532,15 @@ const PatientAppointments = () => {
                   <span className="text-muted-foreground">Doctor</span>
                   <span className="font-medium text-foreground">{selectedDoctor?.doctor_name}</span>
                 </div>
-                {selectedDoctor?.clinic_name && (
+                {selectedClinicName && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Location</span>
+                    <span className="font-medium text-foreground flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-muted-foreground" /> {selectedClinicName}
+                    </span>
+                  </div>
+                )}
+                {!selectedClinicName && selectedDoctor?.clinic_name && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Clinic</span>
                     <span className="font-medium text-foreground">{selectedDoctor.clinic_name}</span>
@@ -625,6 +677,11 @@ const PatientAppointments = () => {
                     <p className="text-sm text-muted-foreground">
                       {format(new Date(a.scheduled_at), "EEEE, MMM d 'at' h:mm a")} • {a.duration_minutes} min
                     </p>
+                    {a.clinic_id && appointmentClinics[a.clinic_id] && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3" /> {appointmentClinics[a.clinic_id]}
+                      </p>
+                    )}
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[a.status]}`}>{a.status}</span>
                 </div>
@@ -667,6 +724,11 @@ const PatientAppointments = () => {
                       </span>
                     </h4>
                     <p className="text-xs text-muted-foreground">{format(new Date(a.scheduled_at), "MMM d, yyyy 'at' h:mm a")}</p>
+                    {a.clinic_id && appointmentClinics[a.clinic_id] && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3" /> {appointmentClinics[a.clinic_id]}
+                      </p>
+                    )}
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[a.status]}`}>{a.status.replace("_", " ")}</span>
                 </div>
