@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Plus, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { AppointmentCompletionModal } from "@/components/AppointmentCompletionModal";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -43,6 +44,7 @@ const Appointments = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ patient_id: "", title: "", date: "", time: "10:00", duration_minutes: "30", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [completingAppointment, setCompletingAppointment] = useState<Appointment | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -94,7 +96,12 @@ const Appointments = () => {
     setSaving(false);
   };
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = async (id: string, status: string, appointment?: Appointment) => {
+    // If completing, show the completion modal
+    if (status === "completed" && appointment) {
+      setCompletingAppointment(appointment);
+      return;
+    }
     const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -265,20 +272,20 @@ const Appointments = () => {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs opacity-70">{a.duration_minutes} min</span>
-                    <select
-                      value={a.status}
-                      onChange={(e) => updateStatus(a.id, e.target.value)}
-                      className="text-xs px-2 py-1 rounded border border-current/20 bg-transparent"
-                    >
-                      <option value="scheduled">Scheduled</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                      <option value="no_show">No Show</option>
-                    </select>
+                      <select
+                        value={a.status}
+                        onChange={(e) => updateStatus(a.id, e.target.value, a)}
+                        className="text-xs px-2 py-1 rounded border border-current/20 bg-transparent"
+                      >
+                        <option value="scheduled">Scheduled</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="no_show">No Show</option>
+                      </select>
+                    </div>
+                    {a.notes && <p className="text-xs opacity-70">{a.notes}</p>}
                   </div>
-                  {a.notes && <p className="text-xs opacity-70">{a.notes}</p>}
-                </div>
-              ))}
+                ))}
             </div>
           )}
           <button
@@ -289,6 +296,19 @@ const Appointments = () => {
           </button>
         </div>
       </div>
+
+      {/* Completion Modal */}
+      {completingAppointment && user && (
+        <AppointmentCompletionModal
+          appointment={completingAppointment}
+          userId={user.id}
+          onClose={() => setCompletingAppointment(null)}
+          onCompleted={() => {
+            setCompletingAppointment(null);
+            fetchData();
+          }}
+        />
+      )}
     </div>
   );
 };
