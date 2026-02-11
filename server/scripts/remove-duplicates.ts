@@ -33,9 +33,13 @@ const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/plan-p
 
 type KeyFields = string[];
 
+/** Any Mongoose model (we only use .collection for aggregation) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyModel = mongoose.Model<any>;
+
 async function removeDuplicatesInCollection(
   name: string,
-  model: mongoose.Model<mongoose.Document>,
+  model: AnyModel,
   keyFields: KeyFields
 ): Promise<number> {
   const collection = model.collection;
@@ -65,7 +69,7 @@ async function run() {
   await mongoose.connect(MONGODB_URI);
   console.log("Connected to MongoDB. Scanning for duplicates...\n");
 
-  const config: [string, mongoose.Model<mongoose.Document>, KeyFields][] = [
+  const config: [string, AnyModel, KeyFields][] = [
     ["patients", Patient, ["doctor_id", "full_name", "phone"]],
     ["enrollments", Enrollment, ["doctor_id", "patient_id", "program_id"]],
     ["appointments", Appointment, ["doctor_id", "patient_id", "scheduled_at"]],

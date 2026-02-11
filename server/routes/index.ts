@@ -164,11 +164,11 @@ router.patch("/clinics/:id", requireAuth, async (req, res) => {
 // ---------- Clinic members ----------
 router.get("/clinic_members", requireAuth, async (req, res) => {
   const q = req.query as { clinic_id?: string };
-  const filter: Record<string, string> = {};
+  const filter: Record<string, string | { $in: string[] }> = {};
   if (q.clinic_id) filter.clinic_id = q.clinic_id;
   else {
     const members = await ClinicMember.find({ user_id: (req as AuthRequest).user.id }).select("clinic_id").lean();
-    filter.clinic_id = { $in: members.map((m: any) => m.clinic_id) };
+    filter.clinic_id = { $in: members.map((m: { clinic_id: string }) => m.clinic_id) };
   }
   const list = await ClinicMember.find(filter).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
