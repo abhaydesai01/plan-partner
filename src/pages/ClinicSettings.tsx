@@ -51,7 +51,7 @@ const ClinicSettings = () => {
 
     const [clinicRes, membersRes, invitesRes] = await Promise.all([
       supabase.from("clinics").select("*").eq("id", membership.clinic_id).single(),
-      supabase.from("clinic_members").select("*, profiles:user_id(full_name, avatar_url)").eq("clinic_id", membership.clinic_id).order("joined_at"),
+      supabase.from("clinic_members").select("*, profiles:user_id(full_name, avatar_url, doctor_code, specialties, phone)").eq("clinic_id", membership.clinic_id).order("joined_at"),
       supabase.from("clinic_invites").select("*").eq("clinic_id", membership.clinic_id).order("created_at", { ascending: false }),
     ]);
 
@@ -232,11 +232,13 @@ const ClinicSettings = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Joined</th>
-                </tr>
+                 <tr className="border-b border-border">
+                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
+                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
+                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Doctor Code</th>
+                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Specialties</th>
+                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Joined</th>
+                 </tr>
               </thead>
               <tbody>
                 {members.map(m => {
@@ -244,14 +246,41 @@ const ClinicSettings = () => {
                   const profileData = m.profiles as any;
                   return (
                     <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-foreground">{profileData?.full_name || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
-                          <RoleIcon className="w-3 h-3" /> {m.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
-                    </tr>
+                       <td className="px-4 py-3">
+                         <p className="font-medium text-foreground">{profileData?.full_name || "—"}</p>
+                         {profileData?.phone && <p className="text-xs text-muted-foreground">{profileData.phone}</p>}
+                       </td>
+                       <td className="px-4 py-3">
+                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
+                           <RoleIcon className="w-3 h-3" /> {m.role}
+                         </span>
+                       </td>
+                       <td className="px-4 py-3 hidden md:table-cell">
+                         {profileData?.doctor_code ? (
+                           <button
+                             onClick={() => copyCode(profileData.doctor_code)}
+                             className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors group"
+                           >
+                             <code className="text-xs font-mono text-foreground">{profileData.doctor_code}</code>
+                             <Copy className="w-3 h-3 text-muted-foreground group-hover:text-foreground" />
+                           </button>
+                         ) : (
+                           <span className="text-xs text-muted-foreground">—</span>
+                         )}
+                       </td>
+                       <td className="px-4 py-3 hidden lg:table-cell">
+                         {profileData?.specialties?.length > 0 ? (
+                           <div className="flex flex-wrap gap-1">
+                             {profileData.specialties.map((s: string) => (
+                               <span key={s} className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs">{s}</span>
+                             ))}
+                           </div>
+                         ) : (
+                           <span className="text-xs text-muted-foreground">—</span>
+                         )}
+                       </td>
+                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
+                     </tr>
                   );
                 })}
               </tbody>
