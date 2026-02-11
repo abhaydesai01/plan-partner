@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send, Edit3, Save, X } from "lucide-react";
+import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send, Edit3, Save, X, UserPlus, Link } from "lucide-react";
 import { format } from "date-fns";
 
 const PatientOverview = () => {
@@ -381,6 +381,150 @@ const PatientOverview = () => {
           )}
         </div>
       </div>
+
+      {/* Link to Doctor Section */}
+      <LinkToDoctorSection userId={user?.id} />
+    </div>
+  );
+};
+
+function LinkToDoctorSection({ userId }: { userId?: string }) {
+  const { toast } = useToast();
+  const [doctorCode, setDoctorCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [existingRequests, setExistingRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from("link_requests")
+      .select("*, profiles:doctor_id(full_name)")
+      .eq("patient_user_id", userId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setExistingRequests(data || []);
+        setLoading(false);
+      });
+  }, [userId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId || !doctorCode.trim()) return;
+    setSubmitting(true);
+
+    const { data: doctorProfile } = await supabase
+      .from("profiles")
+      .select("user_id, full_name, doctor_code")
+      .eq("doctor_code", doctorCode.trim().toUpperCase())
+      .maybeSingle();
+
+    if (!doctorProfile) {
+      toast({ title: "Doctor not found", description: "No doctor found with that code.", variant: "destructive" });
+      setSubmitting(false);
+      return;
+    }
+
+    const { data: myProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const { error } = await supabase.from("link_requests").insert({
+      patient_user_id: userId,
+      patient_name: myProfile?.full_name || "Unknown",
+      doctor_id: doctorProfile.user_id,
+      message: message || null,
+    });
+
+    if (error) {
+      if (error.code === "23505") {
+        toast({ title: "Already requested", description: "You've already sent a request to this doctor." });
+      } else {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
+    } else {
+      toast({ title: "Request sent!", description: `Link request sent to Dr. ${doctorProfile.full_name}` });
+      setDoctorCode("");
+      setMessage("");
+      // Refresh requests
+      const { data } = await supabase
+        .from("link_requests")
+        .select("*, profiles:doctor_id(full_name)")
+        .eq("patient_user_id", userId)
+        .order("created_at", { ascending: false });
+      setExistingRequests(data || []);
+    }
+    setSubmitting(false);
+  };
+
+  if (loading) return null;
+
+  const pending = existingRequests.filter(r => r.status === "pending");
+  const approved = existingRequests.filter(r => r.status === "approved");
+
+  return (
+    <div className="glass-card rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <Link className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h3 className="font-heading font-semibold text-foreground">Link to a Doctor</h3>
+          <p className="text-xs text-muted-foreground">Enter your doctor's code to connect your records</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+        <input
+          required
+          placeholder="Doctor Code (e.g. A1B2C3)"
+          value={doctorCode}
+          onChange={e => setDoctorCode(e.target.value.toUpperCase())}
+          className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-center font-heading tracking-widest uppercase text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          maxLength={10}
+        />
+        <input
+          placeholder="Message (optional)"
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+        />
+        <button
+          type="submit"
+          disabled={submitting || !doctorCode.trim()}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          <Send className="w-4 h-4" />
+          {submitting ? "Sending..." : "Send"}
+        </button>
+      </form>
+
+      {/* Show existing link requests */}
+      {(pending.length > 0 || approved.length > 0) && (
+        <div className="space-y-2 pt-2 border-t border-border">
+          {approved.map(r => (
+            <div key={r.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-primary/5">
+              <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-sm text-foreground font-medium">
+                Dr. {(r.profiles as any)?.full_name || "Unknown"}
+              </span>
+              <span className="text-xs text-primary font-medium ml-auto">Connected</span>
+            </div>
+          ))}
+          {pending.map(r => (
+            <div key={r.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-accent/5">
+              <Clock className="w-4 h-4 text-accent shrink-0" />
+              <span className="text-sm text-foreground font-medium">
+                Dr. {(r.profiles as any)?.full_name || "Unknown"}
+              </span>
+              <span className="text-xs text-accent font-medium ml-auto">Pending</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

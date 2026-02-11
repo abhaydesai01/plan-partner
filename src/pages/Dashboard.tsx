@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight } from "lucide-react";
+import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight, Copy, Check } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface Stats {
@@ -170,6 +170,9 @@ const Dashboard = () => {
         <p className="text-muted-foreground text-sm mt-1">Here's your practice overview</p>
       </div>
 
+      {/* Doctor Code Card */}
+      <DoctorCodeCard userId={user?.id} />
+
       {/* Clinic Setup Prompt */}
       {hasClinic === false && (
         <div className="glass-card rounded-xl p-5 border-2 border-dashed border-primary/30 bg-primary/5">
@@ -311,5 +314,45 @@ const Dashboard = () => {
     </div>
   );
 };
+
+function DoctorCodeCard({ userId }: { userId?: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from("profiles").select("doctor_code").eq("user_id", userId).maybeSingle().then(({ data }) => {
+      setCode(data?.doctor_code || null);
+    });
+  }, [userId]);
+
+  if (!code) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const enrollUrl = `${window.location.origin}/enroll/${code}`;
+
+  return (
+    <div className="glass-card rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+        <Users className="w-5 h-5 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-heading font-semibold text-foreground text-sm">Your Doctor Code</h3>
+        <p className="text-xs text-muted-foreground">Share this with patients so they can link their account or self-enroll</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <code className="text-xl font-heading font-bold tracking-widest text-primary bg-primary/10 px-4 py-2 rounded-lg">{code}</code>
+        <button onClick={handleCopy} className="p-2 rounded-lg border border-border hover:bg-muted transition-colors" title="Copy code">
+          {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default Dashboard;
