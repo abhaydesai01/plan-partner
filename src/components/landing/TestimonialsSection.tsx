@@ -63,15 +63,27 @@ const TestimonialsSection = () => {
       const { data } = await supabase
         .from("feedbacks")
         .select(`
-          id, doctor_rating, clinic_rating, review_text, video_url,
-          patients!feedbacks_patient_id_fkey ( full_name ),
-          profiles:doctor_id ( full_name ),
-          clinics:clinic_id ( name )
+          id, doctor_rating, clinic_rating, review_text, video_url, doctor_id, clinic_id,
+          patients!feedbacks_patient_id_fkey ( full_name )
         `)
         .eq("consent_to_publish", true)
         .not("review_text", "is", null)
         .order("created_at", { ascending: false })
         .limit(6);
+
+      // Fetch doctor names and clinic names separately
+      const doctorIds = [...new Set((data || []).map((f: any) => f.doctor_id))];
+      const clinicIds = [...new Set((data || []).map((f: any) => f.clinic_id).filter(Boolean))];
+
+      const [profilesRes, clinicsRes] = await Promise.all([
+        doctorIds.length ? supabase.from("profiles").select("user_id, full_name").in("user_id", doctorIds) : { data: [] },
+        clinicIds.length ? supabase.from("clinics").select("id, name").in("id", clinicIds) : { data: [] },
+      ]);
+
+      const doctorMap: Record<string, string> = {};
+      (profilesRes.data || []).forEach((p: any) => { doctorMap[p.user_id] = p.full_name; });
+      const clinicMap: Record<string, string> = {};
+      (clinicsRes.data || []).forEach((c: any) => { clinicMap[c.id] = c.name; });
 
       if (data) {
         setRealTestimonials(data.map((f: any) => ({
@@ -81,8 +93,8 @@ const TestimonialsSection = () => {
           review_text: f.review_text,
           video_url: f.video_url,
           patient_name: f.patients?.full_name || "Patient",
-          doctor_name: f.profiles?.full_name || "Doctor",
-          clinic_name: f.clinics?.name || null,
+          doctor_name: doctorMap[f.doctor_id] || "Doctor",
+          clinic_name: f.clinic_id ? clinicMap[f.clinic_id] || null : null,
         })));
       }
     };
