@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { MessageSquare, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,6 +14,7 @@ const Auth = () => {
   const [selectedRole, setSelectedRole] = useState<"doctor" | "patient">("doctor");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
   if (user && role) return <Navigate to={role === "patient" ? "/patient" : "/dashboard"} replace />;
@@ -21,6 +22,10 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLogin && !acceptedTerms) {
+      toast({ title: "Terms Required", description: "You must accept the Terms of Service and Privacy Policy to create an account.", variant: "destructive" });
+      return;
+    }
     setSubmitting(true);
     try {
       if (isLogin) {
@@ -122,9 +127,30 @@ const Auth = () => {
               </button>
             </div>
           </div>
+          {!isLogin && (
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-border text-primary focus:ring-primary/50 cursor-pointer"
+              />
+              <span className="text-xs text-muted-foreground leading-relaxed">
+                I have read and agree to the{" "}
+                <Link to="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link to="/privacy" target="_blank" className="text-primary hover:underline font-medium">
+                  Privacy Policy
+                </Link>
+                , including the AI disclaimer and health data consent provisions.
+              </span>
+            </label>
+          )}
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || (!isLogin && !acceptedTerms)}
             className="w-full py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {submitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
