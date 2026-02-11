@@ -21,13 +21,26 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
 
   useEffect(() => {
     if (!user) return;
+    // Try patient record first, then profile, then user metadata
     supabase
       .from("patients")
       .select("full_name")
       .eq("patient_user_id", user.id)
+      .limit(1)
       .maybeSingle()
-      .then(({ data }) => {
-        if (data) setPatientName(data.full_name.split(" ")[0]);
+      .then(async ({ data }) => {
+        if (data) {
+          setPatientName(data.full_name.split(" ")[0]);
+        } else {
+          // Fallback to profile or user metadata
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          const name = profile?.full_name || user.user_metadata?.full_name || "";
+          if (name) setPatientName(name.split(" ")[0]);
+        }
       });
   }, [user]);
 
