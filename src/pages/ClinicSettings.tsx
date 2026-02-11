@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon, Share2 } from "lucide-react";
+import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon, Share2, RefreshCw, Ban } from "lucide-react";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   owner: Crown,
@@ -35,6 +35,7 @@ const ClinicSettings = () => {
   const [myRole, setMyRole] = useState<string | null>(null);
   const [doctorCode, setDoctorCode] = useState<string | null>(null);
   const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null);
+  const [managingCode, setManagingCode] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -102,6 +103,36 @@ const ClinicSettings = () => {
     toast({ title: "Copied!", description: "Invite code copied to clipboard." });
   };
 
+  const handleManageCode = async (targetUserId: string, action: "deactivate" | "regenerate") => {
+    setManagingCode(targetUserId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-doctor-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ action, target_user_id: targetUserId }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast({ title: "Error", description: result.error, variant: "destructive" });
+      } else {
+        toast({
+          title: action === "deactivate" ? "Code Deactivated" : "Code Regenerated",
+          description: action === "deactivate"
+            ? "The enrollment code has been deactivated."
+            : `New code: ${result.doctor_code}`,
+        });
+        fetchData();
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+    setManagingCode(null);
+  };
   const isAdmin = myRole === "owner" || myRole === "admin";
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
@@ -247,7 +278,7 @@ const ClinicSettings = () => {
                   const profileData = m.profiles as any;
                     return (
                       <>
-                        <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => profileData?.doctor_code && setExpandedDoctor(expandedDoctor === m.id ? null : m.id)}>
+                       <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setExpandedDoctor(expandedDoctor === m.id ? null : m.id)}>
                          <td className="px-4 py-3">
                            <p className="font-medium text-foreground">{profileData?.full_name || "—"}</p>
                            {profileData?.phone && <p className="text-xs text-muted-foreground">{profileData.phone}</p>}
@@ -267,7 +298,7 @@ const ClinicSettings = () => {
                                <Copy className="w-3 h-3 text-muted-foreground group-hover:text-foreground" />
                              </button>
                            ) : (
-                             <span className="text-xs text-muted-foreground">—</span>
+                             <span className="text-xs text-muted-foreground italic">Deactivated</span>
                            )}
                          </td>
                          <td className="px-4 py-3 hidden lg:table-cell">
@@ -283,48 +314,87 @@ const ClinicSettings = () => {
                          </td>
                          <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
                        </tr>
-                       {expandedDoctor === m.id && profileData?.doctor_code && (
+                       {expandedDoctor === m.id && (
                          <tr key={`${m.id}-link`} className="border-b border-border/50 bg-muted/20">
                            <td colSpan={5} className="px-4 py-4">
-                             <div className="flex flex-col sm:flex-row gap-4">
-                               <div className="flex-1 space-y-2">
-                                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                                   <Share2 className="w-3.5 h-3.5" /> Patient Enrollment Link for {profileData.full_name}
-                                 </p>
-                                 <div className="flex items-center gap-2">
-                                   <div className="flex-1 px-3 py-2 rounded-lg bg-muted text-xs text-foreground font-mono truncate">
-                                     {window.location.origin}/enroll/{profileData.doctor_code}
+                             {profileData?.doctor_code ? (
+                               <div className="flex flex-col sm:flex-row gap-4">
+                                 <div className="flex-1 space-y-2">
+                                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                     <Share2 className="w-3.5 h-3.5" /> Patient Enrollment Link for {profileData.full_name}
+                                   </p>
+                                   <div className="flex items-center gap-2">
+                                     <div className="flex-1 px-3 py-2 rounded-lg bg-muted text-xs text-foreground font-mono truncate">
+                                       {window.location.origin}/enroll/{profileData.doctor_code}
+                                     </div>
+                                     <button
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         navigator.clipboard.writeText(`${window.location.origin}/enroll/${profileData.doctor_code}`);
+                                         toast({ title: "Copied!", description: "Enrollment link copied." });
+                                       }}
+                                       className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+                                     >
+                                       <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                     </button>
+                                     <a
+                                       href={`/enroll/${profileData.doctor_code}`}
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       onClick={(e) => e.stopPropagation()}
+                                       className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+                                     >
+                                       <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                                     </a>
                                    </div>
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       navigator.clipboard.writeText(`${window.location.origin}/enroll/${profileData.doctor_code}`);
-                                       toast({ title: "Copied!", description: "Enrollment link copied." });
-                                     }}
-                                     className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-                                   >
-                                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                                   </button>
-                                   <a
-                                     href={`/enroll/${profileData.doctor_code}`}
-                                     target="_blank"
-                                     rel="noopener noreferrer"
-                                     onClick={(e) => e.stopPropagation()}
-                                     className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-                                   >
-                                     <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                                   </a>
+                                   <p className="text-[11px] text-muted-foreground">
+                                     Patients enrolled via this link are automatically associated with <strong>{clinic.name}</strong> and <strong>{profileData.full_name}</strong>.
+                                   </p>
+                                   {isAdmin && (
+                                     <div className="flex items-center gap-2 pt-1">
+                                       <button
+                                         onClick={(e) => { e.stopPropagation(); handleManageCode(m.user_id, "regenerate"); }}
+                                         disabled={managingCode === m.user_id}
+                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                                       >
+                                         <RefreshCw className={`w-3 h-3 ${managingCode === m.user_id ? "animate-spin" : ""}`} />
+                                         Regenerate Code
+                                       </button>
+                                       <button
+                                         onClick={(e) => { e.stopPropagation(); handleManageCode(m.user_id, "deactivate"); }}
+                                         disabled={managingCode === m.user_id}
+                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                                       >
+                                         <Ban className="w-3 h-3" />
+                                         Deactivate
+                                       </button>
+                                     </div>
+                                   )}
                                  </div>
-                                 <p className="text-[11px] text-muted-foreground">
-                                   Patients enrolled via this link are automatically associated with <strong>{clinic.name}</strong> and <strong>{profileData.full_name}</strong>.
-                                 </p>
+                                 <img
+                                   src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/enroll/${profileData.doctor_code}`)}`}
+                                   alt="QR Code"
+                                   className="w-24 h-24 rounded-lg border border-border self-center"
+                                 />
                                </div>
-                               <img
-                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/enroll/${profileData.doctor_code}`)}`}
-                                 alt="QR Code"
-                                 className="w-24 h-24 rounded-lg border border-border self-center"
-                               />
-                             </div>
+                             ) : (
+                               <div className="space-y-2">
+                                 <p className="text-sm text-muted-foreground">
+                                   <Ban className="w-4 h-4 inline mr-1.5 text-destructive" />
+                                   Enrollment code for <strong>{profileData?.full_name}</strong> is currently <strong>deactivated</strong>. Patients cannot enroll via this doctor's link.
+                                 </p>
+                                 {isAdmin && (
+                                   <button
+                                     onClick={(e) => { e.stopPropagation(); handleManageCode(m.user_id, "regenerate"); }}
+                                     disabled={managingCode === m.user_id}
+                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                                   >
+                                     <RefreshCw className={`w-3 h-3 ${managingCode === m.user_id ? "animate-spin" : ""}`} />
+                                     {managingCode === m.user_id ? "Generating..." : "Generate New Code"}
+                                   </button>
+                                 )}
+                               </div>
+                             )}
                            </td>
                          </tr>
                        )}
