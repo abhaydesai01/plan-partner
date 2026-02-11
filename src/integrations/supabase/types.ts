@@ -73,38 +73,114 @@ export type Database = {
           },
         ]
       }
+      appointment_checkins: {
+        Row: {
+          appointment_id: string
+          called_at: string | null
+          checked_in_at: string
+          clinic_id: string | null
+          completed_at: string | null
+          doctor_id: string
+          estimated_wait_minutes: number | null
+          id: string
+          patient_id: string
+          queue_number: number | null
+          status: string
+        }
+        Insert: {
+          appointment_id: string
+          called_at?: string | null
+          checked_in_at?: string
+          clinic_id?: string | null
+          completed_at?: string | null
+          doctor_id: string
+          estimated_wait_minutes?: number | null
+          id?: string
+          patient_id: string
+          queue_number?: number | null
+          status?: string
+        }
+        Update: {
+          appointment_id?: string
+          called_at?: string | null
+          checked_in_at?: string
+          clinic_id?: string | null
+          completed_at?: string | null
+          doctor_id?: string
+          estimated_wait_minutes?: number | null
+          id?: string
+          patient_id?: string
+          queue_number?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_checkins_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_checkins_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_checkins_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
+          appointment_type: string
+          cancellation_reason: string | null
+          clinic_id: string | null
           created_at: string
           doctor_id: string
           duration_minutes: number
           id: string
           notes: string | null
           patient_id: string
+          rebook_from: string | null
           scheduled_at: string
           status: string
           title: string
           updated_at: string
         }
         Insert: {
+          appointment_type?: string
+          cancellation_reason?: string | null
+          clinic_id?: string | null
           created_at?: string
           doctor_id: string
           duration_minutes?: number
           id?: string
           notes?: string | null
           patient_id: string
+          rebook_from?: string | null
           scheduled_at: string
           status?: string
           title: string
           updated_at?: string
         }
         Update: {
+          appointment_type?: string
+          cancellation_reason?: string | null
+          clinic_id?: string | null
           created_at?: string
           doctor_id?: string
           duration_minutes?: number
           id?: string
           notes?: string | null
           patient_id?: string
+          rebook_from?: string | null
           scheduled_at?: string
           status?: string
           title?: string
@@ -112,10 +188,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "appointments_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_patient_id_fkey"
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_rebook_from_fkey"
+            columns: ["rebook_from"]
+            isOneToOne: false
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]
@@ -244,6 +334,59 @@ export type Database = {
         }
         Relationships: []
       }
+      doctor_availability: {
+        Row: {
+          appointment_types: string[]
+          clinic_id: string | null
+          created_at: string
+          day_of_week: number
+          doctor_id: string
+          end_time: string
+          id: string
+          is_active: boolean
+          max_patients: number | null
+          slot_duration_minutes: number
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          appointment_types?: string[]
+          clinic_id?: string | null
+          created_at?: string
+          day_of_week: number
+          doctor_id: string
+          end_time: string
+          id?: string
+          is_active?: boolean
+          max_patients?: number | null
+          slot_duration_minutes?: number
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          appointment_types?: string[]
+          clinic_id?: string | null
+          created_at?: string
+          day_of_week?: number
+          doctor_id?: string
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          max_patients?: number | null
+          slot_duration_minutes?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_availability_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrollments: {
         Row: {
           adherence_pct: number | null
@@ -291,6 +434,64 @@ export type Database = {
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_suggestions: {
+        Row: {
+          appointment_id: string
+          booked_appointment_id: string | null
+          created_at: string
+          doctor_id: string
+          id: string
+          patient_id: string
+          reason: string | null
+          status: string
+          suggested_date: string | null
+        }
+        Insert: {
+          appointment_id: string
+          booked_appointment_id?: string | null
+          created_at?: string
+          doctor_id: string
+          id?: string
+          patient_id: string
+          reason?: string | null
+          status?: string
+          suggested_date?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          booked_appointment_id?: string | null
+          created_at?: string
+          doctor_id?: string
+          id?: string
+          patient_id?: string
+          reason?: string | null
+          status?: string
+          suggested_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_suggestions_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_suggestions_booked_appointment_id_fkey"
+            columns: ["booked_appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_suggestions_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
             referencedColumns: ["id"]
           },
         ]

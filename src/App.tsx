@@ -25,6 +25,7 @@ import DoctorVaultAccess from "./pages/DoctorVaultAccess";
 import PublicEnroll from "./pages/PublicEnroll";
 import ClinicSetup from "./pages/ClinicSetup";
 import ClinicSettings from "./pages/ClinicSettings";
+import DoctorAvailability from "./pages/DoctorAvailability";
 import JoinClinic from "./pages/JoinClinic";
 import PatientChat from "./pages/patient/PatientChat";
 import PatientOverview from "./pages/patient/PatientOverview";
@@ -66,6 +67,7 @@ const App = () => (
             <Route path="/dashboard/programs" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/enrollments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/appointments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Appointments /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/availability" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorAvailability /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/vitals" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVitals /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/lab-results" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLabResults /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/documents" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorDocuments /></DashboardLayout></ProtectedRoute>} />
