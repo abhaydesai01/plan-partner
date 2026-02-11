@@ -93,13 +93,6 @@ const Appointments = () => {
     setSaving(false);
   };
 
-<<<<<<< Updated upstream
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-=======
   const updateStatus = async (id: string, status: string, appointment?: Appointment) => {
     if (status === "completed" && appointment) {
       setCompletingAppointment(appointment);
@@ -107,7 +100,6 @@ const Appointments = () => {
     }
     try {
       await api.patch("appointments/" + id, { status });
->>>>>>> Stashed changes
       fetchData();
     } catch (err: unknown) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });

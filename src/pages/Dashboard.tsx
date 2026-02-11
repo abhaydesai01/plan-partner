@@ -303,8 +303,6 @@ const Dashboard = () => {
   );
 };
 
-<<<<<<< Updated upstream
-=======
 function DoctorCodeCard({ userId }: { userId?: string }) {
   const [code, setCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -345,5 +343,4 @@ function DoctorCodeCard({ userId }: { userId?: string }) {
   );
 }
 
->>>>>>> Stashed changes
 export default Dashboard;
