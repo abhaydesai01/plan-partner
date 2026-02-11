@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Plus, Trash2, Save, MapPin } from "lucide-react";
+import { Clock, Plus, Trash2, Save, MapPin, Filter } from "lucide-react";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TYPES = [
@@ -36,6 +36,7 @@ const DoctorAvailability = () => {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [filterClinic, setFilterClinic] = useState<string>("all");
 
   useEffect(() => {
     if (!user) return;
@@ -153,18 +154,74 @@ const DoctorAvailability = () => {
         </div>
       </div>
 
-      {slots.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center">
-          <Clock className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-40" />
-          <p className="text-muted-foreground mb-4">No availability slots set up yet. Patients won't be able to book.</p>
-          <button onClick={addSlot} className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
-            Add Your First Slot
-          </button>
+      {clinics.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Filter:</span>
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              onClick={() => setFilterClinic("all")}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                filterClinic === "all"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              All Locations
+            </button>
+            <button
+              onClick={() => setFilterClinic("none")}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                filterClinic === "none"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              No Clinic
+            </button>
+            {clinics.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setFilterClinic(c.id)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                  filterClinic === c.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{c.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {slots.map((slot, i) => (
-            <div key={slot.id || `new-${i}`} className={`glass-card rounded-xl p-4 space-y-3 ${!slot.is_active ? "opacity-50" : ""}`}>
+      )}
+
+      {(() => {
+        const filtered = filterClinic === "all"
+          ? slots
+          : filterClinic === "none"
+            ? slots.filter(s => !s.clinic_id)
+            : slots.filter(s => s.clinic_id === filterClinic);
+
+        return filtered.length === 0 ? (
+          <div className="glass-card rounded-xl p-12 text-center">
+            <Clock className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-40" />
+            <p className="text-muted-foreground mb-4">
+              {slots.length === 0
+                ? "No availability slots set up yet. Patients won't be able to book."
+                : "No slots match the selected filter."}
+            </p>
+            {slots.length === 0 && (
+              <button onClick={addSlot} className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
+                Add Your First Slot
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((slot) => {
+              const i = slots.indexOf(slot);
+              return (<div key={slot.id || `new-${i}`} className={`glass-card rounded-xl p-4 space-y-3 ${!slot.is_active ? "opacity-50" : ""}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-wrap">
                   <select
@@ -265,9 +322,11 @@ const DoctorAvailability = () => {
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            );
+          })}
+          </div>
+        );
+      })()}
     </div>
   );
 };
