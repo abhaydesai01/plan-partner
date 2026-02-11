@@ -25,7 +25,6 @@ import DoctorVaultAccess from "./pages/DoctorVaultAccess";
 import PublicEnroll from "./pages/PublicEnroll";
 import ClinicSetup from "./pages/ClinicSetup";
 import ClinicSettings from "./pages/ClinicSettings";
-import DoctorAvailability from "./pages/DoctorAvailability";
 import JoinClinic from "./pages/JoinClinic";
 import PatientChat from "./pages/patient/PatientChat";
 import PatientOverview from "./pages/patient/PatientOverview";
@@ -38,8 +37,6 @@ import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Contact from "./pages/Contact";
-import PublicFeedback from "./pages/PublicFeedback";
-import DoctorFeedbacks from "./pages/DoctorFeedbacks";
 
 const queryClient = new QueryClient();
 
@@ -57,7 +54,6 @@ const App = () => (
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/feedback" element={<PublicFeedback />} />
             
             {/* Clinic Setup */}
             <Route path="/clinic-setup" element={<ProtectedRoute allowedRole="doctor"><ClinicSetup /></ProtectedRoute>} />
@@ -70,7 +66,6 @@ const App = () => (
             <Route path="/dashboard/programs" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/enrollments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/appointments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Appointments /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/availability" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorAvailability /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/vitals" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVitals /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/lab-results" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLabResults /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/documents" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorDocuments /></DashboardLayout></ProtectedRoute>} />
@@ -78,7 +73,6 @@ const App = () => (
             <Route path="/dashboard/clinic" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ClinicSettings /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/alerts" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Alerts /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/dashboard/feedbacks" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorFeedbacks /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/vault-access" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVaultAccess /></DashboardLayout></ProtectedRoute>} />
             
             {/* Patient Portal - Chat is the landing page */}

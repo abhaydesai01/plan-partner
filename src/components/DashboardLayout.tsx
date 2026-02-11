@@ -20,8 +20,6 @@ import {
   Link,
   AlertTriangle,
   Shield,
-  Clock,
-  Star,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -31,13 +29,11 @@ const navItems = [
   { to: "/dashboard/programs", icon: Layers, label: "Programs" },
   { to: "/dashboard/enrollments", icon: UserPlus, label: "Enrollments" },
   { to: "/dashboard/appointments", icon: CalendarDays, label: "Appointments" },
-  { to: "/dashboard/availability", icon: Clock, label: "Availability" },
   { to: "/dashboard/vitals", icon: Activity, label: "Vitals" },
   { to: "/dashboard/lab-results", icon: FileText, label: "Lab Results" },
   { to: "/dashboard/documents", icon: Upload, label: "Documents" },
   { to: "/dashboard/link-requests", icon: Link, label: "Link Requests" },
   { to: "/dashboard/alerts", icon: AlertTriangle, label: "Alerts" },
-  { to: "/dashboard/feedbacks", icon: Star, label: "Feedbacks" },
   { to: "/dashboard/vault-access", icon: Shield, label: "Vault Access" },
   { to: "/dashboard/clinic", icon: Building2, label: "Clinic" },
   { to: "/dashboard/compliance", icon: ClipboardCheck, label: "Compliance" },

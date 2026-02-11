@@ -1,52 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Heart, Shield, Menu, Activity, FlaskConical } from "lucide-react";
+import { Send, Heart, Shield, Menu } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { usePatientRecord } from "@/hooks/usePatientRecord";
 import ReactMarkdown from "react-markdown";
-import ChatVitalsForm from "@/components/patient/ChatVitalsForm";
-import ChatLabForm from "@/components/patient/ChatLabForm";
 
 type Msg = { role: "user" | "assistant"; content: string };
-type ActiveForm = "vitals" | "labs" | null;
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-chat`;
 
 const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { patientId } = usePatientRecord();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [patientName, setPatientName] = useState("");
-  const [activeForm, setActiveForm] = useState<ActiveForm>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!user) return;
-    // Try patient record first, then profile, then user metadata
     supabase
       .from("patients")
       .select("full_name")
       .eq("patient_user_id", user.id)
-      .limit(1)
       .maybeSingle()
-      .then(async ({ data }) => {
-        if (data) {
-          setPatientName(data.full_name.split(" ")[0]);
-        } else {
-          // Fallback to profile or user metadata
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name")
-            .eq("user_id", user.id)
-            .maybeSingle();
-          const name = profile?.full_name || user.user_metadata?.full_name || "";
-          if (name) setPatientName(name.split(" ")[0]);
-        }
+      .then(({ data }) => {
+        if (data) setPatientName(data.full_name.split(" ")[0]);
       });
   }, [user]);
 
@@ -173,12 +154,6 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
     setIsLoading(false);
   };
 
-  const handleFormSuccess = (summary: string) => {
-    setActiveForm(null);
-    setMessages((prev) => [...prev, { role: "assistant", content: summary }]);
-    toast({ title: "Saved!", description: "Your health data has been logged successfully." });
-  };
-
   const hasMessages = messages.length > 0;
 
   return (
@@ -262,31 +237,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                     {chip.label}
                   </button>
                 ))}
-                {/* Log data buttons */}
-                <button
-                  onClick={() => setActiveForm("vitals")}
-                  className="px-3 py-1.5 text-xs rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-medium transition-colors flex items-center gap-1"
-                >
-                  <Activity className="w-3 h-3" /> Log Vitals
-                </button>
-                <button
-                  onClick={() => setActiveForm("labs")}
-                  className="px-3 py-1.5 text-xs rounded-full border border-accent/30 bg-accent/5 hover:bg-accent/10 text-accent font-medium transition-colors flex items-center gap-1"
-                >
-                  <FlaskConical className="w-3 h-3" /> Log Lab Result
-                </button>
               </div>
-
-              {/* Inline form in empty state */}
-              {activeForm && patientId && user && (
-                <div className="flex justify-center mt-4">
-                  {activeForm === "vitals" ? (
-                    <ChatVitalsForm patientId={patientId} userId={user.id} onClose={() => setActiveForm(null)} onSuccess={handleFormSuccess} />
-                  ) : (
-                    <ChatLabForm patientId={patientId} userId={user.id} onClose={() => setActiveForm(null)} onSuccess={handleFormSuccess} />
-                  )}
-                </div>
-              )}
 
               {/* Footer */}
               <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-muted-foreground/50">
@@ -337,71 +288,33 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
               </div>
             </div>
 
-            {/* Inline form above input when chatting */}
-            {activeForm && patientId && user && (
-              <div className="flex-shrink-0 px-4 pt-2 flex justify-start">
-                <div className="max-w-3xl mx-auto w-full flex justify-start">
-                  {activeForm === "vitals" ? (
-                    <ChatVitalsForm patientId={patientId} userId={user.id} onClose={() => setActiveForm(null)} onSuccess={handleFormSuccess} />
-                  ) : (
-                    <ChatLabForm patientId={patientId} userId={user.id} onClose={() => setActiveForm(null)} onSuccess={handleFormSuccess} />
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Input at bottom when chatting */}
             <div className="flex-shrink-0 px-4 pb-4 pt-2 border-t border-border/30">
-              <div className="max-w-3xl mx-auto">
-                {/* Quick log buttons */}
-                <div className="flex gap-2 mb-2">
-                  <button
-                    onClick={() => setActiveForm(activeForm === "vitals" ? null : "vitals")}
-                    className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors flex items-center gap-1 ${
-                      activeForm === "vitals"
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary"
-                    }`}
-                  >
-                    <Activity className="w-3 h-3" /> Log Vitals
-                  </button>
-                  <button
-                    onClick={() => setActiveForm(activeForm === "labs" ? null : "labs")}
-                    className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors flex items-center gap-1 ${
-                      activeForm === "labs"
-                        ? "bg-accent text-accent-foreground border-accent"
-                        : "border-accent/30 bg-accent/5 hover:bg-accent/10 text-accent"
-                    }`}
-                  >
-                    <FlaskConical className="w-3 h-3" /> Log Lab Result
-                  </button>
-                </div>
-                <div className="relative border border-border rounded-2xl bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                      autoResize();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        send();
-                      }
-                    }}
-                    placeholder="Ask anything about your symptoms, treatment or health"
-                    rows={1}
-                    className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
-                  />
-                  <button
-                    onClick={() => send()}
-                    disabled={!input.trim() || isLoading}
-                    className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="max-w-3xl mx-auto relative border border-border rounded-2xl bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoResize();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  placeholder="Ask anything about your symptoms, treatment or health"
+                  rows={1}
+                  className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+                />
+                <button
+                  onClick={() => send()}
+                  disabled={!input.trim() || isLoading}
+                  className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </>

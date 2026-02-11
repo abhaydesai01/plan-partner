@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon, Share2, RefreshCw, Ban } from "lucide-react";
+import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon } from "lucide-react";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   owner: Crown,
@@ -32,14 +32,8 @@ const ClinicSettings = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("doctor");
   const [sending, setSending] = useState(false);
-  const [inviteMode, setInviteMode] = useState<"email" | "code">("email");
-  const [inviteDoctorCode, setInviteDoctorCode] = useState("");
-  const [lookingUpCode, setLookingUpCode] = useState(false);
-  const [lookedUpDoctor, setLookedUpDoctor] = useState<{ email: string; full_name: string; user_id: string } | null>(null);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [doctorCode, setDoctorCode] = useState<string | null>(null);
-  const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null);
-  const [managingCode, setManagingCode] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -57,7 +51,7 @@ const ClinicSettings = () => {
 
     const [clinicRes, membersRes, invitesRes] = await Promise.all([
       supabase.from("clinics").select("*").eq("id", membership.clinic_id).single(),
-      supabase.from("clinic_members").select("*, profiles:user_id(full_name, avatar_url, doctor_code, specialties, phone)").eq("clinic_id", membership.clinic_id).order("joined_at"),
+      supabase.from("clinic_members").select("*, profiles:user_id(full_name, avatar_url)").eq("clinic_id", membership.clinic_id).order("joined_at"),
       supabase.from("clinic_invites").select("*").eq("clinic_id", membership.clinic_id).order("created_at", { ascending: false }),
     ]);
 
@@ -78,86 +72,26 @@ const ClinicSettings = () => {
 
   useEffect(() => { fetchData(); }, [user]);
 
-  const handleLookupDoctorCode = async () => {
-    if (!inviteDoctorCode.trim()) return;
-    setLookingUpCode(true);
-    setLookedUpDoctor(null);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("user_id, full_name")
-      .eq("doctor_code", inviteDoctorCode.trim().toUpperCase())
-      .maybeSingle();
-
-    if (!profile) {
-      toast({ title: "Not found", description: "No doctor found with this code.", variant: "destructive" });
-      setLookingUpCode(false);
-      return;
-    }
-
-    // Get email from auth user metadata via user_roles check
-    const { data: roleData } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("user_id", profile.user_id)
-      .eq("role", "doctor")
-      .maybeSingle();
-
-    if (!roleData) {
-      toast({ title: "Not a doctor", description: "This code doesn't belong to a registered doctor.", variant: "destructive" });
-      setLookingUpCode(false);
-      return;
-    }
-
-    setLookedUpDoctor({ user_id: profile.user_id, full_name: profile.full_name || "Doctor", email: "" });
-    setInviteRole("doctor");
-    setLookingUpCode(false);
-  };
-
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clinic || !user) return;
     setSending(true);
 
-    if (inviteMode === "code" && lookedUpDoctor) {
-      // Directly add them as a clinic member
-      const { error } = await supabase.from("clinic_members").insert({
-        clinic_id: clinic.id,
-        user_id: lookedUpDoctor.user_id,
-        role: inviteRole as any,
-      });
+    const { error } = await supabase.from("clinic_invites").insert({
+      clinic_id: clinic.id,
+      email: inviteEmail,
+      role: inviteRole as any,
+      invited_by: user.id,
+    });
 
-      if (error) {
-        if (error.code === "23505") {
-          toast({ title: "Already a member", description: `${lookedUpDoctor.full_name} is already in this clinic.` });
-        } else {
-          toast({ title: "Error", description: error.message, variant: "destructive" });
-        }
-      } else {
-        toast({ title: "Doctor added!", description: `${lookedUpDoctor.full_name} has been added to the clinic.` });
-        setShowInvite(false);
-        setInviteDoctorCode("");
-        setLookedUpDoctor(null);
-        setInviteMode("email");
-        fetchData();
-      }
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      const { error } = await supabase.from("clinic_invites").insert({
-        clinic_id: clinic.id,
-        email: inviteEmail,
-        role: inviteRole as any,
-        invited_by: user.id,
-      });
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Invite created", description: `Invite for ${inviteEmail} created. Share the invite code with them.` });
-        setShowInvite(false);
-        setInviteEmail("");
-        setInviteRole("doctor");
-        fetchData();
-      }
+      toast({ title: "Invite created", description: `Invite for ${inviteEmail} created. Share the invite code with them.` });
+      setShowInvite(false);
+      setInviteEmail("");
+      setInviteRole("doctor");
+      fetchData();
     }
     setSending(false);
   };
@@ -167,36 +101,6 @@ const ClinicSettings = () => {
     toast({ title: "Copied!", description: "Invite code copied to clipboard." });
   };
 
-  const handleManageCode = async (targetUserId: string, action: "deactivate" | "regenerate") => {
-    setManagingCode(targetUserId);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-doctor-code`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ action, target_user_id: targetUserId }),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        toast({ title: "Error", description: result.error, variant: "destructive" });
-      } else {
-        toast({
-          title: action === "deactivate" ? "Code Deactivated" : "Code Regenerated",
-          description: action === "deactivate"
-            ? "The enrollment code has been deactivated."
-            : `New code: ${result.doctor_code}`,
-        });
-        fetchData();
-      }
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
-    setManagingCode(null);
-  };
   const isAdmin = myRole === "owner" || myRole === "admin";
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
@@ -328,142 +232,27 @@ const ClinicSettings = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                 <tr className="border-b border-border">
-                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
-                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Doctor Code</th>
-                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Specialties</th>
-                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Joined</th>
-                 </tr>
+                <tr className="border-b border-border">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Joined</th>
+                </tr>
               </thead>
               <tbody>
                 {members.map(m => {
                   const RoleIcon = ROLE_ICONS[m.role] || Users;
                   const profileData = m.profiles as any;
-                    return (
-                      <>
-                       <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setExpandedDoctor(expandedDoctor === m.id ? null : m.id)}>
-                         <td className="px-4 py-3">
-                           <p className="font-medium text-foreground">{profileData?.full_name || "—"}</p>
-                           {profileData?.phone && <p className="text-xs text-muted-foreground">{profileData.phone}</p>}
-                         </td>
-                         <td className="px-4 py-3">
-                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
-                             <RoleIcon className="w-3 h-3" /> {m.role}
-                           </span>
-                         </td>
-                         <td className="px-4 py-3 hidden md:table-cell">
-                           {profileData?.doctor_code ? (
-                             <button
-                               onClick={(e) => { e.stopPropagation(); copyCode(profileData.doctor_code); }}
-                               className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors group"
-                             >
-                               <code className="text-xs font-mono text-foreground">{profileData.doctor_code}</code>
-                               <Copy className="w-3 h-3 text-muted-foreground group-hover:text-foreground" />
-                             </button>
-                           ) : (
-                             <span className="text-xs text-muted-foreground italic">Deactivated</span>
-                           )}
-                         </td>
-                         <td className="px-4 py-3 hidden lg:table-cell">
-                           {profileData?.specialties?.length > 0 ? (
-                             <div className="flex flex-wrap gap-1">
-                               {profileData.specialties.map((s: string) => (
-                                 <span key={s} className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs">{s}</span>
-                               ))}
-                             </div>
-                           ) : (
-                             <span className="text-xs text-muted-foreground">—</span>
-                           )}
-                         </td>
-                         <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
-                       </tr>
-                       {expandedDoctor === m.id && (
-                         <tr key={`${m.id}-link`} className="border-b border-border/50 bg-muted/20">
-                           <td colSpan={5} className="px-4 py-4">
-                             {profileData?.doctor_code ? (
-                               <div className="flex flex-col sm:flex-row gap-4">
-                                 <div className="flex-1 space-y-2">
-                                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                                     <Share2 className="w-3.5 h-3.5" /> Patient Enrollment Link for {profileData.full_name}
-                                   </p>
-                                   <div className="flex items-center gap-2">
-                                     <div className="flex-1 px-3 py-2 rounded-lg bg-muted text-xs text-foreground font-mono truncate">
-                                       {window.location.origin}/enroll/{profileData.doctor_code}
-                                     </div>
-                                     <button
-                                       onClick={(e) => {
-                                         e.stopPropagation();
-                                         navigator.clipboard.writeText(`${window.location.origin}/enroll/${profileData.doctor_code}`);
-                                         toast({ title: "Copied!", description: "Enrollment link copied." });
-                                       }}
-                                       className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-                                     >
-                                       <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                                     </button>
-                                     <a
-                                       href={`/enroll/${profileData.doctor_code}`}
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       onClick={(e) => e.stopPropagation()}
-                                       className="p-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-                                     >
-                                       <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                                     </a>
-                                   </div>
-                                   <p className="text-[11px] text-muted-foreground">
-                                     Patients enrolled via this link are automatically associated with <strong>{clinic.name}</strong> and <strong>{profileData.full_name}</strong>.
-                                   </p>
-                                   {isAdmin && (
-                                     <div className="flex items-center gap-2 pt-1">
-                                       <button
-                                         onClick={(e) => { e.stopPropagation(); handleManageCode(m.user_id, "regenerate"); }}
-                                         disabled={managingCode === m.user_id}
-                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-                                       >
-                                         <RefreshCw className={`w-3 h-3 ${managingCode === m.user_id ? "animate-spin" : ""}`} />
-                                         Regenerate Code
-                                       </button>
-                                       <button
-                                         onClick={(e) => { e.stopPropagation(); handleManageCode(m.user_id, "deactivate"); }}
-                                         disabled={managingCode === m.user_id}
-                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                                       >
-                                         <Ban className="w-3 h-3" />
-                                         Deactivate
-                                       </button>
-                                     </div>
-                                   )}
-                                 </div>
-                                 <img
-                                   src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/enroll/${profileData.doctor_code}`)}`}
-                                   alt="QR Code"
-                                   className="w-24 h-24 rounded-lg border border-border self-center"
-                                 />
-                               </div>
-                             ) : (
-                               <div className="space-y-2">
-                                 <p className="text-sm text-muted-foreground">
-                                   <Ban className="w-4 h-4 inline mr-1.5 text-destructive" />
-                                   Enrollment code for <strong>{profileData?.full_name}</strong> is currently <strong>deactivated</strong>. Patients cannot enroll via this doctor's link.
-                                 </p>
-                                 {isAdmin && (
-                                   <button
-                                     onClick={(e) => { e.stopPropagation(); handleManageCode(m.user_id, "regenerate"); }}
-                                     disabled={managingCode === m.user_id}
-                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                                   >
-                                     <RefreshCw className={`w-3 h-3 ${managingCode === m.user_id ? "animate-spin" : ""}`} />
-                                     {managingCode === m.user_id ? "Generating..." : "Generate New Code"}
-                                   </button>
-                                 )}
-                               </div>
-                             )}
-                           </td>
-                         </tr>
-                       )}
-                      </>
-                    );
+                  return (
+                    <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-foreground">{profileData?.full_name || "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
+                          <RoleIcon className="w-3 h-3" /> {m.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{format(new Date(m.joined_at), "MMM d, yyyy")}</td>
+                    </tr>
+                  );
                 })}
               </tbody>
             </table>
@@ -496,123 +285,46 @@ const ClinicSettings = () => {
 
       {/* Invite Modal */}
       {showInvite && (
-        <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => { setShowInvite(false); setLookedUpDoctor(null); setInviteDoctorCode(""); setInviteMode("email"); }}>
+        <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowInvite(false)}>
           <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">Invite Team Member</h2>
-              <button onClick={() => { setShowInvite(false); setLookedUpDoctor(null); setInviteDoctorCode(""); setInviteMode("email"); }} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowInvite(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
             </div>
-
-            {/* Mode Toggle */}
-            <div className="flex rounded-lg bg-muted p-1 gap-1">
-              <button
-                type="button"
-                onClick={() => { setInviteMode("email"); setLookedUpDoctor(null); setInviteDoctorCode(""); }}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${inviteMode === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                By Email
-              </button>
-              <button
-                type="button"
-                onClick={() => { setInviteMode("code"); setInviteEmail(""); }}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${inviteMode === "code" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                By Doctor Code
-              </button>
-            </div>
-
             <form onSubmit={handleInvite} className="space-y-3">
-              {inviteMode === "email" ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Email</label>
-                    <input
-                      required
-                      type="email"
-                      value={inviteEmail}
-                      onChange={e => setInviteEmail(e.target.value)}
-                      placeholder="doctor@example.com"
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Role</label>
-                    <select
-                      value={inviteRole}
-                      onChange={e => setInviteRole(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    >
-                      <option value="doctor">Doctor</option>
-                      <option value="nurse">Nurse</option>
-                      <option value="admin">Admin</option>
-                      <option value="staff">Staff</option>
-                    </select>
-                  </div>
-                  <p className="text-xs text-muted-foreground">An invite code will be generated. Share it with the person so they can join your clinic.</p>
-                  <button
-                    type="submit"
-                    disabled={sending}
-                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    <Send className="w-4 h-4" />
-                    {sending ? "Creating..." : "Create Invite"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Doctor Code</label>
-                    <div className="flex gap-2">
-                      <input
-                        value={inviteDoctorCode}
-                        onChange={e => { setInviteDoctorCode(e.target.value.toUpperCase()); setLookedUpDoctor(null); }}
-                        placeholder="e.g. A3F82K"
-                        maxLength={10}
-                        className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground font-mono tracking-wider uppercase focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleLookupDoctorCode}
-                        disabled={lookingUpCode || !inviteDoctorCode.trim()}
-                        className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-medium text-sm hover:bg-muted/80 disabled:opacity-50 transition-colors"
-                      >
-                        {lookingUpCode ? "..." : "Lookup"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {lookedUpDoctor && (
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Stethoscope className="w-4 h-4 text-primary" />
-                        <p className="font-medium text-sm text-foreground">{lookedUpDoctor.full_name}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">This doctor will be added directly to your clinic.</p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Role</label>
-                    <select
-                      value={inviteRole}
-                      onChange={e => setInviteRole(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    >
-                      <option value="doctor">Doctor</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={sending || !lookedUpDoctor}
-                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    {sending ? "Adding..." : "Add to Clinic"}
-                  </button>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                <input
+                  required
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="doctor@example.com"
+                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Role</label>
+                <select
+                  value={inviteRole}
+                  onChange={e => setInviteRole(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="doctor">Doctor</option>
+                  <option value="nurse">Nurse</option>
+                  <option value="admin">Admin</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">An invite code will be generated. Share it with the person so they can join your clinic.</p>
+              <button
+                type="submit"
+                disabled={sending}
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Send className="w-4 h-4" />
+                {sending ? "Creating..." : "Create Invite"}
+              </button>
             </form>
           </div>
         </div>

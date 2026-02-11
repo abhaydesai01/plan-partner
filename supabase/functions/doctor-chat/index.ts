@@ -170,21 +170,6 @@ Deno.serve(async (req) => {
       contextParts.push("DOCUMENTS: None uploaded.");
     }
 
-    // Fetch food logs
-    const { data: foodLogs } = await serviceClient
-      .from("food_logs")
-      .select("meal_type, food_items, total_calories, total_protein, total_carbs, total_fat, logged_at, notes")
-      .eq("patient_id", patient.id)
-      .order("logged_at", { ascending: false })
-      .limit(30);
-
-    if (foodLogs?.length) {
-      contextParts.push(`FOOD/NUTRITION LOGS (${foodLogs.length} records, newest first):\n` +
-        foodLogs.map(f => `- [${new Date(f.logged_at).toLocaleDateString()}] ${f.meal_type}: Cal=${f.total_calories ?? "?"} | Protein=${f.total_protein ?? "?"}g | Carbs=${f.total_carbs ?? "?"}g | Fat=${f.total_fat ?? "?"}g${f.notes ? ` | Note: ${f.notes}` : ""}`).join("\n"));
-    } else {
-      contextParts.push("FOOD/NUTRITION LOGS: None recorded.");
-    }
-
     // Fetch alerts
     const { data: alerts } = await serviceClient
       .from("alerts")
@@ -204,27 +189,18 @@ Deno.serve(async (req) => {
 
 You are NOT a general chatbot.
 You MUST answer ONLY using the patient data provided in the context.
-Never invent facts. Never guess.
+Never invent facts.
+Never guess.
 If data is missing, say: "Not available in patient records."
 
 Your role:
-- Analyze patient vitals, labs, medications, nutrition, history, notes, and documents
+- Analyze patient vitals, labs, medications, history, notes, and documents
 - Detect abnormalities, risks, and trends
 - Highlight clinically relevant issues
 - Provide concise medical insights
 - Suggest possible next clinical actions (not prescriptions)
 - Use professional medical tone
-- Be structured and actionable
-
-FORMATTING RULES:
-- Use **bold** for key values, abnormal findings, and important terms
-- Use bullet points and numbered lists for clarity
-- Use headings (##) to separate sections
-- Keep paragraphs short (2-3 sentences max)
-- Use tables (markdown) when comparing values across time
-- Flag abnormal values with ⚠️ emoji
-- Flag critical values with 🚨 emoji
-- Use ✅ for normal/healthy findings
+- Be short, structured, and actionable
 
 STRICT RULES:
 - Do NOT provide legal or liability statements
@@ -233,14 +209,15 @@ STRICT RULES:
 - Do NOT use external knowledge beyond provided patient context
 - Base answers ONLY on the given records
 
-Response structure (adapt based on question):
-## Key Findings
-## Abnormalities & Risks
-## Trend Analysis (if applicable)
-## Suggested Actions
+Response format:
+1. Key Findings
+2. Abnormalities/Risks
+3. Trend Analysis (if applicable)
+4. Suggested Clinical Considerations
 
-If asked to summarize, provide structured bullet summary with sections.
-You are assisting a trained medical professional. Be precise, clinical, and efficient.
+If asked to summarize, provide structured bullet summary.
+You are assisting a trained medical professional.
+Be precise, clinical, and efficient.
 
 --- PATIENT RECORDS ---
 ${contextParts.join("\n\n")}
