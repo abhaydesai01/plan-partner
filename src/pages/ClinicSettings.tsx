@@ -32,6 +32,10 @@ const ClinicSettings = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("doctor");
   const [sending, setSending] = useState(false);
+  const [inviteMode, setInviteMode] = useState<"email" | "code">("email");
+  const [inviteDoctorCode, setInviteDoctorCode] = useState("");
+  const [lookingUpCode, setLookingUpCode] = useState(false);
+  const [lookedUpDoctor, setLookedUpDoctor] = useState<{ email: string; full_name: string; user_id: string } | null>(null);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [doctorCode, setDoctorCode] = useState<string | null>(null);
   const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null);
@@ -74,26 +78,86 @@ const ClinicSettings = () => {
 
   useEffect(() => { fetchData(); }, [user]);
 
+  const handleLookupDoctorCode = async () => {
+    if (!inviteDoctorCode.trim()) return;
+    setLookingUpCode(true);
+    setLookedUpDoctor(null);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_id, full_name")
+      .eq("doctor_code", inviteDoctorCode.trim().toUpperCase())
+      .maybeSingle();
+
+    if (!profile) {
+      toast({ title: "Not found", description: "No doctor found with this code.", variant: "destructive" });
+      setLookingUpCode(false);
+      return;
+    }
+
+    // Get email from auth user metadata via user_roles check
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("user_id", profile.user_id)
+      .eq("role", "doctor")
+      .maybeSingle();
+
+    if (!roleData) {
+      toast({ title: "Not a doctor", description: "This code doesn't belong to a registered doctor.", variant: "destructive" });
+      setLookingUpCode(false);
+      return;
+    }
+
+    setLookedUpDoctor({ user_id: profile.user_id, full_name: profile.full_name || "Doctor", email: "" });
+    setInviteRole("doctor");
+    setLookingUpCode(false);
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clinic || !user) return;
     setSending(true);
 
-    const { error } = await supabase.from("clinic_invites").insert({
-      clinic_id: clinic.id,
-      email: inviteEmail,
-      role: inviteRole as any,
-      invited_by: user.id,
-    });
+    if (inviteMode === "code" && lookedUpDoctor) {
+      // Directly add them as a clinic member
+      const { error } = await supabase.from("clinic_members").insert({
+        clinic_id: clinic.id,
+        user_id: lookedUpDoctor.user_id,
+        role: inviteRole as any,
+      });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      if (error) {
+        if (error.code === "23505") {
+          toast({ title: "Already a member", description: `${lookedUpDoctor.full_name} is already in this clinic.` });
+        } else {
+          toast({ title: "Error", description: error.message, variant: "destructive" });
+        }
+      } else {
+        toast({ title: "Doctor added!", description: `${lookedUpDoctor.full_name} has been added to the clinic.` });
+        setShowInvite(false);
+        setInviteDoctorCode("");
+        setLookedUpDoctor(null);
+        setInviteMode("email");
+        fetchData();
+      }
     } else {
-      toast({ title: "Invite created", description: `Invite for ${inviteEmail} created. Share the invite code with them.` });
-      setShowInvite(false);
-      setInviteEmail("");
-      setInviteRole("doctor");
-      fetchData();
+      const { error } = await supabase.from("clinic_invites").insert({
+        clinic_id: clinic.id,
+        email: inviteEmail,
+        role: inviteRole as any,
+        invited_by: user.id,
+      });
+
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Invite created", description: `Invite for ${inviteEmail} created. Share the invite code with them.` });
+        setShowInvite(false);
+        setInviteEmail("");
+        setInviteRole("doctor");
+        fetchData();
+      }
     }
     setSending(false);
   };
@@ -432,46 +496,123 @@ const ClinicSettings = () => {
 
       {/* Invite Modal */}
       {showInvite && (
-        <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowInvite(false)}>
+        <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => { setShowInvite(false); setLookedUpDoctor(null); setInviteDoctorCode(""); setInviteMode("email"); }}>
           <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">Invite Team Member</h2>
-              <button onClick={() => setShowInvite(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowInvite(false); setLookedUpDoctor(null); setInviteDoctorCode(""); setInviteMode("email"); }} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleInvite} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Email</label>
-                <input
-                  required
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="doctor@example.com"
-                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Role</label>
-                <select
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                >
-                  <option value="doctor">Doctor</option>
-                  <option value="nurse">Nurse</option>
-                  <option value="admin">Admin</option>
-                  <option value="staff">Staff</option>
-                </select>
-              </div>
-              <p className="text-xs text-muted-foreground">An invite code will be generated. Share it with the person so they can join your clinic.</p>
+
+            {/* Mode Toggle */}
+            <div className="flex rounded-lg bg-muted p-1 gap-1">
               <button
-                type="submit"
-                disabled={sending}
-                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                type="button"
+                onClick={() => { setInviteMode("email"); setLookedUpDoctor(null); setInviteDoctorCode(""); }}
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${inviteMode === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
-                <Send className="w-4 h-4" />
-                {sending ? "Creating..." : "Create Invite"}
+                By Email
               </button>
+              <button
+                type="button"
+                onClick={() => { setInviteMode("code"); setInviteEmail(""); }}
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${inviteMode === "code" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                By Doctor Code
+              </button>
+            </div>
+
+            <form onSubmit={handleInvite} className="space-y-3">
+              {inviteMode === "email" ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                    <input
+                      required
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      placeholder="doctor@example.com"
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Role</label>
+                    <select
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    >
+                      <option value="doctor">Doctor</option>
+                      <option value="nurse">Nurse</option>
+                      <option value="admin">Admin</option>
+                      <option value="staff">Staff</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">An invite code will be generated. Share it with the person so they can join your clinic.</p>
+                  <button
+                    type="submit"
+                    disabled={sending}
+                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    <Send className="w-4 h-4" />
+                    {sending ? "Creating..." : "Create Invite"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Doctor Code</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={inviteDoctorCode}
+                        onChange={e => { setInviteDoctorCode(e.target.value.toUpperCase()); setLookedUpDoctor(null); }}
+                        placeholder="e.g. A3F82K"
+                        maxLength={10}
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground font-mono tracking-wider uppercase focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleLookupDoctorCode}
+                        disabled={lookingUpCode || !inviteDoctorCode.trim()}
+                        className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-medium text-sm hover:bg-muted/80 disabled:opacity-50 transition-colors"
+                      >
+                        {lookingUpCode ? "..." : "Lookup"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {lookedUpDoctor && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Stethoscope className="w-4 h-4 text-primary" />
+                        <p className="font-medium text-sm text-foreground">{lookedUpDoctor.full_name}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">This doctor will be added directly to your clinic.</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Role</label>
+                    <select
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    >
+                      <option value="doctor">Doctor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={sending || !lookedUpDoctor}
+                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    {sending ? "Adding..." : "Add to Clinic"}
+                  </button>
+                </>
+              )}
             </form>
           </div>
         </div>
