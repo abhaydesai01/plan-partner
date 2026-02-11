@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Plus, Trash2, Save } from "lucide-react";
+import { Clock, Plus, Trash2, Save, MapPin } from "lucide-react";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TYPES = [
@@ -10,6 +10,11 @@ const TYPES = [
   { value: "teleconsult", label: "Teleconsult" },
   { value: "walk_in", label: "Walk-in" },
 ];
+
+interface Clinic {
+  id: string;
+  name: string;
+}
 
 interface Slot {
   id?: string;
@@ -20,6 +25,7 @@ interface Slot {
   appointment_types: string[];
   is_active: boolean;
   max_patients: number;
+  clinic_id: string | null;
   isNew?: boolean;
 }
 
@@ -27,22 +33,29 @@ const DoctorAvailability = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    const fetch = async () => {
-      const { data } = await supabase
-        .from("doctor_availability")
-        .select("*")
-        .eq("doctor_id", user.id)
-        .order("day_of_week")
-        .order("start_time");
-      setSlots((data as any[]) || []);
+    const fetchData = async () => {
+      const [slotsRes, clinicsRes] = await Promise.all([
+        supabase
+          .from("doctor_availability")
+          .select("*")
+          .eq("doctor_id", user.id)
+          .order("day_of_week")
+          .order("start_time"),
+        supabase
+          .from("clinics")
+          .select("id, name"),
+      ]);
+      setSlots((slotsRes.data as any[]) || []);
+      setClinics((clinicsRes.data as Clinic[]) || []);
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, [user]);
 
   const addSlot = () => {
@@ -52,6 +65,7 @@ const DoctorAvailability = () => {
       end_time: "17:00",
       slot_duration_minutes: 30,
       appointment_types: ["in_person"],
+      clinic_id: clinics.length > 0 ? clinics[0].id : null,
       is_active: true,
       max_patients: 20,
       isNew: true,
@@ -98,6 +112,7 @@ const DoctorAvailability = () => {
         appointment_types: slot.appointment_types,
         is_active: slot.is_active,
         max_patients: slot.max_patients,
+        clinic_id: slot.clinic_id || null,
       };
 
       if (slot.id) {
@@ -151,7 +166,7 @@ const DoctorAvailability = () => {
           {slots.map((slot, i) => (
             <div key={slot.id || `new-${i}`} className={`glass-card rounded-xl p-4 space-y-3 ${!slot.is_active ? "opacity-50" : ""}`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <select
                     value={slot.day_of_week}
                     onChange={e => updateSlot(i, "day_of_week", parseInt(e.target.value))}
@@ -159,6 +174,19 @@ const DoctorAvailability = () => {
                   >
                     {DAYS.map((d, idx) => <option key={idx} value={idx}>{d}</option>)}
                   </select>
+                  {clinics.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      <select
+                        value={slot.clinic_id || ""}
+                        onChange={e => updateSlot(i, "clinic_id", e.target.value || null)}
+                        className="px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        <option value="">No Clinic</option>
+                        {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
                     <input
                       type="checkbox"
