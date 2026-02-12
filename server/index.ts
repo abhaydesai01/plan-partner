@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 import app from "./app.js";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/plan-partner";
-const PORT = parseInt(process.env.PORT || "3001", 10);
+const portParsed = parseInt(String(process.env.PORT || "3001"), 10);
+const PORT = Number.isFinite(portParsed) && portParsed > 0 && portParsed < 65536 ? portParsed : 3001;
 
 async function start() {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
@@ -11,7 +12,17 @@ async function start() {
   }
   await mongoose.connect(MONGODB_URI);
   console.log("MongoDB connected");
-  app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+  // Bind to 0.0.0.0 so the server is reachable on all interfaces (public port)
+  const host = "0.0.0.0";
+  const server = app.listen(PORT, host, () => console.log(`Server listening on http://${host}:${PORT}`));
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`Port ${PORT} is already in use. Stop the other process or set PORT to a different value (e.g. PORT=3002).`);
+    } else {
+      console.error(err);
+    }
+    process.exit(1);
+  });
 }
 
 start().catch((err) => {

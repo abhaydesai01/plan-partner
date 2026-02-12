@@ -1,0 +1,15 @@
+# Netlify config for plan-partner frontend
+# https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# Optional: set BACKEND_URL here (or in Netlify UI → Site settings → Environment variables)
+# [build.environment]
+#   BACKEND_URL = "http://YOUR_EC2_IP:3001"
+
+# VITE_API_URL must be set in Netlify UI so the frontend calls the proxy (HTTPS) instead of the backend (HTTP)
+# In Netlify: Environment variables → VITE_API_URL = /.netlify/functions/api
+#             Environment variables → BACKEND_URL = http://13.233.110.45:3001

@@ -3,6 +3,11 @@ import { Profile, Program, ClinicMember, Clinic, Patient, Enrollment, Notificati
 
 const router = Router();
 
+/** GET /api - health/root (so "Cannot GET /api" is replaced with a proper response) */
+router.get("/", (_req, res) => {
+  res.json({ ok: true, message: "Plan Partner API", version: "1.0" });
+});
+
 /** GET ?code=INVITE_CODE - public lookup for join-clinic flow */
 router.get("/clinic-invite-by-code", async (req, res) => {
   const code = (req.query.code as string)?.trim()?.toUpperCase();
