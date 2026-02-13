@@ -12,15 +12,21 @@ exports.handler = async (event) => {
   const backendUrl = process.env.BACKEND_URL || "http://13.233.110.45:3001";
   const base = backendUrl.replace(/\/$/, "");
 
-  // event.path is e.g. "/.netlify/functions/api/user_roles" or "/.netlify/functions/api/patients/123"
-  const path = event.path.startsWith(FUNCTION_PATH)
+  // Path: from rewrite ?path=:splat (e.g. path=auth/register), or from event.path when called directly
+  const pathParam = event.queryStringParameters && event.queryStringParameters.path;
+  const pathFromQuery = pathParam ? (pathParam.startsWith("/") ? pathParam : `/${pathParam}`) : null;
+  const pathFromEvent = event.path.startsWith(FUNCTION_PATH)
     ? event.path.slice(FUNCTION_PATH.length) || "/"
+    : event.path.startsWith("/api")
+    ? event.path.slice(4) || "/"
     : event.path;
-  const apiPath = path.startsWith("/") ? path : `/${path}`;
-  const query = event.queryStringParameters
-    ? "?" + new URLSearchParams(event.queryStringParameters).toString()
-    : "";
-  const url = `${base}/api${apiPath}${query}`;
+  const apiPath = pathFromQuery || pathFromEvent;
+  const finalPath = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
+  // Rebuild query without "path" so we don't forward it to the backend
+  const q = event.queryStringParameters ? { ...event.queryStringParameters } : {};
+  delete q.path;
+  const query = Object.keys(q).length ? "?" + new URLSearchParams(q).toString() : "";
+  const url = `${base}/api${finalPath}${query}`;
 
   const headers = { "Content-Type": "application/json" };
   if (event.headers.authorization) headers["Authorization"] = event.headers.authorization;

@@ -2,13 +2,20 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import app from "./app.js";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/plan-partner";
+const DEFAULT_MONGODB_URI = "mongodb://localhost:27017/plan-partner";
+const MONGODB_URI = process.env.MONGODB_URI || DEFAULT_MONGODB_URI;
+const isProduction = process.env.NODE_ENV === "production";
 const portParsed = parseInt(String(process.env.PORT || "3001"), 10);
 const PORT = Number.isFinite(portParsed) && portParsed > 0 && portParsed < 65536 ? portParsed : 3001;
 
 async function start() {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "change-me-in-production") {
     console.warn("Set JWT_SECRET in production for auth.");
+  }
+  if (isProduction && MONGODB_URI === DEFAULT_MONGODB_URI) {
+    console.error("Production requires MONGODB_URI to be set (e.g. MongoDB Atlas). Current value is localhost.");
+    console.error("On your server, set the env var or add to server/.env: MONGODB_URI=mongodb+srv://...");
+    process.exit(1);
   }
   try {
     await mongoose.connect(MONGODB_URI);

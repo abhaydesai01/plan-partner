@@ -6,10 +6,18 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Route all API subpaths to the single api function (otherwise /.netlify/functions/api/auth/register etc. 404)
+# Pass the subpath as ?path= so the function can proxy to the correct backend route
+[[redirects]]
+  from = "/.netlify/functions/api/*"
+  to = "/.netlify/functions/api?path=:splat"
+  status = 200
+  force = true
+
 # Optional: set BACKEND_URL here (or in Netlify UI → Site settings → Environment variables)
 # [build.environment]
 #   BACKEND_URL = "http://YOUR_EC2_IP:3001"
 
 # VITE_API_URL must be set in Netlify UI so the frontend calls the proxy (HTTPS) instead of the backend (HTTP)
 # In Netlify: Environment variables → VITE_API_URL = /.netlify/functions/api
-#             Environment variables → BACKEND_URL = http://13.233.110.45:3001
+#             Environment variables → BACKEND_URL = http://YOUR_SERVER_IP:3001
