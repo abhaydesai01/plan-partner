@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 import { Shield, Copy, QrCode, Check, X, Clock, UserPlus, RefreshCw } from "lucide-react";
 
 type VaultCode = { id: string; vault_code: string; is_active: boolean };
@@ -24,33 +24,21 @@ const PatientVault = () => {
 
   const fetchData = async () => {
     if (!user) return;
+    try {
+      const list = await api.get<{ id?: string; _id?: string; vault_code?: string }[]>("patient_vault_codes", { patient_user_id: user.id });
+      let vc = Array.isArray(list) ? list[0] : null;
+      if (!vc) {
+        vc = await api.post<any>("patient_vault_codes", { patient_user_id: user.id });
+      }
+      setVaultCode(vc ? { ...vc, id: vc.id || vc._id } : null);
 
-    // Fetch or create vault code
-    let { data: vc } = await supabase
-      .from("patient_vault_codes")
-      .select("*")
-      .eq("patient_user_id", user.id)
-      .maybeSingle();
-
-    if (!vc) {
-      const { data: newVc } = await supabase
-        .from("patient_vault_codes")
-        .insert({ patient_user_id: user.id })
-        .select()
-        .single();
-      vc = newVc;
+      const linkData = await api.get<DoctorLink[]>("patient_doctor_links", { patient_user_id: user.id });
+      const sorted = Array.isArray(linkData) ? linkData.sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime()) : [];
+      setLinks(sorted);
+    } catch {
+      setVaultCode(null);
+      setLinks([]);
     }
-
-    setVaultCode(vc);
-
-    // Fetch doctor links
-    const { data: linkData } = await supabase
-      .from("patient_doctor_links")
-      .select("*")
-      .eq("patient_user_id", user.id)
-      .order("requested_at", { ascending: false });
-
-    setLinks(linkData || []);
     setLoading(false);
   };
 
@@ -65,30 +53,26 @@ const PatientVault = () => {
   };
 
   const regenerateCode = async () => {
-    if (!user || !vaultCode) return;
-    const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const { error } = await supabase
-      .from("patient_vault_codes")
-      .update({ vault_code: newCode })
-      .eq("patient_user_id", user.id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      setVaultCode({ ...vaultCode, vault_code: newCode });
+    if (!user || !vaultCode?.id) return;
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let newCode = "";
+    for (let i = 0; i < 8; i++) newCode += chars[Math.floor(Math.random() * chars.length)];
+    try {
+      const updated = await api.patch<{ vault_code?: string }>(`patient_vault_codes/${vaultCode.id}`, { vault_code: newCode });
+      setVaultCode({ ...vaultCode, vault_code: updated?.vault_code ?? newCode });
       toast({ title: "Code regenerated" });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     }
   };
 
   const updateLinkStatus = async (linkId: string, status: "approved" | "rejected") => {
-    const { error } = await supabase
-      .from("patient_doctor_links")
-      .update({ status, responded_at: new Date().toISOString() })
-      .eq("id", linkId);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.patch(`patient_doctor_links/${linkId}`, { status, responded_at: new Date().toISOString() });
       toast({ title: status === "approved" ? "Doctor approved" : "Request rejected" });
       fetchData();
+    } catch (err: unknown) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     }
   };
 

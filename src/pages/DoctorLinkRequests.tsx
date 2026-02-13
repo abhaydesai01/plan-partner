@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { UserPlus, Check, X, Clock, Link } from "lucide-react";
 
@@ -16,12 +16,17 @@ const DoctorLinkRequests = () => {
 
   const fetchData = async () => {
     if (!user) return;
-    const [reqRes, patRes] = await Promise.all([
-      supabase.from("link_requests").select("*").eq("doctor_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("patients").select("id, full_name, patient_user_id").eq("doctor_id", user.id).order("full_name"),
-    ]);
-    setRequests(reqRes.data || []);
-    setPatients(patRes.data || []);
+    try {
+      const [reqList, patList] = await Promise.all([
+        api.get<any[]>("link_requests").catch(() => []),
+        api.get<any[]>("patients").catch(() => []),
+      ]);
+      setRequests(Array.isArray(reqList) ? reqList : []);
+      setPatients(Array.isArray(patList) ? patList : []);
+    } catch {
+      setRequests([]);
+      setPatients([]);
+    }
     setLoading(false);
   };
 
@@ -29,51 +34,31 @@ const DoctorLinkRequests = () => {
 
   const handleApprove = async (request: any) => {
     const selectedPatientId = selectedPatientMap[request.id];
-    if (!selectedPatientId) {
-      toast({ title: "Select a patient", description: "Choose which patient record to link", variant: "destructive" });
-      return;
-    }
     setProcessingId(request.id);
 
-    // Update patient record with the patient_user_id
-    const { error: patientError } = await supabase
-      .from("patients")
-      .update({ patient_user_id: request.patient_user_id })
-      .eq("id", selectedPatientId);
-
-    if (patientError) {
-      toast({ title: "Error", description: patientError.message, variant: "destructive" });
-      setProcessingId(null);
-      return;
-    }
-
-    // Update request status
-    const { error: reqError } = await supabase
-      .from("link_requests")
-      .update({ status: "approved", linked_patient_id: selectedPatientId, resolved_at: new Date().toISOString() })
-      .eq("id", request.id);
-
-    if (reqError) {
-      toast({ title: "Error", description: reqError.message, variant: "destructive" });
-    } else {
-      toast({ title: "Request approved", description: `${request.patient_name} has been linked.` });
+    try {
+      if (selectedPatientId) {
+        await api.patch(`patients/${selectedPatientId}`, { patient_user_id: request.patient_user_id });
+        await api.patch(`link_requests/${request.id}`, { status: "approved", linked_patient_id: selectedPatientId, resolved_at: new Date().toISOString() });
+      } else {
+        await api.patch(`link_requests/${request.id}`, { status: "approved", resolved_at: new Date().toISOString() });
+      }
+      toast({ title: "Request approved", description: `${request.patient_name} is now connected. They can connect to multiple doctors.` });
       fetchData();
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setProcessingId(null);
   };
 
   const handleDeny = async (request: any) => {
     setProcessingId(request.id);
-    const { error } = await supabase
-      .from("link_requests")
-      .update({ status: "denied", resolved_at: new Date().toISOString() })
-      .eq("id", request.id);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.patch(`link_requests/${request.id}`, { status: "denied", resolved_at: new Date().toISOString() });
       toast({ title: "Request denied" });
       fetchData();
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
     setProcessingId(null);
   };
@@ -124,9 +109,9 @@ const DoctorLinkRequests = () => {
                     onChange={e => setSelectedPatientMap(prev => ({ ...prev, [r.id]: e.target.value }))}
                     className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                   >
-                    <option value="">Link to patient record...</option>
+                    <option value="">Approve (link to existing or create)</option>
                     {unlinkablePatients.map(p => (
-                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                      <option key={p.id} value={p.id}>Link to: {p.full_name}</option>
                     ))}
                   </select>
                   <div className="flex gap-2">
@@ -193,9 +178,9 @@ function DoctorCode({ userId }: { userId?: string }) {
 
   useEffect(() => {
     if (!userId) return;
-    supabase.from("profiles").select("doctor_code").eq("user_id", userId).maybeSingle().then(({ data }) => {
-      setCode(data?.doctor_code || null);
-    });
+    api.get<{ doctor_code?: string }[]>("profiles", { user_id: userId }).then((data) => {
+      setCode(Array.isArray(data) && data[0] ? data[0].doctor_code || null : null);
+    }).catch(() => setCode(null));
   }, [userId]);
 
   if (!code) return <p className="text-sm text-muted-foreground">Loading...</p>;

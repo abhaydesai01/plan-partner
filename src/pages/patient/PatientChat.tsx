@@ -1,16 +1,44 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { api, getStoredToken } from "@/lib/api";
 import { Send, Heart, Shield, Menu } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+const VITAL_TYPES = [
+  { value: "blood_pressure", label: "Blood Pressure", unit: "mmHg" },
+  { value: "heart_rate", label: "Heart Rate", unit: "bpm" },
+  { value: "temperature", label: "Temperature", unit: "°F" },
+  { value: "weight", label: "Weight", unit: "kg" },
+  { value: "blood_sugar", label: "Blood Sugar", unit: "mg/dL" },
+  { value: "spo2", label: "SpO2", unit: "%" },
+];
+
+const MEAL_TYPES = [
+  { value: "breakfast", label: "Breakfast" },
+  { value: "lunch", label: "Lunch" },
+  { value: "dinner", label: "Dinner" },
+  { value: "snack", label: "Snack" },
+  { value: "other", label: "Other" },
+];
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-chat`;
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -19,17 +47,17 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [showVitalModal, setShowVitalModal] = useState(false);
+  const [showMealModal, setShowMealModal] = useState(false);
+  const [vitalForm, setVitalForm] = useState({ vital_type: "heart_rate", value: "", bp_upper: "", bp_lower: "", notes: "" });
+  const [mealForm, setMealForm] = useState({ meal_type: "lunch", notes: "" });
+  const [savingVital, setSavingVital] = useState(false);
+  const [savingMeal, setSavingMeal] = useState(false);
+
   useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("patients")
-      .select("full_name")
-      .eq("patient_user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setPatientName(data.full_name.split(" ")[0]);
-      });
-  }, [user]);
+    const p = session?.patient as { full_name?: string } | undefined;
+    if (p?.full_name) setPatientName(p.full_name.split(" ")[0] || "");
+  }, [session?.patient]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,15 +88,12 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
     let assistantSoFar = "";
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const resp = await fetch(CHAT_URL, {
+      const token = getStoredToken();
+      const resp = await fetch(`${API_BASE}/chat/patient`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ messages: updatedMessages }),
       });
@@ -154,6 +179,51 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
     setIsLoading(false);
   };
 
+  const handleLogVital = async () => {
+    const isBp = vitalForm.vital_type === "blood_pressure";
+    if (isBp ? !vitalForm.bp_upper.trim() || !vitalForm.bp_lower.trim() : !vitalForm.value.trim()) {
+      toast({ title: "Enter a value", variant: "destructive" });
+      return;
+    }
+    setSavingVital(true);
+    try {
+      const vitalInfo = VITAL_TYPES.find((t) => t.value === vitalForm.vital_type);
+      const isBp = vitalForm.vital_type === "blood_pressure";
+      const valueText = isBp ? `${vitalForm.bp_upper.trim()}/${vitalForm.bp_lower.trim()}` : vitalForm.value.trim();
+      const numericVal = isBp ? parseFloat(vitalForm.bp_upper) : parseFloat(vitalForm.value);
+      await api.post("me/vitals", {
+        vital_type: vitalForm.vital_type,
+        value_text: valueText,
+        value_numeric: Number.isFinite(numericVal) ? numericVal : undefined,
+        unit: vitalInfo?.unit || undefined,
+        notes: vitalForm.notes.trim() || undefined,
+      });
+      toast({ title: "Vital recorded" });
+      setShowVitalModal(false);
+      setVitalForm({ vital_type: "heart_rate", value: "", bp_upper: "", bp_lower: "", notes: "" });
+    } catch (e) {
+      toast({ title: "Failed to log vital", description: (e as Error).message, variant: "destructive" });
+    }
+    setSavingVital(false);
+  };
+
+  const handleLogMeal = async () => {
+    setSavingMeal(true);
+    try {
+      await api.post("me/food_logs", {
+        meal_type: mealForm.meal_type,
+        notes: mealForm.notes.trim() || undefined,
+        food_items: mealForm.notes.trim() ? [{ name: mealForm.notes.trim() }] : undefined,
+      });
+      toast({ title: "Meal logged" });
+      setShowMealModal(false);
+      setMealForm({ meal_type: "lunch", notes: "" });
+    } catch (e) {
+      toast({ title: "Failed to log meal", description: (e as Error).message, variant: "destructive" });
+    }
+    setSavingMeal(false);
+  };
+
   const hasMessages = messages.length > 0;
 
   return (
@@ -237,6 +307,18 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                     {chip.label}
                   </button>
                 ))}
+                <button
+                  onClick={() => setShowVitalModal(true)}
+                  className="px-3 py-1.5 text-xs rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                >
+                  ➕ Log a vital
+                </button>
+                <button
+                  onClick={() => setShowMealModal(true)}
+                  className="px-3 py-1.5 text-xs rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                >
+                  ➕ Log my meal
+                </button>
               </div>
 
               {/* Footer */}
@@ -288,6 +370,22 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
               </div>
             </div>
 
+            {/* Quick actions when in chat - Log vital / Log meal */}
+            <div className="flex flex-wrap justify-center gap-2 px-4 pb-2">
+              <button
+                onClick={() => setShowVitalModal(true)}
+                className="px-3 py-1.5 text-xs rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                ➕ Log a vital
+              </button>
+              <button
+                onClick={() => setShowMealModal(true)}
+                className="px-3 py-1.5 text-xs rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                ➕ Log my meal
+              </button>
+            </div>
+
             {/* Input at bottom when chatting */}
             <div className="flex-shrink-0 px-4 pb-4 pt-2 border-t border-border/30">
               <div className="max-w-3xl mx-auto relative border border-border rounded-2xl bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
@@ -320,6 +418,129 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
           </>
         )}
       </div>
+
+      {/* Log vital modal */}
+      <Dialog open={showVitalModal} onOpenChange={setShowVitalModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Log a vital</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>Type</Label>
+              <select
+                value={vitalForm.vital_type}
+                onChange={(e) => setVitalForm((f) => ({ ...f, vital_type: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
+              >
+                {VITAL_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label} ({t.unit})</option>
+                ))}
+              </select>
+            </div>
+            {vitalForm.vital_type === "blood_pressure" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Upper (Systolic) mmHg *</Label>
+                  <Input
+                    type="number"
+                    min={60}
+                    max={250}
+                    placeholder="120"
+                    value={vitalForm.bp_upper}
+                    onChange={(e) => setVitalForm((f) => ({ ...f, bp_upper: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Lower (Diastolic) mmHg *</Label>
+                  <Input
+                    type="number"
+                    min={40}
+                    max={150}
+                    placeholder="80"
+                    value={vitalForm.bp_lower}
+                    onChange={(e) => setVitalForm((f) => ({ ...f, bp_lower: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Label>Value *</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. 72"
+                  value={vitalForm.value}
+                  onChange={(e) => setVitalForm((f) => ({ ...f, value: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+            )}
+            <div>
+              <Label>Notes (optional)</Label>
+              <Textarea
+                placeholder="Any context"
+                value={vitalForm.notes}
+                onChange={(e) => setVitalForm((f) => ({ ...f, notes: e.target.value }))}
+                className="mt-1 min-h-[60px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVitalModal(false)}>Cancel</Button>
+            <Button
+              onClick={handleLogVital}
+              disabled={
+                savingVital ||
+                (vitalForm.vital_type === "blood_pressure"
+                  ? !vitalForm.bp_upper.trim() || !vitalForm.bp_lower.trim()
+                  : !vitalForm.value.trim())
+              }
+            >
+              {savingVital ? "Saving..." : "Save vital"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Log meal modal */}
+      <Dialog open={showMealModal} onOpenChange={setShowMealModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Log my meal</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>Meal type</Label>
+              <select
+                value={mealForm.meal_type}
+                onChange={(e) => setMealForm((f) => ({ ...f, meal_type: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
+              >
+                {MEAL_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>What did you eat? (optional)</Label>
+              <Textarea
+                placeholder="e.g. Rice, dal, vegetables"
+                value={mealForm.notes}
+                onChange={(e) => setMealForm((f) => ({ ...f, notes: e.target.value }))}
+                className="mt-1 min-h-[80px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMealModal(false)}>Cancel</Button>
+            <Button onClick={handleLogMeal} disabled={savingMeal}>
+              {savingMeal ? "Saving..." : "Log meal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

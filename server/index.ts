@@ -7,11 +7,23 @@ const portParsed = parseInt(String(process.env.PORT || "3001"), 10);
 const PORT = Number.isFinite(portParsed) && portParsed > 0 && portParsed < 65536 ? portParsed : 3001;
 
 async function start() {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    console.warn("SUPABASE_URL and SUPABASE_ANON_KEY should be set for auth.");
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "change-me-in-production") {
+    console.warn("Set JWT_SECRET in production for auth.");
   }
-  await mongoose.connect(MONGODB_URI);
-  console.log("MongoDB connected");
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log("MongoDB connected");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("MongoDB connection failed:", msg);
+    if (msg.includes("ECONNREFUSED") || msg.includes("querySrv")) {
+      console.error("\nTroubleshooting:");
+      console.error("  - Using Atlas? Check cluster is running, Network Access allows your IP (or 0.0.0.0/0 for dev), and the connection string in server/.env is correct.");
+      console.error("  - For local dev without Atlas, install MongoDB and set in server/.env:");
+      console.error("    MONGODB_URI=mongodb://localhost:27017/plan-partner");
+    }
+    throw err;
+  }
   // Bind to 0.0.0.0 so the server is reachable on all interfaces (public port)
   const host = "0.0.0.0";
   const server = app.listen(PORT, host, () => console.log(`Server listening on http://${host}:${PORT}`));

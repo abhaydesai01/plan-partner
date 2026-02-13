@@ -41,18 +41,21 @@ const Appointments = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ patient_id: "", title: "", date: "", time: "10:00", duration_minutes: "30", notes: "" });
+  const [form, setForm] = useState({ patient_id: "", title: "", date: "", time: "10:00", duration_minutes: "30", notes: "", clinic_id: "" });
   const [saving, setSaving] = useState(false);
+  const [clinics, setClinics] = useState<{ id: string; name: string }[]>([]);
 
   const fetchData = async () => {
     if (!user) return;
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
     try {
-      const [apptList, patientList] = await Promise.all([
+      const [apptList, patientList, clinicsList] = await Promise.all([
         api.get<Appointment[]>("appointments"),
         api.get<Patient[]>("patients"),
+        api.get<{ id: string; name: string }[]>("clinics").catch(() => []),
       ]);
+      setClinics(Array.isArray(clinicsList) ? clinicsList : []);
       const patientMap: Record<string, string> = {};
       (patientList || []).forEach((p) => { patientMap[p.id] = p.full_name; });
       setPatients(patientList || []);
@@ -82,10 +85,11 @@ const Appointments = () => {
         scheduled_at: scheduledAt,
         duration_minutes: parseInt(form.duration_minutes),
         notes: form.notes || null,
+        ...(form.clinic_id ? { clinic_id: form.clinic_id } : {}),
       });
       toast({ title: "Appointment scheduled" });
       setShowForm(false);
-      setForm({ patient_id: "", title: "", date: "", time: "10:00", duration_minutes: "30", notes: "" });
+      setForm({ patient_id: "", title: "", date: "", time: "10:00", duration_minutes: "30", notes: "", clinic_id: "" });
       fetchData();
     } catch (err: unknown) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
@@ -93,13 +97,10 @@ const Appointments = () => {
     setSaving(false);
   };
 
-  const updateStatus = async (id: string, status: string, appointment?: Appointment) => {
-    if (status === "completed" && appointment) {
-      setCompletingAppointment(appointment);
-      return;
-    }
+  const updateStatus = async (id: string, status: string) => {
     try {
       await api.patch("appointments/" + id, { status });
+      if (status === "completed") toast({ title: "Marked completed", description: "Patient will receive a feedback request." });
       fetchData();
     } catch (err: unknown) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
@@ -157,6 +158,15 @@ const Appointments = () => {
                   </select>
                 </div>
                 <input required placeholder="Appointment Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                {clinics.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">At clinic (optional)</label>
+                    <select value={form.clinic_id} onChange={(e) => setForm({ ...form, clinic_id: e.target.value })} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                      <option value="">No specific clinic</option>
+                      {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">Date</label>

@@ -93,7 +93,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 const InlineContactForm = () => {
@@ -114,10 +114,7 @@ const InlineContactForm = () => {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("send-contact-email", {
-        body: { ...form, type: "contact" },
-      });
-      if (error) throw error;
+      await api.post("contact", { ...form, type: "contact" });
       setSubmitted(true);
       toast({ title: "Message sent!", description: "We'll get back to you shortly." });
     } catch {

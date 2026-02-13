@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getStoredToken } from "@/lib/api";
 import { Bot, Send, X, Sparkles, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doctor-chat`;
-const EVIDENCE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clinical-evidence`;
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const EVIDENCE_QUERY_KEY = "__EVIDENCE__";
 
@@ -52,15 +51,12 @@ const DoctorCopilot = ({ patientId, patientName }: DoctorCopilotProps) => {
     setIsLoading(true);
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const resp = await fetch(EVIDENCE_URL, {
+      const token = getStoredToken();
+      const resp = await fetch(`${API_BASE}/clinical-evidence`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ patient_id: patientId }),
       });
@@ -102,15 +98,12 @@ const DoctorCopilot = ({ patientId, patientName }: DoctorCopilotProps) => {
     let assistantSoFar = "";
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const resp = await fetch(CHAT_URL, {
+      const token = getStoredToken();
+      const resp = await fetch(`${API_BASE}/chat/doctor`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ messages: updatedMessages, patient_id: patientId }),
       });

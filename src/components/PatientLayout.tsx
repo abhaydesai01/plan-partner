@@ -14,15 +14,21 @@ import {
   MessageSquare,
   FlaskConical,
   Shield,
+  UtensilsCrossed,
+  Link2,
+  Star,
 } from "lucide-react";
 
 const navItems = [
   { to: "/patient", icon: MessageSquare, label: "AI Assistant", exact: true },
   { to: "/patient/overview", icon: Home, label: "Overview" },
+  { to: "/patient/connect-doctor", icon: Link2, label: "Connect to doctor" },
   { to: "/patient/vitals", icon: Activity, label: "Vitals" },
   { to: "/patient/lab-results", icon: FlaskConical, label: "Lab Results" },
   { to: "/patient/documents", icon: Upload, label: "Documents" },
   { to: "/patient/appointments", icon: CalendarDays, label: "Appointments" },
+  { to: "/patient/feedback", icon: Star, label: "Feedback" },
+  { to: "/patient/food-analysis", icon: UtensilsCrossed, label: "Food Analysis" },
   { to: "/patient/vault", icon: Shield, label: "Health Vault" },
 ];
 
@@ -88,24 +94,19 @@ export function PatientLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {children instanceof Object && (children as any)?.type?.name === "PatientChat" ? (
-        // Chat page renders full-screen, passes menu opener
-        children
-      ) : (
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-16 border-b border-border bg-card flex items-center px-4 lg:px-6 sticky top-0 z-30">
-            <button onClick={() => setSidebarOpen(true)} className="mr-3 text-muted-foreground">
-              <Menu className="w-5 h-5" />
-            </button>
-            <h2 className="text-lg font-heading font-semibold text-foreground">
-              {navItems.find((i) => i.exact ? location.pathname === i.to : location.pathname === i.to || location.pathname.startsWith(i.to + "/"))?.label || "My Health"}
-            </h2>
-          </header>
-          <main className="flex-1 p-4 lg:p-6 overflow-auto">
-            {children}
-          </main>
-        </div>
-      )}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-16 border-b border-border bg-card flex items-center px-4 lg:px-6 sticky top-0 z-30">
+          <button onClick={() => setSidebarOpen(true)} className="mr-3 text-muted-foreground">
+            <Menu className="w-5 h-5" />
+          </button>
+          <h2 className="text-lg font-heading font-semibold text-foreground">
+            {navItems.find((i) => i.exact ? location.pathname === i.to : location.pathname === i.to || location.pathname.startsWith(i.to + "/"))?.label || "My Health"}
+          </h2>
+        </header>
+        <main className="flex-1 p-4 lg:p-6 overflow-auto">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

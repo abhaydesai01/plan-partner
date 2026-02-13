@@ -62,8 +62,8 @@ Deno.serve(async (req) => {
     const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
     if (!PERPLEXITY_API_KEY) throw new Error("PERPLEXITY_API_KEY is not configured");
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     // Get patient data
     const { data: patient } = await serviceClient
@@ -129,21 +129,10 @@ Deno.serve(async (req) => {
     const rawEvidence = perplexityData.choices?.[0]?.message?.content ?? "";
     const citations = perplexityData.citations ?? [];
 
-    // Step 2: Use Lovable AI to format evidence for THIS patient
+    // Step 2: Use Gemini to format evidence for THIS patient
     const patientSummary = `Patient: ${patient.full_name}, ${age} ${gender}. Conditions: ${conditions || "None"}. Medications: ${medications || "None"}.`;
 
-    const formatResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content: `You are a Clinical Evidence Assistant. Given a patient summary and research evidence, select the 3-5 most clinically relevant sources and format them.
+    const formatSystemPrompt = `You are a Clinical Evidence Assistant. Given a patient summary and research evidence, select the 3-5 most clinically relevant sources and format them.
 
 Rules:
 - Do NOT fabricate studies. Use ONLY the provided evidence.
@@ -161,15 +150,22 @@ OUTPUT FORMAT (use markdown):
 
 Repeat for each source (3-5 max).
 
-If citations are available, use them as source links. Otherwise use any URLs from the evidence text.`
-          },
-          {
+If citations are available, use them as source links. Otherwise use any URLs from the evidence text.`;
+
+    const formatResp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: formatSystemPrompt }] },
+          contents: [{
             role: "user",
-            content: `PATIENT SUMMARY:\n${patientSummary}\n\nRESEARCH EVIDENCE:\n${rawEvidence}\n\nCITATIONS:\n${citations.map((c: string, i: number) => `[${i + 1}] ${c}`).join("\n")}`
-          },
-        ],
-      }),
-    });
+            parts: [{ text: `PATIENT SUMMARY:\n${patientSummary}\n\nRESEARCH EVIDENCE:\n${rawEvidence}\n\nCITATIONS:\n${citations.map((c: string, i: number) => `[${i + 1}] ${c}`).join("\n")}` }],
+          }],
+        }),
+      }
+    );
 
     if (!formatResp.ok) {
       // Fall back to raw evidence if formatting fails
@@ -179,7 +175,7 @@ If citations are available, use them as source links. Otherwise use any URLs fro
     }
 
     const formatData = await formatResp.json();
-    const formattedContent = formatData.choices?.[0]?.message?.content ?? rawEvidence;
+    const formattedContent = formatData.candidates?.[0]?.content?.parts?.[0]?.text ?? rawEvidence;
 
     return new Response(JSON.stringify({ content: formattedContent, citations }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

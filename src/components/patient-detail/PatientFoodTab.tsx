@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { UtensilsCrossed, Flame, Beef, Wheat, Droplets, Send, Loader2 } from "lucide-react";
+import { NutritionInsights } from "@/components/NutritionInsights";
+import { computeNutritionInsights } from "@/lib/nutritionAnalysis";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -81,6 +83,8 @@ const PatientFoodTab = ({ patientId, doctorId }: Props) => {
     setParsing(false);
   };
 
+  const nutritionInsights = useMemo(() => computeNutritionInsights(logs), [logs]);
+
   // Analytics
   const todayLogs = logs.filter(l => format(new Date(l.logged_at), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"));
   const todayCalories = todayLogs.reduce((s, l) => s + (l.total_calories || 0), 0);
@@ -112,6 +116,11 @@ const PatientFoodTab = ({ patientId, doctorId }: Props) => {
 
   return (
     <div className="space-y-6">
+      {/* AI Nutrition Insights */}
+      <div className="glass-card rounded-xl p-5">
+        <NutritionInsights data={nutritionInsights} />
+      </div>
+
       {/* WhatsApp-style food logger */}
       <div className="glass-card rounded-xl p-5 space-y-3">
         <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">

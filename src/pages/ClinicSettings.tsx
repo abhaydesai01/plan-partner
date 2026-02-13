@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
-import { Building2, Users, Send, Copy, Check, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, Link as LinkIcon } from "lucide-react";
+import { Building2, Users, Send, Copy, X, UserPlus, Crown, Shield, Stethoscope, QrCode, ExternalLink, KeyRound } from "lucide-react";
 
 const ROLE_ICONS: Record<string, typeof Crown> = {
   owner: Crown,
@@ -22,7 +22,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const ClinicSettings = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const [clinic, setClinic] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
@@ -34,39 +34,64 @@ const ClinicSettings = () => {
   const [sending, setSending] = useState(false);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [doctorCode, setDoctorCode] = useState<string | null>(null);
+  const [memberProfiles, setMemberProfiles] = useState<Record<string, { full_name?: string }>>({});
+  const [hasClinicLogin, setHasClinicLogin] = useState<boolean | null>(null);
+  const [clinicLoginEmail, setClinicLoginEmail] = useState("");
+  const [clinicLoginPassword, setClinicLoginPassword] = useState("");
+  const [creatingLogin, setCreatingLogin] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
+    try {
+      const [clinicsList, profileRes] = await Promise.all([
+        api.get<any[]>("clinics").catch(() => []),
+        api.get<{ doctor_code?: string }[]>("profiles", { user_id: user.id }).catch(() => []),
+      ]);
+      const profile = Array.isArray(profileRes) ? profileRes[0] : profileRes;
+      setDoctorCode((profile as { doctor_code?: string })?.doctor_code ?? null);
 
-    // Get user's clinic membership
-    const { data: membership } = await supabase
-      .from("clinic_members")
-      .select("clinic_id, role")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
+      const clinics = Array.isArray(clinicsList) ? clinicsList : [];
+      const clinic = clinics[0] ?? null;
+      if (!clinic) { setLoading(false); return; }
 
-    if (!membership) { setLoading(false); return; }
-    setMyRole(membership.role);
-
-    const [clinicRes, membersRes, invitesRes] = await Promise.all([
-      supabase.from("clinics").select("*").eq("id", membership.clinic_id).single(),
-      supabase.from("clinic_members").select("*, profiles:user_id(full_name, avatar_url)").eq("clinic_id", membership.clinic_id).order("joined_at"),
-      supabase.from("clinic_invites").select("*").eq("clinic_id", membership.clinic_id).order("created_at", { ascending: false }),
-    ]);
-
-    setClinic(clinicRes.data);
-    setMembers(membersRes.data || []);
-    setInvites(invitesRes.data || []);
-
-    // Fetch doctor code for enrollment link
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("doctor_code")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    setDoctorCode(profileData?.doctor_code || null);
-
+      const [membersList, invitesList] = await Promise.all([
+        api.get<any[]>("clinic_members", { clinic_id: clinic.id }).catch(() => []),
+        api.get<any[]>("clinic_invites", { clinic_id: clinic.id }).catch(() => []),
+      ]);
+      const members = Array.isArray(membersList) ? membersList : [];
+      const invites = Array.isArray(invitesList) ? invitesList : [];
+      const membership = members.find((m: any) => m.user_id === user.id);
+      setMyRole(membership?.role ?? null);
+      setClinic(clinic);
+      setMembers(members);
+      setInvites(invites);
+      const profilesByUser: Record<string, { full_name?: string }> = {};
+      await Promise.all(
+        members.map(async (m: any) => {
+          try {
+            const list = await api.get<any[]>("profiles", { user_id: m.user_id });
+            const p = Array.isArray(list) ? list[0] : list;
+            if (p?.user_id) profilesByUser[p.user_id] = { full_name: p.full_name };
+          } catch { /* ignore */ }
+        })
+      );
+      setMemberProfiles(profilesByUser);
+      if (clinic?.id) {
+        try {
+          const hasLoginRes = await api.get<{ hasLogin: boolean }>(`clinics/${clinic.id}/has-login`);
+          setHasClinicLogin(hasLoginRes.hasLogin);
+        } catch {
+          setHasClinicLogin(null);
+        }
+      } else {
+        setHasClinicLogin(null);
+      }
+    } catch {
+      setClinic(null);
+      setMembers([]);
+      setInvites([]);
+      setHasClinicLogin(null);
+    }
     setLoading(false);
   };
 
@@ -76,29 +101,47 @@ const ClinicSettings = () => {
     e.preventDefault();
     if (!clinic || !user) return;
     setSending(true);
-
-    const { error } = await supabase.from("clinic_invites").insert({
-      clinic_id: clinic.id,
-      email: inviteEmail,
-      role: inviteRole as any,
-      invited_by: user.id,
-    });
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.post("clinic_invites", {
+        clinic_id: clinic.id,
+        email: inviteEmail,
+        role: inviteRole,
+        invited_by: user.id,
+      });
       toast({ title: "Invite created", description: `Invite for ${inviteEmail} created. Share the invite code with them.` });
       setShowInvite(false);
       setInviteEmail("");
       setInviteRole("doctor");
       fetchData();
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code);
     toast({ title: "Copied!", description: "Invite code copied to clipboard." });
+  };
+
+  const handleCreateClinicLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clinic?.id || !clinicLoginEmail.trim() || !clinicLoginPassword) return;
+    setCreatingLogin(true);
+    try {
+      await api.post(`clinics/${clinic.id}/create-login`, { email: clinicLoginEmail.trim(), password: clinicLoginPassword });
+      toast({ title: "Clinic login created", description: "The clinic can now sign in with this email." });
+      setClinicLoginEmail("");
+      setClinicLoginPassword("");
+      setHasClinicLogin(true);
+    } catch (err) {
+      const msg = (err as Error).message || "Failed to create clinic login";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      if (String(msg).toLowerCase().includes("already has a login")) setHasClinicLogin(true);
+    } finally {
+      setCreatingLogin(false);
+    }
   };
 
   const isAdmin = myRole === "owner" || myRole === "admin";
@@ -158,6 +201,64 @@ const ClinicSettings = () => {
           )}
         </div>
       </div>
+
+      {/* Clinic login (separate credentials for clinic) */}
+      {isAdmin && hasClinicLogin === false && (
+        <div className="glass-card rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <KeyRound className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-heading font-semibold text-foreground">Clinic login</h3>
+              <p className="text-xs text-muted-foreground">Create separate credentials so the clinic can sign in as &quot;Clinic&quot; (e.g. for front desk).</p>
+            </div>
+          </div>
+          <form onSubmit={handleCreateClinicLogin} className="space-y-3 max-w-sm">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Email for clinic login</label>
+              <input
+                type="email"
+                required
+                value={clinicLoginEmail}
+                onChange={(e) => setClinicLoginEmail(e.target.value)}
+                placeholder="clinic@example.com"
+                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Password</label>
+              <input
+                type="password"
+                required
+                value={clinicLoginPassword}
+                onChange={(e) => setClinicLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={creatingLogin}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              <KeyRound className="w-4 h-4" />
+              {creatingLogin ? "Creating…" : "Create clinic login"}
+            </button>
+          </form>
+        </div>
+      )}
+      {isAdmin && hasClinicLogin === true && (
+        <div className="glass-card rounded-xl p-5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <KeyRound className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-heading font-semibold text-foreground">Clinic login</h3>
+            <p className="text-xs text-muted-foreground">This clinic already has separate login credentials. As clinic owner/admin you can switch to the clinic portal from the sidebar (Switch to clinic). The clinic can also sign in with email and password on the auth page as a backup.</p>
+          </div>
+        </div>
+      )}
 
       {/* Patient Enrollment Link */}
       {doctorCode && (
@@ -241,10 +342,10 @@ const ClinicSettings = () => {
               <tbody>
                 {members.map(m => {
                   const RoleIcon = ROLE_ICONS[m.role] || Users;
-                  const profileData = m.profiles as any;
+                  const fullName = memberProfiles[m.user_id]?.full_name;
                   return (
                     <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-foreground">{profileData?.full_name || "—"}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{fullName || "—"}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[m.role] || ""}`}>
                           <RoleIcon className="w-3 h-3" /> {m.role}

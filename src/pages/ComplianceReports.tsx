@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { AlertTriangle, TrendingUp, Users, CheckCircle } from "lucide-react";
 
@@ -22,14 +22,20 @@ const ComplianceReports = () => {
   useEffect(() => {
     if (!user) return;
     const fetch = async () => {
-      const [enrollRes, patientRes, programRes] = await Promise.all([
-        supabase.from("enrollments").select("*").eq("doctor_id", user.id),
-        supabase.from("patients").select("id, full_name, status").eq("doctor_id", user.id),
-        supabase.from("programs").select("id, name").eq("doctor_id", user.id),
-      ]);
-      setEnrollments((enrollRes.data || []).map(e => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : 0 })));
-      setPatients(patientRes.data || []);
-      setPrograms(programRes.data || []);
+      try {
+        const [enrollList, patientList, programList] = await Promise.all([
+          api.get<any[]>("enrollments").catch(() => []),
+          api.get<any[]>("patients").catch(() => []),
+          api.get<any[]>("programs").catch(() => []),
+        ]);
+        setEnrollments((Array.isArray(enrollList) ? enrollList : []).map(e => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : 0 })));
+        setPatients(Array.isArray(patientList) ? patientList : []);
+        setPrograms(Array.isArray(programList) ? programList : []);
+      } catch {
+        setEnrollments([]);
+        setPatients([]);
+        setPrograms([]);
+      }
       setLoading(false);
     };
     fetch();

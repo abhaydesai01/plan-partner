@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
-import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight } from "lucide-react";
+import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight, Copy, Check } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface Stats {
@@ -304,16 +304,29 @@ const Dashboard = () => {
 };
 
 function DoctorCodeCard({ userId }: { userId?: string }) {
-  const [code, setCode] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
+    setCode(undefined);
     api.get<{ doctor_code?: string }[]>("profiles", { user_id: userId }).then((data) => {
       setCode(data?.[0]?.doctor_code || null);
     }).catch(() => setCode(null));
   }, [userId]);
 
+  if (code === undefined) {
+    return (
+      <div className="glass-card rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 animate-pulse">
+        <div className="w-10 h-10 rounded-xl bg-muted shrink-0" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="h-4 w-32 bg-muted rounded" />
+          <div className="h-3 w-48 bg-muted rounded" />
+        </div>
+        <div className="h-10 w-28 bg-muted rounded-lg" />
+      </div>
+    );
+  }
   if (!code) return null;
 
   const handleCopy = () => {

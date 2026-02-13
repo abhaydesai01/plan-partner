@@ -1,12 +1,20 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send, Edit3, Save, X } from "lucide-react";
+import { api, getStoredToken } from "@/lib/api";
+import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send, Edit3, Save, X, UtensilsCrossed, ImagePlus, Sparkles, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
+const MEAL_TYPES = [
+  { value: "breakfast", label: "Breakfast" },
+  { value: "lunch", label: "Lunch" },
+  { value: "dinner", label: "Dinner" },
+  { value: "snack", label: "Snack" },
+  { value: "other", label: "Other" },
+] as const;
+
 const PatientOverview = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const [patientData, setPatientData] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
@@ -25,92 +33,160 @@ const PatientOverview = () => {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Log meal from dashboard
+  const [mealType, setMealType] = useState<typeof MEAL_TYPES[number]["value"]>("lunch");
+  const [mealNotes, setMealNotes] = useState("");
+  const [mealImageFile, setMealImageFile] = useState<File | null>(null);
+  const [mealImagePreview, setMealImagePreview] = useState<string | null>(null);
+  const [analyzingMeal, setAnalyzingMeal] = useState(false);
+  const [savingMeal, setSavingMeal] = useState(false);
+  const [mealFoodItems, setMealFoodItems] = useState<{ name: string; quantity?: number; unit?: string; calories?: number; protein?: number; carbs?: number; fat?: number }[]>([]);
+  const [foodLogs, setFoodLogs] = useState<any[]>([]);
+
+  const resetMealForm = useCallback(() => {
+    setMealType("lunch");
+    setMealNotes("");
+    setMealImageFile(null);
+    setMealImagePreview(null);
+    setMealFoodItems([]);
+  }, []);
+
+  const handleMealImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    setMealImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setMealImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+    setMealFoodItems([]);
+  }, []);
+
+  const handleAnalyzeMealImage = useCallback(async () => {
+    if (!mealImageFile || !user) return;
+    setAnalyzingMeal(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64Part = result.includes(",") ? result.split(",")[1] : result;
+          resolve(base64Part || "");
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(mealImageFile);
+      });
+      const result = await api.post<{ meal_type?: string; food_items?: typeof mealFoodItems; notes?: string }>("analyze-meal-image", {
+        image_base64: base64,
+        mime_type: mealImageFile.type,
+      });
+      if (result.meal_type) setMealType(result.meal_type as typeof mealType);
+      if (result.notes) setMealNotes(result.notes);
+      if (Array.isArray(result.food_items)) setMealFoodItems(result.food_items);
+      toast({ title: "Meal analyzed", description: "Food items and meal type have been filled." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNotConfigured = /GEMINI_API_KEY|not configured/i.test(msg);
+      toast({
+        title: "Analysis failed",
+        description: isNotConfigured
+          ? "AI analysis is not set up on the server. You can still log your meal by entering details below."
+          : msg,
+        variant: "destructive",
+      });
+    } finally {
+      setAnalyzingMeal(false);
+    }
+  }, [mealImageFile, user, toast]);
+
+  const handleLogMeal = useCallback(async () => {
+    if (!user || !patientData) return;
+    setSavingMeal(true);
+    try {
+      let imagePath: string | undefined;
+      if (mealImageFile) {
+        const formData = new FormData();
+        formData.append("file", mealImageFile);
+        const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+        const res = await fetch(`${API_BASE}/me/meal-image-upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${getStoredToken()}` },
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const { path } = await res.json();
+        imagePath = path;
+      }
+      await api.post("me/food_logs", {
+        meal_type: mealType,
+        notes: mealNotes.trim() || undefined,
+        food_items: mealFoodItems.length > 0 ? mealFoodItems : undefined,
+        image_path: imagePath,
+      });
+      toast({ title: "Meal logged", description: "Your meal has been saved." });
+      resetMealForm();
+      try {
+        const logsList = await api.get<any[]>("me/food_logs");
+        setFoodLogs(Array.isArray(logsList) ? logsList : []);
+      } catch { /* keep existing list */ }
+    } catch (err) {
+      toast({ title: "Failed to log meal", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSavingMeal(false);
+    }
+  }, [user, patientData, mealType, mealNotes, mealFoodItems, mealImageFile, resetMealForm, toast]);
+
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
-      // Get patient record linked to this user
-      const { data: patient } = await supabase
-        .from("patients")
-        .select("*")
-        .eq("patient_user_id", user.id)
-        .maybeSingle();
-
+      const patient = session?.patient as any;
       if (!patient) {
-        // Check if there's a pending link request
-        const { data: existingReq } = await supabase
-          .from("link_requests")
-          .select("*")
-          .eq("patient_user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        setLinkRequest(existingReq);
+        try {
+          const list = await api.get<any[]>("me/link_requests");
+          setLinkRequest(list?.[0] ?? null);
+        } catch {
+          setLinkRequest(null);
+        }
         setLoading(false);
         return;
       }
       setPatientData(patient);
 
-      const [enrollRes, apptRes, vitalsRes] = await Promise.all([
-        supabase.from("enrollments").select("*, programs(name, type)").eq("patient_id", patient.id).order("enrolled_at", { ascending: false }).limit(5),
-        supabase.from("appointments").select("*").eq("patient_id", patient.id).gte("scheduled_at", new Date().toISOString()).order("scheduled_at").limit(5),
-        supabase.from("vitals").select("*").eq("patient_id", patient.id).order("recorded_at", { ascending: false }).limit(5),
-      ]);
-
-      setEnrollments(enrollRes.data?.map(e => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null })) || []);
-      setUpcomingAppts(apptRes.data || []);
-      setRecentVitals(vitalsRes.data || []);
+      try {
+        const [enrollList, apptList, vitalsList, logsList] = await Promise.all([
+          api.get<any[]>("me/enrollments").catch(() => []),
+          api.get<any[]>("me/appointments").catch(() => []),
+          api.get<any[]>("me/vitals").catch(() => []),
+          api.get<any[]>("me/food_logs").catch(() => []),
+        ]);
+        setEnrollments(Array.isArray(enrollList) ? enrollList.map(e => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null })) : []);
+        setUpcomingAppts(Array.isArray(apptList) ? apptList.filter((a: any) => new Date(a.scheduled_at) >= new Date()).slice(0, 5) : []);
+        setRecentVitals(Array.isArray(vitalsList) ? vitalsList.slice(0, 5) : []);
+        setFoodLogs(Array.isArray(logsList) ? logsList : []);
+      } catch {
+        setEnrollments([]);
+        setUpcomingAppts([]);
+        setRecentVitals([]);
+        setFoodLogs([]);
+      }
       setLoading(false);
     };
     fetchAll();
-  }, [user]);
+  }, [user, session?.patient]);
 
   const handleLinkRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !doctorCode.trim()) return;
     setSubmitting(true);
-
-    // Look up doctor by code
-    const { data: doctorProfile } = await supabase
-      .from("profiles")
-      .select("user_id, full_name, doctor_code")
-      .eq("doctor_code", doctorCode.trim().toUpperCase())
-      .maybeSingle();
-
-    if (!doctorProfile) {
-      toast({ title: "Doctor not found", description: "No doctor found with that code. Please check and try again.", variant: "destructive" });
+    try {
+      await api.post("me/link_requests", { doctor_code: doctorCode.trim(), message: message || null });
+      toast({ title: "Request sent!", description: "Your link request has been sent to the doctor." });
+      const list = await api.get<any[]>("me/link_requests");
+      setLinkRequest(list?.[0] ?? null);
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    // Get user's profile name
-    const { data: myProfile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const { error } = await supabase.from("link_requests").insert({
-      patient_user_id: user.id,
-      patient_name: myProfile?.full_name || "Unknown",
-      doctor_id: doctorProfile.user_id,
-      message: message || null,
-    });
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Request sent!", description: `Your link request has been sent to Dr. ${doctorProfile.full_name}.` });
-      // Refresh to show pending state
-      const { data: newReq } = await supabase
-        .from("link_requests")
-        .select("*")
-        .eq("patient_user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      setLinkRequest(newReq);
-    }
-    setSubmitting(false);
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
@@ -217,6 +293,144 @@ const PatientOverview = () => {
         </div>
       </div>
 
+      {/* Log meal from dashboard */}
+      <div className="glass-card rounded-xl p-5 space-y-4">
+        <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">
+          <UtensilsCrossed className="w-5 h-5 text-primary" />
+          Log meal
+        </h3>
+        <p className="text-sm text-muted-foreground">Upload a photo of your meal for AI analysis, or add details manually.</p>
+
+        {/* Meal type segregation */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-2 block">Meal type</label>
+          <div className="flex flex-wrap gap-2">
+            {MEAL_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setMealType(t.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  mealType === t.value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Image upload + preview */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-2 block">Meal photo (optional)</label>
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
+            <label className="flex flex-col items-center justify-center w-full sm:w-40 h-32 rounded-xl border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleMealImageChange}
+              />
+              {mealImagePreview ? (
+                <img src={mealImagePreview} alt="Meal" className="w-full h-full object-cover rounded-xl" />
+              ) : (
+                <>
+                  <ImagePlus className="w-8 h-8 text-muted-foreground mb-1" />
+                  <span className="text-xs text-muted-foreground">Upload image</span>
+                </>
+              )}
+            </label>
+            {mealImageFile && (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleAnalyzeMealImage}
+                  disabled={analyzingMeal}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {analyzingMeal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {analyzingMeal ? "Analyzing..." : "Analyze with AI"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMealImageFile(null); setMealImagePreview(null); setMealFoodItems([]); }}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Remove photo
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">What did you eat? (optional)</label>
+          <textarea
+            placeholder="e.g. Rice, dal, vegetables — or use Analyze with AI to fill from photo"
+            value={mealNotes}
+            onChange={(e) => setMealNotes(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm min-h-[72px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+
+        {mealFoodItems.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Detected items</p>
+            <p className="text-sm text-foreground">{mealFoodItems.map((i) => i.name).join(", ")}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={handleLogMeal}
+            disabled={savingMeal}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {savingMeal ? <Loader2 className="w-4 h-4 animate-spin" /> : <UtensilsCrossed className="w-4 h-4" />}
+            {savingMeal ? "Saving..." : "Log meal"}
+          </button>
+          <button
+            type="button"
+            onClick={resetMealForm}
+            className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      {/* Previous meal logs */}
+      <div className="glass-card rounded-xl p-5 space-y-3">
+        <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">
+          <UtensilsCrossed className="w-5 h-5 text-primary" />
+          Previous meal logs
+        </h3>
+        {foodLogs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No meals logged yet. Log a meal above to see it here.</p>
+        ) : (
+          <div className="space-y-2 max-h-[320px] overflow-y-auto">
+            {foodLogs.map((log) => {
+              const items = Array.isArray(log.food_items) ? log.food_items : [];
+              const names = items.map((i: { name?: string }) => i?.name).filter(Boolean).join(", ");
+              const summary = names || log.notes || "—";
+              return (
+                <div key={log.id} className="p-3 rounded-lg border border-border/50 bg-muted/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm text-foreground capitalize">{log.meal_type || "Meal"}</p>
+                    <p className="text-xs text-muted-foreground truncate" title={summary}>{summary}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground shrink-0">{format(new Date(log.logged_at), "MMM d, yyyy 'at' HH:mm")}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Health Info - Editable */}
       <div className="glass-card rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
@@ -248,17 +462,12 @@ const PatientOverview = () => {
                 onClick={async () => {
                   if (!patientData?.id) return;
                   setSavingProfile(true);
-                  const { error } = await supabase
-                    .from("patients")
-                    .update({
+                  try {
+                    await api.patch("me/patient", {
                       medications: profileForm.medications ? profileForm.medications.split(";").map(m => m.trim()).filter(Boolean) : [],
                       conditions: profileForm.conditions ? profileForm.conditions.split(";").map(c => c.trim()).filter(Boolean) : [],
                       emergency_contact: profileForm.emergency_contact || null,
-                    })
-                    .eq("id", patientData.id);
-                  if (error) {
-                    toast({ title: "Error", description: error.message, variant: "destructive" });
-                  } else {
+                    });
                     toast({ title: "Profile updated" });
                     setPatientData({
                       ...patientData,
@@ -267,8 +476,11 @@ const PatientOverview = () => {
                       emergency_contact: profileForm.emergency_contact || null,
                     });
                     setEditingProfile(false);
+                  } catch (err) {
+                    toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+                  } finally {
+                    setSavingProfile(false);
                   }
-                  setSavingProfile(false);
                 }}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50"
               >

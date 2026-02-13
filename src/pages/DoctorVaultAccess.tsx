@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 import { Shield, Search, Check, Clock, X, UserPlus } from "lucide-react";
 
 type LinkEntry = {
@@ -21,70 +21,49 @@ const DoctorVaultAccess = () => {
   const [links, setLinks] = useState<LinkEntry[]>([]);
   const [loadingLinks, setLoadingLinks] = useState(true);
 
-  // Fetch existing links on mount
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("patient_doctor_links")
-      .select("*")
-      .eq("doctor_user_id", user.id)
-      .order("requested_at", { ascending: false })
-      .then(({ data }) => {
-        setLinks(data || []);
-        setLoadingLinks(false);
-      });
+    api
+      .get<LinkEntry[]>("patient_doctor_links", { doctor_id: user.id })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setLinks(list.sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime()));
+      })
+      .catch(() => setLinks([]))
+      .finally(() => setLoadingLinks(false));
   }, [user]);
 
   const requestAccess = async () => {
     if (!code.trim() || !user) return;
     setSearching(true);
-
-    // Look up vault code
-    const { data: vault, error: lookupErr } = await supabase
-      .from("patient_vault_codes")
-      .select("patient_user_id, vault_code")
-      .eq("vault_code", code.trim().toUpperCase())
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (lookupErr || !vault) {
-      toast({ title: "Not found", description: "No patient found with this vault code", variant: "destructive" });
-      setSearching(false);
-      return;
-    }
-
-    // Get doctor profile name
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    // Create link request
-    const { error } = await supabase.from("patient_doctor_links").insert({
-      patient_user_id: vault.patient_user_id,
-      doctor_user_id: user.id,
-      doctor_name: profile?.full_name || "Doctor",
-    });
-
-    if (error) {
-      if (error.code === "23505") {
-        toast({ title: "Already requested", description: "You've already sent a request to this patient" });
-      } else {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+    try {
+      const vaultList = await api.get<any[]>("patient_vault_codes", { vault_code: code.trim().toUpperCase() });
+      const vault = Array.isArray(vaultList) ? vaultList[0] : null;
+      if (!vault?.patient_user_id) {
+        toast({ title: "Not found", description: "No patient found with this vault code", variant: "destructive" });
+        setSearching(false);
+        return;
       }
-    } else {
+      const profile = (await api.get<any>("profiles/me").catch(() => null)) as { full_name?: string } | null;
+      await api.post("patient_doctor_links", {
+        patient_user_id: vault.patient_user_id,
+        doctor_user_id: user.id,
+        doctor_name: profile?.full_name || "Doctor",
+      });
       toast({ title: "Access requested", description: "Waiting for patient approval" });
       setCode("");
-      // Refresh links
-      const { data } = await supabase
-        .from("patient_doctor_links")
-        .select("*")
-        .eq("doctor_user_id", user.id)
-        .order("requested_at", { ascending: false });
-      setLinks(data || []);
+      const data = await api.get<LinkEntry[]>("patient_doctor_links", { doctor_id: user.id });
+      setLinks(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      const msg = (err as Error).message || "";
+      if (msg.includes("duplicate") || msg.includes("23505")) {
+        toast({ title: "Already requested", description: "You've already sent a request to this patient" });
+      } else {
+        toast({ title: "Error", description: msg, variant: "destructive" });
+      }
+    } finally {
+      setSearching(false);
     }
-    setSearching(false);
   };
 
   const pending = links.filter(l => l.status === "pending");

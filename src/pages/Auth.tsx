@@ -11,12 +11,19 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"doctor" | "patient">("doctor");
+  const [phone, setPhone] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"doctor" | "patient" | "clinic">("doctor");
+  const [clinicName, setClinicName] = useState("");
+  const [clinicAddress, setClinicAddress] = useState("");
+  const [clinicPhone, setClinicPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
-  if (user && role) return <Navigate to={role === "patient" ? "/patient" : "/dashboard"} replace />;
+  if (user && role) {
+    const to = role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : "/dashboard";
+    return <Navigate to={to} replace />;
+  }
   if (user && !role) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,11 +32,32 @@ const Auth = () => {
     try {
       if (isLogin) {
         const { error } = await signIn(email, password);
-        if (error) toast({ title: "Login failed", description: error.message, variant: "destructive" });
+        if (error) {
+          const isInvalidCreds = error.message.toLowerCase().includes("invalid email or password");
+          toast({
+            title: "Login failed",
+            description: isInvalidCreds
+              ? "Invalid email or password. If you're a patient, create an account first (Sign up → choose Patient, then use the same email to sign in)."
+              : error.message,
+            variant: "destructive",
+          });
+        }
       } else {
-        const { error } = await signUp(email, password, fullName, selectedRole);
+        const name = selectedRole === "clinic" ? clinicName.trim() : fullName;
+        const phoneValue = selectedRole === "clinic" ? clinicPhone.trim() : phone.trim();
+        if (selectedRole === "clinic" && !name) {
+          toast({ title: "Clinic name required", variant: "destructive" });
+          setSubmitting(false);
+          return;
+        }
+        if (!phoneValue) {
+          toast({ title: "Phone number is required", variant: "destructive" });
+          setSubmitting(false);
+          return;
+        }
+        const { error } = await signUp(email, password, name, selectedRole, selectedRole === "clinic" ? { clinic_name: clinicName.trim(), address: clinicAddress.trim() || undefined, phone: phoneValue } : { phone: phoneValue });
         if (error) toast({ title: "Signup failed", description: error.message, variant: "destructive" });
-        else toast({ title: "Check your email", description: "We sent you a verification link to confirm your account." });
+        else toast({ title: "Account created", description: "You can sign in now." });
       }
     } finally {
       setSubmitting(false);
@@ -55,8 +83,8 @@ const Auth = () => {
           {!isLogin && (
             <>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">I am a</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="text-sm font-medium text-foreground">I am signing up as</label>
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedRole("doctor")}
@@ -66,7 +94,18 @@ const Auth = () => {
                         : "bg-background text-muted-foreground border-border hover:bg-muted"
                     }`}
                   >
-                    Doctor / Clinic
+                    Doctor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole("clinic")}
+                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      selectedRole === "clinic"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    Clinic
                   </button>
                   <button
                     type="button"
@@ -81,17 +120,67 @@ const Auth = () => {
                   </button>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder={selectedRole === "doctor" ? "Dr. Sharma" : "Your full name"}
-                />
-              </div>
+              {selectedRole === "clinic" ? (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Clinic Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={clinicName}
+                      onChange={(e) => setClinicName(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="e.g. City Care Clinic"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-muted-foreground">Address (optional)</label>
+                    <input
+                      type="text"
+                      value={clinicAddress}
+                      onChange={(e) => setClinicAddress(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Street, city"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Phone *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={clinicPhone}
+                      onChange={(e) => setClinicPhone(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="+91..."
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder={selectedRole === "doctor" ? "Dr. Sharma" : "Your full name"}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Phone *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="+91..."
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
           <div className="space-y-1.5">

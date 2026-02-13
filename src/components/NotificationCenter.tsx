@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Bell, Check, X, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 
@@ -27,13 +27,12 @@ export function NotificationCenter() {
   const fetchNotifications = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    setNotifications(data || []);
+    try {
+      const data = await api.get<any[]>("notifications");
+      setNotifications(Array.isArray(data) ? data.slice(0, 20) : []);
+    } catch {
+      setNotifications([]);
+    }
     setLoading(false);
   };
 
@@ -42,14 +41,18 @@ export function NotificationCenter() {
   }, [open, user]);
 
   const markRead = async (id: string) => {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    try {
+      await api.patch(`notifications/${id}`, { is_read: true });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch { /* ignore */ }
   };
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    try {
+      await api.patch("notifications/read-all", {});
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch { /* ignore */ }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;

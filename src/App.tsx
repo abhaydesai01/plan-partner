@@ -20,8 +20,10 @@ import DoctorLabResults from "./pages/DoctorLabResults";
 import DoctorDocuments from "./pages/DoctorDocuments";
 import ComplianceReports from "./pages/ComplianceReports";
 import DoctorLinkRequests from "./pages/DoctorLinkRequests";
+import DoctorAvailability from "./pages/DoctorAvailability";
 import Alerts from "./pages/Alerts";
 import DoctorVaultAccess from "./pages/DoctorVaultAccess";
+import DoctorFeedback from "./pages/DoctorFeedback";
 import PublicEnroll from "./pages/PublicEnroll";
 import ClinicSetup from "./pages/ClinicSetup";
 import ClinicSettings from "./pages/ClinicSettings";
@@ -33,6 +35,16 @@ import PatientLabResults from "./pages/patient/PatientLabResults";
 import PatientDocuments from "./pages/patient/PatientDocuments";
 import PatientAppointments from "./pages/patient/PatientAppointments";
 import PatientVault from "./pages/patient/PatientVault";
+import PatientFoodAnalysis from "./pages/patient/PatientFoodAnalysis";
+import PatientConnectDoctor from "./pages/patient/PatientConnectDoctor";
+import PatientFeedback from "./pages/patient/PatientFeedback";
+import ClinicDashboard from "./pages/clinic/ClinicDashboard";
+import ClinicTeam from "./pages/clinic/ClinicTeam";
+import ClinicPatients from "./pages/clinic/ClinicPatients";
+import ClinicAppointments from "./pages/clinic/ClinicAppointments";
+import ClinicSettingsPage from "./pages/clinic/ClinicSettingsPage";
+import ClinicFeedback from "./pages/clinic/ClinicFeedback";
+import { ClinicLayout } from "./components/ClinicLayout";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -66,6 +78,7 @@ const App = () => (
             <Route path="/dashboard/programs" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Programs /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/enrollments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Enrollments /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/appointments" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Appointments /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/availability" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorAvailability /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/vitals" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVitals /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/lab-results" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorLabResults /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/documents" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorDocuments /></DashboardLayout></ProtectedRoute>} />
@@ -74,6 +87,15 @@ const App = () => (
             <Route path="/dashboard/compliance" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><ComplianceReports /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/alerts" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Alerts /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/vault-access" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVaultAccess /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/feedback" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorFeedback /></DashboardLayout></ProtectedRoute>} />
+            
+            {/* Clinic Portal */}
+            <Route path="/clinic" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicDashboard /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/team" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicTeam /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/patients" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicPatients /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/appointments" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicAppointments /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/feedback" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicFeedback /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/settings" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicSettingsPage /></ClinicLayout></ProtectedRoute>} />
             
             {/* Patient Portal - Chat is the landing page */}
             <Route path="/patient" element={
@@ -84,10 +106,13 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/patient/overview" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/connect-doctor" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientConnectDoctor /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/vitals" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVitals /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/lab-results" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientLabResults /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/documents" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientDocuments /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientAppointments /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/feedback" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientFeedback /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/food-analysis" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientFoodAnalysis /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/vault" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVault /></PatientLayout></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />

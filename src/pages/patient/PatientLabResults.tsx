@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { usePatientRecord } from "@/hooks/usePatientRecord";
+import { api } from "@/lib/api";
 import { format } from "date-fns";
-import { FileText, Plus, X } from "lucide-react";
+import { FileText, Plus, X, Upload, ArrowLeft, Sparkles, BookOpen } from "lucide-react";
+import {
+  BarChart, Bar, LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend,
+} from "recharts";
 
 const statusColors: Record<string, string> = {
   normal: "bg-whatsapp/10 text-whatsapp",
@@ -12,13 +14,42 @@ const statusColors: Record<string, string> = {
   critical: "bg-destructive/10 text-destructive",
 };
 
+interface LabChart {
+  title: string;
+  type: string;
+  labels: string[];
+  datasets: { label: string; values: number[] }[];
+}
+
+interface LabReport {
+  id: string;
+  file_name?: string;
+  tested_at: string;
+  ai_summary?: string | null;
+  layman_summary?: string | null;
+  extracted_data?: { key_points?: string[]; charts?: LabChart[] } | null;
+}
+
+interface LabResultRow {
+  id: string;
+  test_name: string;
+  result_value: string;
+  unit: string | null;
+  reference_range: string | null;
+  status: string;
+  tested_at: string;
+}
+
 const PatientLabResults = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
   const { patientId, loading: patientLoading } = usePatientRecord();
   const [results, setResults] = useState<any[]>([]);
+  const [reports, setReports] = useState<LabReport[]>([]);
+  const [selectedReport, setSelectedReport] = useState<{ report: LabReport; results: LabResultRow[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [testName, setTestName] = useState("");
   const [resultValue, setResultValue] = useState("");
   const [unit, setUnit] = useState("");
@@ -26,53 +57,308 @@ const PatientLabResults = () => {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const fetchResults = async () => {
-    if (!patientId) { setLoading(false); return; }
-    const { data } = await supabase.from("lab_results").select("*").eq("patient_id", patientId).order("tested_at", { ascending: false });
-    setResults(data || []);
-    setLoading(false);
+  const fetchResults = useCallback(async () => {
+    if (!patientId) return;
+    try {
+      const [resultsData, reportsData] = await Promise.all([
+        api.get<any[]>("me/lab_results").catch(() => []),
+        api.get<LabReport[]>("me/lab_reports").catch(() => []),
+      ]);
+      setResults(Array.isArray(resultsData) ? resultsData : []);
+      setReports(Array.isArray(reportsData) ? reportsData : []);
+    } catch {
+      setResults([]);
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId]);
+
+  useEffect(() => {
+    if (!patientLoading) fetchResults();
+  }, [patientId, patientLoading, fetchResults]);
+
+  const handleUpload = useCallback(async (file: File) => {
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf";
+    if (!patientId || (!isImage && !isPdf)) {
+      toast({ title: "Please choose an image (JPEG, PNG, WebP) or PDF", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const data = await api.upload<{ report: LabReport; results: LabResultRow[] }>("me/lab_results/upload-report", formData);
+      toast({ title: "Report processed", description: `${data.results?.length || 0} values extracted.` });
+      setSelectedReport({ report: data.report, results: data.results || [] });
+      fetchResults();
+    } catch (err) {
+      toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }, [patientId, toast, fetchResults]);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleUpload(file);
+  }, [handleUpload]);
+
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragOver(true); }, []);
+  const onDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragOver(false); }, []);
+
+  const openReport = async (reportId: string) => {
+    try {
+      const data = await api.get<{ report: LabReport; results: LabResultRow[] }>(`me/lab_reports/${reportId}`);
+      setSelectedReport({ report: data.report, results: data.results || [] });
+    } catch {
+      toast({ title: "Could not load report", variant: "destructive" });
+    }
   };
 
-  useEffect(() => { if (!patientLoading) fetchResults(); }, [patientId, patientLoading]);
-
   const handleAdd = async () => {
-    if (!patientId || !user || !testName.trim() || !resultValue.trim()) return;
+    if (!patientId || !testName.trim() || !resultValue.trim()) return;
     setSaving(true);
-    const { error } = await supabase.from("lab_results").insert({
-      patient_id: patientId,
-      doctor_id: user.id,
-      test_name: testName,
-      result_value: resultValue,
-      unit: unit || null,
-      reference_range: refRange || null,
-      notes: notes || null,
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.post("me/lab_results", {
+        test_name: testName,
+        result_value: resultValue,
+        unit: unit || null,
+        reference_range: refRange || null,
+        notes: notes || null,
+      });
       toast({ title: "Lab result added" });
       setShowAdd(false);
       setTestName(""); setResultValue(""); setUnit(""); setRefRange(""); setNotes("");
       fetchResults();
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
+
+  // Report detail view (after upload or when opening a report)
+  if (selectedReport) {
+    const { report, results: reportResults } = selectedReport;
+    const chartData = reportResults
+      .filter((r) => !isNaN(parseFloat(r.result_value)))
+      .slice(0, 15)
+      .map((r) => ({
+        name: r.test_name.length > 14 ? r.test_name.slice(0, 14) + "…" : r.test_name,
+        fullName: r.test_name,
+        value: parseFloat(r.result_value),
+        status: r.status,
+        unit: r.unit || "",
+      }));
+    return (
+      <div className="space-y-6">
+        <button onClick={() => setSelectedReport(null)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" /> Back to lab results
+        </button>
+        <div className="glass-card rounded-xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-heading font-bold text-foreground">{report.file_name || "Lab Report"}</h2>
+              <p className="text-sm text-muted-foreground">{format(new Date(report.tested_at), "MMM d, yyyy")}</p>
+            </div>
+          </div>
+
+          {/* Extracted values table */}
+          <h3 className="font-semibold text-foreground mb-2">Extracted values</h3>
+          <div className="overflow-x-auto rounded-lg border border-border/50 mb-6">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Test</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Result</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Reference</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportResults.map((r) => (
+                  <tr key={r.id} className={`border-b border-border/50 ${r.status === "abnormal" || r.status === "critical" ? "bg-destructive/5" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium text-foreground">{r.test_name}</td>
+                    <td className="px-4 py-2.5 text-foreground">{r.result_value} {r.unit || ""}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{r.reference_range || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[r.status] || ""}`}>{r.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Overview chart (all numeric values) */}
+          {chartData.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-foreground mb-3">Overview</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} layout="vertical" margin={{ left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} />
+                    <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 13 }} formatter={(val: number, _: string, entry: any) => [`${val} ${entry.payload.unit}`, entry.payload.fullName]} />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.status === "abnormal" || entry.status === "critical" ? "hsl(0, 70%, 55%)" : "hsl(142, 70%, 45%)"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Multiple analytics charts by category (from AI) */}
+          {report.extracted_data?.charts?.length ? (
+            <div className="mb-6 space-y-6">
+              <h3 className="font-semibold text-foreground">Analytics by category</h3>
+              {report.extracted_data.charts.map((chart, idx) => {
+                const data = chart.labels.map((label, i) => {
+                  const point: Record<string, string | number> = { name: label.length > 12 ? label.slice(0, 12) + "…" : label };
+                  chart.datasets.forEach((ds) => { point[ds.label] = ds.values[i] ?? 0; });
+                  return point;
+                });
+                const keys = chart.datasets.map((d) => d.label);
+                const colors = ["hsl(var(--primary))", "hsl(142, 70%, 45%)", "hsl(0, 70%, 55%)"];
+                return (
+                  <div key={idx} className="p-4 rounded-xl border border-border/50">
+                    <h4 className="font-medium text-foreground mb-3">{chart.title}</h4>
+                    <div className="h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {chart.type === "line" ? (
+                          <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                            <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+                            <Legend />
+                            {keys.map((key, i) => (
+                              <Line key={key} type="monotone" dataKey={key} stroke={colors[i % 3]} strokeWidth={2} dot={{ r: 4 }} />
+                            ))}
+                          </LineChart>
+                        ) : (
+                          <BarChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                            <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+                            <Legend />
+                            {keys.map((key, i) => (
+                              <Bar key={key} dataKey={key} fill={colors[i % 3]} radius={[4, 4, 0, 0]} />
+                            ))}
+                          </BarChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Key points */}
+          {report.extracted_data?.key_points?.length ? (
+            <div className="mb-4 p-4 rounded-xl border border-border/50">
+              <h3 className="font-semibold text-foreground mb-2">Key points</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm text-foreground">
+                {report.extracted_data.key_points.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Clinical summary (doctor terms) */}
+          {report.ai_summary && (
+            <div className="mb-4 p-4 rounded-xl bg-primary/5 border border-primary/20">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-2">
+                <Sparkles className="w-4 h-4 text-primary" /> Clinical summary (for your doctor)
+              </h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{report.ai_summary}</p>
+            </div>
+          )}
+
+          {/* Layman summary - Understanding your report */}
+          {report.layman_summary && (
+            <div className="p-4 rounded-xl bg-whatsapp/5 border border-whatsapp/20">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-2">
+                <BookOpen className="w-4 h-4 text-whatsapp" /> Understanding your report (in simple terms)
+              </h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{report.layman_summary}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-heading font-bold text-foreground">Lab Results</h1>
-          <p className="text-muted-foreground text-sm">Your test results and diagnostics</p>
+          <p className="text-muted-foreground text-sm">Upload a report or add results manually</p>
         </div>
         {patientId && (
-          <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
-            <Plus className="w-4 h-4" /> Add Lab Result
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
+              <Plus className="w-4 h-4" /> Add Lab Result
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Upload lab report */}
+      {patientId && (
+        <div
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          className={`glass-card rounded-xl p-8 border-2 border-dashed transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-border"}`}
+        >
+          <div className="flex flex-col items-center justify-center text-center space-y-3">
+            <Upload className="w-12 h-12 text-muted-foreground" />
+            <div>
+              <p className="font-semibold text-foreground">Upload lab report</p>
+              <p className="text-sm text-muted-foreground mt-1">Drop an image (JPEG, PNG, WebP) or PDF, or click to browse. AI will extract values and explain the report.</p>
+            </div>
+            <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 disabled:opacity-50">
+              <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} disabled={uploading} />
+              {uploading ? "Processing…" : "Choose file"}
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* List of uploaded reports */}
+      {reports.length > 0 && (
+        <div>
+          <h2 className="text-lg font-heading font-semibold text-foreground mb-3">Your lab reports</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {reports.map((r) => (
+              <button key={r.id} onClick={() => openReport(r.id)} className="glass-card rounded-xl p-4 text-left hover:shadow-md transition-shadow flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground truncate">{r.file_name || "Lab Report"}</p>
+                  <p className="text-xs text-muted-foreground">{format(new Date(r.tested_at), "MMM d, yyyy")}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add Lab Result Modal */}
       {showAdd && (
@@ -98,42 +384,46 @@ const PatientLabResults = () => {
         </div>
       )}
 
-      {results.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
-          <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          No lab results recorded yet.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {results.map(r => (
-            <div key={r.id} className="glass-card rounded-xl p-5 space-y-2">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-heading font-semibold text-foreground">{r.test_name}</h3>
-                  <p className="text-xs text-muted-foreground">{format(new Date(r.tested_at), "MMM d, yyyy")}</p>
+      {/* All results (flat list) */}
+      <div>
+        <h2 className="text-lg font-heading font-semibold text-foreground mb-3">All lab results</h2>
+        {results.length === 0 ? (
+          <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
+            <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+            No lab results recorded yet. Upload a report or add one manually.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {results.map(r => (
+              <div key={r.id} className="glass-card rounded-xl p-5 space-y-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-heading font-semibold text-foreground">{r.test_name}</h3>
+                    <p className="text-xs text-muted-foreground">{format(new Date(r.tested_at), "MMM d, yyyy")}</p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[r.status] || ""}`}>
+                    {r.status}
+                  </span>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[r.status] || ""}`}>
-                  {r.status}
-                </span>
+                <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border/50">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Result</p>
+                    <p className="font-heading font-bold text-foreground">{r.result_value} {r.unit && <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Reference Range</p>
+                    <p className="text-sm text-foreground">{r.reference_range || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Notes</p>
+                    <p className="text-sm text-foreground">{r.notes || "—"}</p>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border/50">
-                <div>
-                  <p className="text-xs text-muted-foreground">Result</p>
-                  <p className="font-heading font-bold text-foreground">{r.result_value} {r.unit && <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Reference Range</p>
-                  <p className="text-sm text-foreground">{r.reference_range || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Notes</p>
-                  <p className="text-sm text-foreground">{r.notes || "—"}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

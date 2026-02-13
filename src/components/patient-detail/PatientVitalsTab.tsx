@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { Heart, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { getVitalsAnalysis } from "@/lib/vitalsAnalysis";
+import { VitalsAnalysisCard } from "@/components/VitalsAnalysisCard";
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
@@ -33,15 +35,25 @@ const VITAL_COLORS: Record<string, string> = {
 const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
   const [vitals, setVitals] = useState<Vital[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!patientId) {
+      setLoading(false);
+      setVitals([]);
+      return;
+    }
+    setError(null);
+    setLoading(true);
     const fetch = async () => {
       try {
-        const data = await api.get<Vital[]>("vitals", { patient_id: patientId });
-        setVitals(Array.isArray(data) ? data : []);
-      } catch {
+        const data = await api.get<unknown>("vitals", { patient_id: patientId });
+        const list = Array.isArray(data) ? data : (data && typeof data === "object" && "list" in data && Array.isArray((data as { list: unknown }).list) ? (data as { list: Vital[] }).list : []);
+        setVitals(list);
+      } catch (e) {
         setVitals([]);
+        setError(e instanceof Error ? e.message : "Could not load vitals.");
       }
       setLoading(false);
     };
@@ -49,6 +61,12 @@ const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
   }, [patientId, doctorId]);
 
   if (loading) return <div className="flex items-center justify-center h-32"><div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" /></div>;
+  if (error) return (
+    <div className="glass-card rounded-xl p-8 text-center">
+      <Heart className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+      <p className="text-muted-foreground">{error}</p>
+    </div>
+  );
 
   // Group vitals by type
   const grouped: Record<string, Vital[]> = {};
@@ -82,6 +100,11 @@ const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
     return { type, latest, trend };
   });
 
+  const vitalsAnalysis = useMemo(() => {
+    const sorted = [...vitals].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+    return getVitalsAnalysis(sorted);
+  }, [vitals]);
+
   if (vitals.length === 0) {
     return (
       <div className="glass-card rounded-xl p-8 text-center">
@@ -93,6 +116,9 @@ const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
 
   return (
     <div className="space-y-4">
+      {/* Analysis & recommendations (for doctor) */}
+      <VitalsAnalysisCard data={vitalsAnalysis} emptyMessage="No vitals recorded for this patient yet." />
+
       {/* Latest Readings Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {latestByType.map(({ type, latest, trend }) => (

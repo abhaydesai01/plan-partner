@@ -1,6 +1,7 @@
-import { ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { ReactNode, useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   LayoutDashboard,
@@ -20,8 +21,10 @@ import {
   Link,
   AlertTriangle,
   Shield,
+  ChevronDown,
+  Clock,
+  Star,
 } from "lucide-react";
-import { useState } from "react";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -29,6 +32,8 @@ const navItems = [
   { to: "/dashboard/programs", icon: Layers, label: "Programs" },
   { to: "/dashboard/enrollments", icon: UserPlus, label: "Enrollments" },
   { to: "/dashboard/appointments", icon: CalendarDays, label: "Appointments" },
+  { to: "/dashboard/availability", icon: Clock, label: "Availability" },
+  { to: "/dashboard/feedback", icon: Star, label: "Feedback" },
   { to: "/dashboard/vitals", icon: Activity, label: "Vitals" },
   { to: "/dashboard/lab-results", icon: FileText, label: "Lab Results" },
   { to: "/dashboard/documents", icon: Upload, label: "Documents" },
@@ -40,9 +45,36 @@ const navItems = [
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
-  const { signOut } = useAuth();
+  const { role, signOut, switchableClinics, switchToClinic } = useAuth();
+  const { toast } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [clinics, setClinics] = useState<{ id: string; name: string }[]>([]);
+  const [clinicDropdownOpen, setClinicDropdownOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    if (role === "doctor") {
+      switchableClinics().then(setClinics);
+    }
+  }, [role, switchableClinics]);
+
+  const onSwitchToClinic = async (clinicId: string) => {
+    setSwitching(true);
+    setClinicDropdownOpen(false);
+    setSidebarOpen(false);
+    try {
+      const { error } = await switchToClinic(clinicId);
+      if (error) {
+        toast({ title: "Could not switch to clinic", description: error.message, variant: "destructive" });
+      } else {
+        navigate("/clinic", { replace: true });
+      }
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -88,7 +120,47 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border space-y-1">
+          {role === "doctor" && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setClinicDropdownOpen((o) => !o)}
+                disabled={switching}
+                className="flex items-center justify-between gap-2 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                <span className="flex items-center gap-3">
+                  <Building2 className="w-5 h-5" />
+                  Switch to clinic
+                </span>
+                <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${clinicDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              {clinicDropdownOpen && (
+                <div className="mt-1 py-1 rounded-lg bg-muted/50 border border-border shadow-lg">
+                  {clinics.length > 0 ? (
+                    clinics.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => onSwitchToClinic(c.id)}
+                        className="w-full text-left px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                      >
+                        {c.name}
+                      </button>
+                    ))
+                  ) : (
+                    <NavLink
+                      to="/dashboard/clinic"
+                      onClick={() => { setClinicDropdownOpen(false); setSidebarOpen(false); }}
+                      className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      Create clinic login in Clinic settings
+                    </NavLink>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={signOut}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors"

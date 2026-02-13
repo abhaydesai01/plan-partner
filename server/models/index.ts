@@ -12,7 +12,17 @@ const toJsonOptions = {
 
 // Enums
 const clinicRoleEnum = ["owner", "admin", "doctor", "nurse", "staff"];
-const appRoleEnum = ["doctor", "patient"];
+const appRoleEnum = ["doctor", "patient", "clinic"];
+
+const AuthUserSchema = new mongoose.Schema(
+  {
+    clinic_id: String,
+    email: { type: String, required: true, unique: true },
+    password_hash: { type: String, required: true },
+    user_id: { type: String, required: true, unique: true },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
 
 const AlertSchema = new mongoose.Schema(
   {
@@ -140,6 +150,7 @@ const FeedbackRequestSchema = new mongoose.Schema(
     doctor_id: { type: String, required: true },
     expires_at: { type: Date, required: true },
     patient_id: { type: String, required: true },
+    patient_user_id: String, // for listing "my requests" by logged-in patient
     status: { type: String, default: "pending" },
     submitted_at: Date,
     token: { type: String, required: true },
@@ -160,6 +171,7 @@ const FeedbackSchema = new mongoose.Schema(
     patient_id: { type: String, required: true },
     review_text: String,
     video_url: String,
+    video_path: String, // uploaded video file (stored in uploads/feedback_videos)
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
@@ -181,6 +193,7 @@ const FoodLogSchema = new mongoose.Schema(
   {
     doctor_id: { type: String, required: true },
     food_items: mongoose.Schema.Types.Mixed,
+    image_path: String,
     logged_at: { type: Date, default: Date.now },
     meal_type: { type: String, default: "other" },
     notes: String,
@@ -198,6 +211,7 @@ const FoodLogSchema = new mongoose.Schema(
 const LabResultSchema = new mongoose.Schema(
   {
     doctor_id: { type: String, required: true },
+    lab_report_id: { type: mongoose.Schema.Types.ObjectId, ref: "LabReport", default: null },
     notes: String,
     patient_id: { type: String, required: true },
     reference_range: String,
@@ -206,6 +220,22 @@ const LabResultSchema = new mongoose.Schema(
     test_name: { type: String, required: true },
     tested_at: { type: Date, required: true },
     unit: String,
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+
+const LabReportSchema = new mongoose.Schema(
+  {
+    doctor_id: { type: String, required: true },
+    patient_id: { type: String, required: true },
+    uploaded_by: { type: String, required: true },
+    file_name: String,
+    file_path: { type: String, required: true },
+    file_type: String,
+    tested_at: { type: Date, default: Date.now },
+    ai_summary: String,
+    layman_summary: String,
+    extracted_data: mongoose.Schema.Types.Mixed, // { key_points: string[], charts: { title, type, labels, datasets }[] }
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
@@ -244,7 +274,7 @@ const PatientDoctorLinkSchema = new mongoose.Schema(
     patient_user_id: { type: String, required: true },
     requested_at: { type: Date, default: Date.now },
     responded_at: Date,
-    status: { type: String, required: true },
+    status: { type: String, required: true, default: "pending" },
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
@@ -260,6 +290,10 @@ const PatientDocumentSchema = new mongoose.Schema(
     notes: String,
     patient_id: { type: String, required: true },
     uploaded_by: { type: String, required: true },
+    ai_summary: String,
+    layman_summary: String,
+    extracted_data: mongoose.Schema.Types.Mixed,
+    analyzed_at: Date,
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
@@ -320,6 +354,7 @@ const ProgramSchema = new mongoose.Schema(
 
 const UserRoleSchema = new mongoose.Schema(
   {
+    clinic_id: String,
     role: { type: String, enum: appRoleEnum, required: true },
     user_id: { type: String, required: true },
   },
@@ -340,6 +375,7 @@ const VitalSchema = new mongoose.Schema(
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
 
+export const AuthUser = mongoose.model("AuthUser", AuthUserSchema);
 export const Alert = mongoose.model("Alert", AlertSchema);
 export const AppointmentCheckin = mongoose.model("AppointmentCheckin", AppointmentCheckinSchema);
 export const Appointment = mongoose.model("Appointment", AppointmentSchema);
@@ -353,6 +389,7 @@ export const Feedback = mongoose.model("Feedback", FeedbackSchema);
 export const FollowUpSuggestion = mongoose.model("FollowUpSuggestion", FollowUpSuggestionSchema);
 export const FoodLog = mongoose.model("FoodLog", FoodLogSchema);
 export const LabResult = mongoose.model("LabResult", LabResultSchema);
+export const LabReport = mongoose.model("LabReport", LabReportSchema);
 export const LinkRequest = mongoose.model("LinkRequest", LinkRequestSchema);
 export const Notification = mongoose.model("Notification", NotificationSchema);
 export const PatientDoctorLink = mongoose.model("PatientDoctorLink", PatientDoctorLinkSchema);
