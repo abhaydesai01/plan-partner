@@ -45,6 +45,20 @@ exports.handler = async (event) => {
     const text = await res.text();
     const contentType = res.headers.get("content-type") || "application/json";
 
+    // If backend returns Express 404, surface a hint (backend may be down or BACKEND_URL wrong)
+    if (res.status === 404 && text.includes("Cannot POST") && text.includes("<pre>")) {
+      console.error("Backend 404 for:", url, "Check BACKEND_URL and that the API server is running.");
+      return {
+        statusCode: 502,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+        body: JSON.stringify({
+          error: "Backend returned 404",
+          message: "The API server did not recognize this route. Ensure BACKEND_URL is correct (e.g. http://YOUR_IP:3001 with no trailing slash) and the plan-partner API is running (e.g. pm2 list).",
+          proxyTarget: url,
+        }),
+      };
+    }
+
     return {
       statusCode: res.status,
       headers: {
@@ -54,11 +68,15 @@ exports.handler = async (event) => {
       body: text,
     };
   } catch (err) {
-    console.error("Proxy error:", err.message);
+    console.error("Proxy error:", err.message, "url:", url);
     return {
       statusCode: 502,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Bad Gateway", message: err.message }),
+      body: JSON.stringify({
+        error: "Bad Gateway",
+        message: err.message,
+        hint: "Is BACKEND_URL reachable from Netlify? Check the API server is running and MongoDB is connected.",
+      }),
     };
   }
 };

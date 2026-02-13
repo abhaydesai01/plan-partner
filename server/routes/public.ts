@@ -5,7 +5,7 @@ const router = Router();
 
 /** GET /api - health/root (so "Cannot GET /api" is replaced with a proper response) */
 router.get("/", (_req, res) => {
-  res.json({ ok: true, message: "Plan Partner API", version: "1.0" });
+  res.json({ ok: true, message: "Plan Partner API", version: "1.0", routes: "auth/register, auth/login, ..." });
 });
 
 /** GET ?code=INVITE_CODE - public lookup for join-clinic flow */

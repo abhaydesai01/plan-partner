@@ -1,0 +1,2 @@
+# API proxy: /api/* -> Netlify function (copied to dist by Vite; Netlify merges with netlify.toml)
+/api/*  /.netlify/functions/api?path=:splat  200
