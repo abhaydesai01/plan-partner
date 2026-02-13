@@ -39,7 +39,7 @@ const CHART_COLORS = [
 ];
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({ totalPatients: 0, activePrograms: 0, activeEnrollments: 0, atRiskPatients: 0 });
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -184,6 +184,9 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Doctor code (share with patients) */}
+      {user?.id && <DoctorCodeCard userId={user.id} sessionCode={session?.profile?.doctor_code} />}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {cards.map((card) => (
@@ -303,17 +306,21 @@ const Dashboard = () => {
   );
 };
 
-function DoctorCodeCard({ userId }: { userId?: string }) {
+function DoctorCodeCard({ userId, sessionCode }: { userId?: string; sessionCode?: string | null }) {
   const [code, setCode] = useState<string | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (typeof sessionCode === "string" && sessionCode !== "") {
+      setCode(sessionCode);
+      return;
+    }
     if (!userId) return;
     setCode(undefined);
     api.get<{ doctor_code?: string }[]>("profiles", { user_id: userId }).then((data) => {
-      setCode(data?.[0]?.doctor_code || null);
+      setCode(data?.[0]?.doctor_code ?? null);
     }).catch(() => setCode(null));
-  }, [userId]);
+  }, [userId, sessionCode]);
 
   if (code === undefined) {
     return (

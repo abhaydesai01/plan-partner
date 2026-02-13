@@ -11,7 +11,7 @@ export interface AuthUser {
 
 export interface AuthSession {
   user: AuthUser;
-  profile: { full_name?: string; user_id: string; id?: string } | null;
+  profile: { full_name?: string; user_id: string; id?: string; doctor_code?: string } | null;
   role: AppRole | null;
   patient: Record<string, unknown> | null;
   clinic: Record<string, unknown> | null;

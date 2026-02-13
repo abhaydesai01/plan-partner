@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { api, getStoredToken } from "@/lib/api";
 import { Send, Heart, Shield, Menu } from "lucide-react";
@@ -244,12 +245,12 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
             <span className="font-heading font-bold text-foreground">Mediimate AI</span>
           </div>
         </div>
-        <a
-          href="/patient/overview"
+        <Link
+          to="/patient/overview"
           className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           Go To Dashboard
-        </a>
+        </Link>
       </header>
 
       {/* Chat Area - full height */}

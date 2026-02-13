@@ -32,12 +32,20 @@ exports.handler = async (event) => {
   if (event.headers.authorization) headers["Authorization"] = event.headers.authorization;
   if (event.headers["content-type"]) headers["Content-Type"] = event.headers["content-type"];
 
+  // Netlify may send body base64-encoded (e.g. multipart/form-data); decode so backend receives raw body
+  let body = event.body;
+  if (body && (event.httpMethod === "POST" || event.httpMethod === "PATCH" || event.httpMethod === "PUT")) {
+    if (event.isBase64Encoded) {
+      body = Buffer.from(event.body, "base64");
+    }
+  } else {
+    body = undefined;
+  }
+
   const options = {
     method: event.httpMethod,
     headers,
-    body: event.body && (event.httpMethod === "POST" || event.httpMethod === "PATCH" || event.httpMethod === "PUT")
-      ? event.body
-      : undefined,
+    body,
   };
 
   try {
