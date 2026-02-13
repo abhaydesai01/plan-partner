@@ -1,4 +1,4 @@
-# Netlify config for plan-partner frontend
+# Netlify: frontend build + API proxy via Vite env
 # https://docs.netlify.com/configure-builds/file-based-configuration/
 
 [build]
@@ -7,26 +7,11 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # So the built app calls /api/* (see public/_redirects). Overrides .env.production.
   VITE_API_URL = "/api"
 
-# Rewrite /api/* to the proxy function (frontend uses VITE_API_URL=/api, so requests go to /api/auth/login etc.)
+# Proxy /api/* to backend (set BACKEND_URL in Netlify UI → Environment variables)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api?path=:splat"
   status = 200
   force = true
-
-# Route /.netlify/functions/api/* to the same function (if frontend uses VITE_API_URL=/.netlify/functions/api)
-[[redirects]]
-  from = "/.netlify/functions/api/*"
-  to = "/.netlify/functions/api?path=:splat"
-  status = 200
-  force = true
-
-# Optional: set BACKEND_URL here (or in Netlify UI → Site settings → Environment variables)
-# [build.environment]
-#   BACKEND_URL = "http://YOUR_EC2_IP:3001"
-
-# In Netlify: Environment variables → VITE_API_URL = /api  (so login/register go to /api/auth/... and get rewritten to the function)
-#             BACKEND_URL = http://YOUR_SERVER_IP:3001
