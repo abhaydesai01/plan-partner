@@ -10,6 +10,11 @@ import { AuthUser, Clinic, ClinicMember, Patient, Profile, UserRole } from "../m
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
 
+/** GET /api/health - verify this app and /api auth routes are deployed (no auth required) */
+router.get("/health", (_req, res) => {
+  res.json({ ok: true, auth: true, message: "Plan Partner API with auth routes" });
+});
+
 router.post("/auth/register", async (req, res) => {
   const { email, password, full_name, role, clinic_name, address, phone } = req.body;
   if (!email || !password) {

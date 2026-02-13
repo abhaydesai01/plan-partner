@@ -731,7 +731,7 @@ const feedbackVideoUpload = multer({
   limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
   fileFilter: (_req, file, cb) => {
     const ok = !file.mimetype || file.mimetype.startsWith("video/");
-    cb(ok ? null : new Error("Only video files are allowed"), ok);
+    (cb as (err: Error | null, accept: boolean) => void)(ok ? null : new Error("Only video files are allowed"), ok);
   },
 });
 router.post("/me/meal-image-upload", requireAuth, mealUpload.single("file"), async (req, res) => {
@@ -1670,7 +1670,8 @@ router.get("/patients/:id", requireAuth, async (req, res) => {
 router.get("/patients", requireAuth, async (req, res) => {
   const userId = (req as AuthRequest).user.id;
   const q = req.query as { doctor_id?: string; patient_user_id?: string; count?: string; status?: string; clinic_id?: string };
-  let filter: Record<string, string | { $in: string[] }> = {};
+  type PatientFilter = Record<string, string | { $in: string[] } | Array<{ doctor_id: string } | { patient_user_id: { $in: string[] } }>>;
+  let filter: PatientFilter = {};
   const asClinicId = await getClinicIdForUser(userId);
   const clinicId = q.clinic_id || (asClinicId ? asClinicId : null);
   if (clinicId) {
@@ -1948,7 +1949,7 @@ async function uploadPdfToGemini(apiKey: string, pdfBuffer: Buffer, displayName:
       "X-Goog-Upload-Offset": "0",
       "X-Goog-Upload-Command": "upload, finalize",
     },
-    body: pdfBuffer,
+    body: new Uint8Array(pdfBuffer),
   });
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
