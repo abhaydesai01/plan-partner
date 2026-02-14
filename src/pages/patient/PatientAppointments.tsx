@@ -178,10 +178,10 @@ const PatientAppointments = () => {
   const hasNoDoctors = !doctorsLoading && doctors.length === 0 && patientId;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Appointments</h1>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Appointments</h1>
           <p className="text-muted-foreground text-sm">Schedule with your doctor or view your history</p>
         </div>
         <button

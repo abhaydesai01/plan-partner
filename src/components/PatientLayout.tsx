@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Heart,
@@ -38,7 +38,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-background w-full max-w-full overflow-x-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} />
       )}
@@ -95,8 +95,8 @@ export function PatientLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="safe-area-header h-16 min-h-[4rem] border-b border-border bg-card flex items-center gap-3 sticky top-0 z-30 flex-shrink-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-hidden">
+        <header className="safe-area-header h-16 min-h-[4rem] border-b border-border bg-card flex items-center gap-2 sticky top-0 z-30 flex-shrink-0 px-3 sm:px-4">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 -ml-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation"
@@ -104,11 +104,18 @@ export function PatientLayout({ children }: { children: ReactNode }) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <h2 className="text-lg font-heading font-semibold text-foreground truncate min-w-0">
+          <h2 className="text-base sm:text-lg font-heading font-semibold text-foreground truncate min-w-0 flex-1">
             {navItems.find((i) => i.exact ? location.pathname === i.to : location.pathname === i.to || location.pathname.startsWith(i.to + "/"))?.label || "My Health"}
           </h2>
+          <Link
+            to="/patient"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+          >
+            <Home className="w-4 h-4" />
+            <span className="hidden sm:inline">Home</span>
+          </Link>
         </header>
-        <main className="safe-area-bottom flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="safe-area-bottom flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto min-w-0">
           {children}
         </main>
       </div>
@@ -123,7 +130,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-background w-full max-w-full overflow-x-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} />
       )}

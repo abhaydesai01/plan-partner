@@ -157,11 +157,13 @@ const PatientLabResults = () => {
         unit: r.unit || "",
       }));
     return (
-      <div className="space-y-6">
-        <button onClick={() => setSelectedReport(null)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="w-4 h-4" /> Back to lab results
-        </button>
-        <div className="glass-card rounded-xl p-5">
+      <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
+        <div className="sticky top-0 z-10 -mx-4 px-4 py-2 -mt-2 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur border-b border-border/50 sm:static sm:bg-transparent sm:backdrop-blur-none sm:border-0 sm:p-0 sm:mt-0">
+          <button onClick={() => setSelectedReport(null)} className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground touch-manipulation">
+            <ArrowLeft className="w-4 h-4 shrink-0" /> Back to lab results
+          </button>
+        </div>
+        <div className="glass-card rounded-xl p-4 sm:p-5 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-heading font-bold text-foreground">{report.file_name || "Lab Report"}</h2>
@@ -171,8 +173,8 @@ const PatientLabResults = () => {
 
           {/* Extracted values table */}
           <h3 className="font-semibold text-foreground mb-2">Extracted values</h3>
-          <div className="overflow-x-auto rounded-lg border border-border/50 mb-6">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border/50 mb-6 min-w-0 -mx-px">
+            <table className="w-full min-w-[260px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Test</th>
@@ -198,14 +200,14 @@ const PatientLabResults = () => {
 
           {/* Overview chart (all numeric values) */}
           {chartData.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-6 min-w-0">
               <h3 className="font-semibold text-foreground mb-3">Overview</h3>
-              <div className="h-64">
+              <div className="h-56 sm:h-64 min-w-0 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 10 }}>
+                  <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} />
-                    <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} />
+                    <YAxis dataKey="name" type="category" width={72} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 13 }} formatter={(val: number, _: string, entry: any) => [`${val} ${entry.payload.unit}`, entry.payload.fullName]} />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
                       {chartData.map((entry, index) => (
@@ -303,10 +305,10 @@ const PatientLabResults = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Lab Results</h1>
+    <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Lab Results</h1>
           <p className="text-muted-foreground text-sm">Upload a report or add results manually</p>
         </div>
         {patientId && (
@@ -405,18 +407,18 @@ const PatientLabResults = () => {
                     {r.status}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border/50">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 pt-2 border-t border-border/50">
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Result</p>
-                    <p className="font-heading font-bold text-foreground">{r.result_value} {r.unit && <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>}</p>
+                    <p className="font-heading font-bold text-foreground truncate">{r.result_value} {r.unit && <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>}</p>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Reference Range</p>
-                    <p className="text-sm text-foreground">{r.reference_range || "—"}</p>
+                    <p className="text-sm text-foreground truncate">{r.reference_range || "—"}</p>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Notes</p>
-                    <p className="text-sm text-foreground">{r.notes || "—"}</p>
+                    <p className="text-sm text-foreground truncate">{r.notes || "—"}</p>
                   </div>
                 </div>
               </div>

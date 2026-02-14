@@ -140,11 +140,13 @@ const PatientDocuments = () => {
     const chartKeys = cd?.datasets?.map((d) => d.label) ?? [];
 
     return (
-      <div className="space-y-6">
-        <button onClick={() => setSelectedDoc(null)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="w-4 h-4" /> Back to documents
-        </button>
-        <div className="glass-card rounded-xl p-6 space-y-6">
+      <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
+        <div className="sticky top-0 z-10 -mx-4 px-4 py-2 -mt-2 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur border-b border-border/50 sm:static sm:bg-transparent sm:backdrop-blur-none sm:border-0 sm:p-0 sm:mt-0">
+          <button onClick={() => setSelectedDoc(null)} className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground touch-manipulation">
+            <ArrowLeft className="w-4 h-4 shrink-0" /> Back to documents
+          </button>
+        </div>
+        <div className="glass-card rounded-xl p-4 sm:p-6 space-y-6 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-heading font-bold text-foreground">{selectedDoc.file_name}</h2>
@@ -218,10 +220,10 @@ const PatientDocuments = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Documents</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Documents</h1>
           <p className="text-muted-foreground text-sm">{documents.length} documents</p>
         </div>
         {patientId && (

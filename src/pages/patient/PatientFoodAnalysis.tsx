@@ -59,9 +59,9 @@ export default function PatientFoodAnalysis() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold text-foreground">Food Analysis</h1>
+    <div className="w-full max-w-full min-w-0 space-y-6">
+      <div className="min-w-0">
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Food Analysis</h1>
         <p className="text-muted-foreground text-sm">AI-powered nutrition insights from your meal logs</p>
       </div>
       <div className="glass-card rounded-xl p-5">

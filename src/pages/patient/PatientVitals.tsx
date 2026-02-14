@@ -146,19 +146,19 @@ const PatientVitals = () => {
     : [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Vitals</h1>
+    <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Vitals</h1>
           <p className="text-muted-foreground text-sm">Your recorded vital signs</p>
         </div>
         {patientId && (
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
-              <Plus className="w-4 h-4" /> Add Vital
+            <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
+              <Plus className="w-4 h-4 shrink-0" /> Add Vital
             </button>
-            <button onClick={() => setShowBulkAdd(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-primary text-primary font-semibold text-sm hover:bg-primary/10 transition-colors">
-              <Upload className="w-4 h-4" /> Bulk Upload
+            <button onClick={() => setShowBulkAdd(true)} className="inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg border border-primary text-primary font-semibold text-sm hover:bg-primary/10 transition-colors">
+              <Upload className="w-4 h-4 shrink-0" /> Bulk Upload
             </button>
           </div>
         )}
@@ -262,19 +262,19 @@ const PatientVitals = () => {
       {/* Analysis & recommendations */}
       <VitalsAnalysisCard data={vitalsAnalysis} emptyMessage="No vitals recorded yet. Add readings to see analysis and recommendations." />
 
-      {/* Filter */}
+      {/* Filter tabs: wrap on small screens, no horizontal scroll */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => setSelectedType("all")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedType === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>All</button>
+        <button onClick={() => setSelectedType("all")} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${selectedType === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>All</button>
         {VITAL_TYPES.map(t => (
-          <button key={t.value} onClick={() => setSelectedType(t.value)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedType === t.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t.label}</button>
+          <button key={t.value} onClick={() => setSelectedType(t.value)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${selectedType === t.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t.label}</button>
         ))}
       </div>
 
       {/* Chart */}
       {selectedType !== "all" && chartData.length > 1 && (
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="font-heading font-semibold text-foreground mb-4">{VITAL_TYPES.find(t => t.value === selectedType)?.label} Trend</h3>
-          <div className="h-48">
+        <div className="glass-card rounded-xl p-4 sm:p-5 min-w-0">
+          <h3 className="font-heading font-semibold text-foreground mb-4 truncate">{VITAL_TYPES.find(t => t.value === selectedType)?.label} Trend</h3>
+          <div className="h-40 sm:h-48 min-w-0 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
@@ -301,26 +301,26 @@ const PatientVitals = () => {
           No vitals recorded yet.
         </div>
       ) : (
-        <div className="glass-card rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className="glass-card rounded-xl overflow-hidden min-w-0">
+          <div className="overflow-x-auto -mx-px">
+            <table className="w-full min-w-[280px] text-sm table-fixed sm:table-auto">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Value</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Unit</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Notes</th>
+                  <th className="text-left px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-muted-foreground w-24 sm:w-auto">Type</th>
+                  <th className="text-left px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-muted-foreground">Value</th>
+                  <th className="text-left px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-muted-foreground hidden sm:table-cell">Unit</th>
+                  <th className="text-left px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-muted-foreground">Date</th>
+                  <th className="text-left px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-muted-foreground hidden md:table-cell">Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(v => (
                   <tr key={v.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground capitalize">{v.vital_type.replace("_", " ")}</td>
-                    <td className="px-4 py-3 font-heading font-bold text-foreground">{v.value_text}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{v.unit || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{format(new Date(v.recorded_at), "MMM d, yyyy")}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{v.notes || "—"}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground capitalize truncate">{v.vital_type.replace("_", " ")}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-heading font-bold text-foreground truncate">{v.value_text}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground hidden sm:table-cell">{v.unit || "—"}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground text-xs sm:text-sm">{format(new Date(v.recorded_at), "MMM d, yyyy")}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground hidden md:table-cell truncate max-w-[120px]">{v.notes || "—"}</td>
                   </tr>
                 ))}
               </tbody>

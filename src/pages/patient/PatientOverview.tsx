@@ -263,9 +263,9 @@ const PatientOverview = () => {
     : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold text-foreground">Hello, {patientData.full_name}</h1>
+    <div className="w-full max-w-full min-w-0 space-y-6">
+      <div className="min-w-0">
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Hello, {patientData.full_name}</h1>
         <p className="text-muted-foreground text-sm mt-1">Your health overview</p>
       </div>
 
