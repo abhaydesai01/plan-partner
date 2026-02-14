@@ -48,19 +48,19 @@ export function PatientLayout({ children }: { children: ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="h-16 flex items-center justify-between px-5 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+        <div className="safe-area-header h-16 min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
               <Heart className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-heading font-bold text-foreground">My Health</span>
+            <span className="text-lg font-heading font-bold text-foreground truncate">My Health</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground">
+          <button onClick={() => setSidebarOpen(false)} className="p-2 -mr-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.to
@@ -84,7 +84,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <PatientPwaLink />
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border safe-area-bottom">
           <button
             onClick={signOut}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors"
@@ -96,15 +96,19 @@ export function PatientLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-border bg-card flex items-center px-4 lg:px-6 sticky top-0 z-30">
-          <button onClick={() => setSidebarOpen(true)} className="mr-3 text-muted-foreground">
+        <header className="safe-area-header h-16 min-h-[4rem] border-b border-border bg-card flex items-center gap-3 sticky top-0 z-30 flex-shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation"
+            aria-label="Open menu"
+          >
             <Menu className="w-5 h-5" />
           </button>
-          <h2 className="text-lg font-heading font-semibold text-foreground">
+          <h2 className="text-lg font-heading font-semibold text-foreground truncate min-w-0">
             {navItems.find((i) => i.exact ? location.pathname === i.to : location.pathname === i.to || location.pathname.startsWith(i.to + "/"))?.label || "My Health"}
           </h2>
         </header>
-        <main className="flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="safe-area-bottom flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </main>
       </div>
@@ -129,19 +133,19 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="h-16 flex items-center justify-between px-5 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+        <div className="safe-area-header h-16 min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
               <Heart className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-heading font-bold text-foreground">My Health</span>
+            <span className="text-lg font-heading font-bold text-foreground truncate">My Health</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground">
+          <button onClick={() => setSidebarOpen(false)} className="p-2 -mr-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.to
@@ -165,7 +169,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
         </nav>
 
         <PatientPwaLink />
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border safe-area-bottom">
           <button
             onClick={signOut}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors"

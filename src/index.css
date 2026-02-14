@@ -6,6 +6,12 @@
 
 @layer base {
   :root {
+    /* PWA safe area insets (notch, home indicator); fallback 0 for desktop */
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+
     --background: 160 20% 97%;
     --foreground: 180 25% 12%;
 
@@ -102,5 +108,15 @@
   }
   .glass-card {
     @apply bg-card/80 backdrop-blur-lg border border-border/50 shadow-lg;
+  }
+  /* PWA: keep header content below notch / status bar */
+  .safe-area-header {
+    padding-top: var(--sat);
+    padding-left: max(1rem, var(--sal));
+    padding-right: max(1rem, var(--sar));
+    padding-bottom: 0.5rem;
+  }
+  .safe-area-bottom {
+    padding-bottom: var(--sab);
   }
 }

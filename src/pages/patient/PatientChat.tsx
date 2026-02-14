@@ -228,28 +228,29 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="h-screen w-full flex-1 flex flex-col bg-background overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 lg:px-6 h-14 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 flex-shrink-0">
-        <div className="flex items-center gap-3">
+    <div className="h-screen w-full flex-1 flex flex-col bg-background overflow-hidden min-h-[100dvh]">
+      {/* Header: safe-area so logo/link/hamburger aren't cut in PWA */}
+      <header className="safe-area-header flex items-center justify-between gap-2 flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 min-h-[3.5rem]">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <button
             onClick={onOpenMenu}
-            className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+            className="p-2 -ml-1 rounded-lg hover:bg-muted transition-colors text-muted-foreground flex-shrink-0 touch-manipulation"
+            aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <Heart className="w-3.5 h-3.5 text-primary" />
             </div>
-            <span className="font-heading font-bold text-foreground">Mediimate AI</span>
+            <span className="font-heading font-bold text-foreground truncate">Mediimate AI</span>
           </div>
         </div>
         <Link
           to="/patient/overview"
-          className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 whitespace-nowrap touch-manipulation"
         >
-          Go To Dashboard
+          Dashboard
         </Link>
       </header>
 
