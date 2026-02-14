@@ -1674,7 +1674,7 @@ router.get("/patients/:id", requireAuth, async (req, res) => {
 
 router.get("/patients", requireAuth, async (req, res) => {
   const userId = (req as AuthRequest).user.id;
-  const q = req.query as { doctor_id?: string; patient_user_id?: string; count?: string; status?: string; clinic_id?: string };
+  const q = req.query as { doctor_id?: string; patient_user_id?: string; count?: string; status?: string; clinic_id?: string; limit?: string; skip?: string };
   type PatientFilter = Record<string, string | { $in: string[] } | Array<{ doctor_id: string } | { patient_user_id: { $in: string[] } }>>;
   let filter: PatientFilter = {};
   const asClinicId = await getClinicIdForUser(userId);
