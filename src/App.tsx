@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,48 +10,64 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { PatientLayout, PatientLayoutWithChat } from "@/components/PatientLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Patients from "./pages/Patients";
-import PatientDetail from "./pages/PatientDetail";
-import Programs from "./pages/Programs";
-import Enrollments from "./pages/Enrollments";
-import Appointments from "./pages/Appointments";
-import DoctorVitals from "./pages/DoctorVitals";
-import DoctorLabResults from "./pages/DoctorLabResults";
-import DoctorDocuments from "./pages/DoctorDocuments";
-import ComplianceReports from "./pages/ComplianceReports";
-import DoctorLinkRequests from "./pages/DoctorLinkRequests";
-import DoctorAvailability from "./pages/DoctorAvailability";
-import Alerts from "./pages/Alerts";
-import DoctorVaultAccess from "./pages/DoctorVaultAccess";
-import DoctorFeedback from "./pages/DoctorFeedback";
 import PublicEnroll from "./pages/PublicEnroll";
-import ClinicSetup from "./pages/ClinicSetup";
-import ClinicSettings from "./pages/ClinicSettings";
-import JoinClinic from "./pages/JoinClinic";
-import PatientChat from "./pages/patient/PatientChat";
-import PatientOverview from "./pages/patient/PatientOverview";
-import PatientVitals from "./pages/patient/PatientVitals";
-import PatientLabResults from "./pages/patient/PatientLabResults";
-import PatientDocuments from "./pages/patient/PatientDocuments";
-import PatientAppointments from "./pages/patient/PatientAppointments";
-import PatientVault from "./pages/patient/PatientVault";
-import PatientFoodAnalysis from "./pages/patient/PatientFoodAnalysis";
-import PatientConnectDoctor from "./pages/patient/PatientConnectDoctor";
-import PatientFeedback from "./pages/patient/PatientFeedback";
-import ClinicDashboard from "./pages/clinic/ClinicDashboard";
-import ClinicTeam from "./pages/clinic/ClinicTeam";
-import ClinicPatients from "./pages/clinic/ClinicPatients";
-import ClinicAppointments from "./pages/clinic/ClinicAppointments";
-import ClinicSettingsPage from "./pages/clinic/ClinicSettingsPage";
-import ClinicFeedback from "./pages/clinic/ClinicFeedback";
-import { ClinicLayout } from "./components/ClinicLayout";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Contact from "./pages/Contact";
+import { ClinicLayout } from "./components/ClinicLayout";
 
-const queryClient = new QueryClient();
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Patients = lazy(() => import("./pages/Patients"));
+const PatientDetail = lazy(() => import("./pages/PatientDetail"));
+const Programs = lazy(() => import("./pages/Programs"));
+const Enrollments = lazy(() => import("./pages/Enrollments"));
+const Appointments = lazy(() => import("./pages/Appointments"));
+const DoctorVitals = lazy(() => import("./pages/DoctorVitals"));
+const DoctorLabResults = lazy(() => import("./pages/DoctorLabResults"));
+const DoctorDocuments = lazy(() => import("./pages/DoctorDocuments"));
+const ComplianceReports = lazy(() => import("./pages/ComplianceReports"));
+const DoctorLinkRequests = lazy(() => import("./pages/DoctorLinkRequests"));
+const DoctorAvailability = lazy(() => import("./pages/DoctorAvailability"));
+const Alerts = lazy(() => import("./pages/Alerts"));
+const DoctorVaultAccess = lazy(() => import("./pages/DoctorVaultAccess"));
+const DoctorFeedback = lazy(() => import("./pages/DoctorFeedback"));
+const ClinicSetup = lazy(() => import("./pages/ClinicSetup"));
+const ClinicSettings = lazy(() => import("./pages/ClinicSettings"));
+const JoinClinic = lazy(() => import("./pages/JoinClinic"));
+const PatientChat = lazy(() => import("./pages/patient/PatientChat"));
+const PatientOverview = lazy(() => import("./pages/patient/PatientOverview"));
+const PatientVitals = lazy(() => import("./pages/patient/PatientVitals"));
+const PatientLabResults = lazy(() => import("./pages/patient/PatientLabResults"));
+const PatientDocuments = lazy(() => import("./pages/patient/PatientDocuments"));
+const PatientAppointments = lazy(() => import("./pages/patient/PatientAppointments"));
+const PatientVault = lazy(() => import("./pages/patient/PatientVault"));
+const PatientFoodAnalysis = lazy(() => import("./pages/patient/PatientFoodAnalysis"));
+const PatientConnectDoctor = lazy(() => import("./pages/patient/PatientConnectDoctor"));
+const PatientFeedback = lazy(() => import("./pages/patient/PatientFeedback"));
+const ClinicDashboard = lazy(() => import("./pages/clinic/ClinicDashboard"));
+const ClinicTeam = lazy(() => import("./pages/clinic/ClinicTeam"));
+const ClinicPatients = lazy(() => import("./pages/clinic/ClinicPatients"));
+const ClinicAppointments = lazy(() => import("./pages/clinic/ClinicAppointments"));
+const ClinicSettingsPage = lazy(() => import("./pages/clinic/ClinicSettingsPage"));
+const ClinicFeedback = lazy(() => import("./pages/clinic/ClinicFeedback"));
+
+const PageFallback = () => (
+  <div className="flex items-center justify-center min-h-[40vh]">
+    <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+  </div>
+);
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -59,6 +76,7 @@ const App = () => (
         <AuthProvider>
           <Toaster />
           <Sonner />
+          <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -117,6 +135,7 @@ const App = () => (
             
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

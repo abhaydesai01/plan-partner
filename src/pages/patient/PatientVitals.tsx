@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { usePatientRecord } from "@/hooks/usePatientRecord";
 import { api } from "@/lib/api";
@@ -22,9 +23,16 @@ const emptyBulkRow = (): BulkRow => ({ vital_type: "blood_pressure", value_text:
 
 const PatientVitals = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { patientId, loading: patientLoading } = usePatientRecord();
-  const [vitals, setVitals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: vitals = [], isLoading } = useQuery({
+    queryKey: ["me", "vitals", patientId],
+    queryFn: async () => {
+      const data = await api.get<any[]>("me/vitals");
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!patientId && !patientLoading,
+  });
   const [selectedType, setSelectedType] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
@@ -37,25 +45,7 @@ const PatientVitals = () => {
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   const [savingBulk, setSavingBulk] = useState(false);
 
-  const fetchVitals = async () => {
-    if (!patientId) { setLoading(false); return; }
-    try {
-      const data = await api.get<any[]>("me/vitals");
-      setVitals(Array.isArray(data) ? data : []);
-    } catch {
-      setVitals([]);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (patientLoading) return;
-    if (!patientId) {
-      setLoading(false);
-      return;
-    }
-    fetchVitals();
-  }, [patientId, patientLoading]);
+  const loading = patientLoading || isLoading;
 
   const vitalsAnalysis = useMemo(() => {
     const sorted = [...vitals].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
@@ -84,7 +74,7 @@ const PatientVitals = () => {
       setAddBpUpper("");
       setAddBpLower("");
       setAddNotes("");
-      fetchVitals();
+      queryClient.invalidateQueries({ queryKey: ["me", "vitals"] });
     } catch (err) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     } finally {
@@ -119,7 +109,7 @@ const PatientVitals = () => {
       toast({ title: "Vitals recorded", description: `${res.created} vital(s) added.` });
       setShowBulkAdd(false);
       setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
-      fetchVitals();
+      queryClient.invalidateQueries({ queryKey: ["me", "vitals"] });
     } catch (err) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     } finally {

@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { usePatientRecord } from "@/hooks/usePatientRecord";
 import { api } from "@/lib/api";
@@ -42,11 +43,25 @@ interface LabResultRow {
 
 const PatientLabResults = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { patientId, loading: patientLoading } = usePatientRecord();
-  const [results, setResults] = useState<any[]>([]);
-  const [reports, setReports] = useState<LabReport[]>([]);
+  const { data, isLoading } = useQuery({
+    queryKey: ["me", "lab_results", patientId],
+    queryFn: async () => {
+      const [resultsData, reportsData] = await Promise.all([
+        api.get<any[]>("me/lab_results").catch(() => []),
+        api.get<LabReport[]>("me/lab_reports").catch(() => []),
+      ]);
+      return {
+        results: Array.isArray(resultsData) ? resultsData : [],
+        reports: Array.isArray(reportsData) ? reportsData : [],
+      };
+    },
+    enabled: !!patientId && !patientLoading,
+  });
+  const results = data?.results ?? [];
+  const reports = data?.reports ?? [];
   const [selectedReport, setSelectedReport] = useState<{ report: LabReport; results: LabResultRow[] } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -57,26 +72,7 @@ const PatientLabResults = () => {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const fetchResults = useCallback(async () => {
-    if (!patientId) return;
-    try {
-      const [resultsData, reportsData] = await Promise.all([
-        api.get<any[]>("me/lab_results").catch(() => []),
-        api.get<LabReport[]>("me/lab_reports").catch(() => []),
-      ]);
-      setResults(Array.isArray(resultsData) ? resultsData : []);
-      setReports(Array.isArray(reportsData) ? reportsData : []);
-    } catch {
-      setResults([]);
-      setReports([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [patientId]);
-
-  useEffect(() => {
-    if (!patientLoading) fetchResults();
-  }, [patientId, patientLoading, fetchResults]);
+  const loading = patientLoading || isLoading;
 
   const handleUpload = useCallback(async (file: File) => {
     const isImage = file.type.startsWith("image/");
@@ -92,13 +88,13 @@ const PatientLabResults = () => {
       const data = await api.upload<{ report: LabReport; results: LabResultRow[] }>("me/lab_results/upload-report", formData);
       toast({ title: "Report processed", description: `${data.results?.length || 0} values extracted.` });
       setSelectedReport({ report: data.report, results: data.results || [] });
-      fetchResults();
+      queryClient.invalidateQueries({ queryKey: ["me", "lab_results"] });
     } catch (err) {
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
-  }, [patientId, toast, fetchResults]);
+  }, [patientId, toast, queryClient]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -133,7 +129,7 @@ const PatientLabResults = () => {
       toast({ title: "Lab result added" });
       setShowAdd(false);
       setTestName(""); setResultValue(""); setUnit(""); setRefRange(""); setNotes("");
-      fetchResults();
+      queryClient.invalidateQueries({ queryKey: ["me", "lab_results"] });
     } catch (err) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     } finally {

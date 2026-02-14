@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { api, getStoredToken } from "@/lib/api";
@@ -16,12 +17,42 @@ const MEAL_TYPES = [
 const PatientOverview = () => {
   const { user, session } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const patientFromSession = session?.patient as any;
   const [patientData, setPatientData] = useState<any>(null);
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [upcomingAppts, setUpcomingAppts] = useState<any[]>([]);
-  const [recentVitals, setRecentVitals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [linkRequest, setLinkRequest] = useState<any>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["me", "overview", user?.id, patientFromSession?.id],
+    queryFn: async () => {
+      if (!patientFromSession) {
+        const list = await api.get<any[]>("me/link_requests").catch(() => []);
+        return { linkRequest: list?.[0] ?? null, enrollments: [], upcomingAppts: [], recentVitals: [], foodLogs: [] };
+      }
+      const [enrollList, apptList, vitalsList, logsList] = await Promise.all([
+        api.get<any[]>("me/enrollments").catch(() => []),
+        api.get<any[]>("me/appointments").catch(() => []),
+        api.get<any[]>("me/vitals").catch(() => []),
+        api.get<any[]>("me/food_logs").catch(() => []),
+      ]);
+      const enrollments = Array.isArray(enrollList) ? enrollList.map((e: any) => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null })) : [];
+      const upcomingAppts = Array.isArray(apptList) ? apptList.filter((a: any) => new Date(a.scheduled_at) >= new Date()).slice(0, 5) : [];
+      const recentVitals = Array.isArray(vitalsList) ? vitalsList.slice(0, 5) : [];
+      const foodLogs = Array.isArray(logsList) ? logsList : [];
+      return { linkRequest: null, enrollments, upcomingAppts, recentVitals, foodLogs };
+    },
+    enabled: !!user,
+  });
+
+  const enrollments = data?.enrollments ?? [];
+  const upcomingAppts = data?.upcomingAppts ?? [];
+  const recentVitals = data?.recentVitals ?? [];
+  const foodLogs = data?.foodLogs ?? [];
+  const linkRequest = data?.linkRequest ?? null;
+  const loading = isLoading;
+
+  useEffect(() => {
+    setPatientData(patientFromSession ?? null);
+  }, [patientFromSession]);
 
   // Health profile editing
   const [editingProfile, setEditingProfile] = useState(false);
@@ -41,7 +72,6 @@ const PatientOverview = () => {
   const [analyzingMeal, setAnalyzingMeal] = useState(false);
   const [savingMeal, setSavingMeal] = useState(false);
   const [mealFoodItems, setMealFoodItems] = useState<{ name: string; quantity?: number; unit?: string; calories?: number; protein?: number; carbs?: number; fat?: number }[]>([]);
-  const [foodLogs, setFoodLogs] = useState<any[]>([]);
 
   const resetMealForm = useCallback(() => {
     setMealType("lunch");
@@ -124,54 +154,13 @@ const PatientOverview = () => {
       });
       toast({ title: "Meal logged", description: "Your meal has been saved." });
       resetMealForm();
-      try {
-        const logsList = await api.get<any[]>("me/food_logs");
-        setFoodLogs(Array.isArray(logsList) ? logsList : []);
-      } catch { /* keep existing list */ }
+      queryClient.invalidateQueries({ queryKey: ["me", "overview"] });
     } catch (err) {
       toast({ title: "Failed to log meal", description: (err as Error).message, variant: "destructive" });
     } finally {
       setSavingMeal(false);
     }
-  }, [user, patientData, mealType, mealNotes, mealFoodItems, mealImageFile, resetMealForm, toast]);
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchAll = async () => {
-      const patient = session?.patient as any;
-      if (!patient) {
-        try {
-          const list = await api.get<any[]>("me/link_requests");
-          setLinkRequest(list?.[0] ?? null);
-        } catch {
-          setLinkRequest(null);
-        }
-        setLoading(false);
-        return;
-      }
-      setPatientData(patient);
-
-      try {
-        const [enrollList, apptList, vitalsList, logsList] = await Promise.all([
-          api.get<any[]>("me/enrollments").catch(() => []),
-          api.get<any[]>("me/appointments").catch(() => []),
-          api.get<any[]>("me/vitals").catch(() => []),
-          api.get<any[]>("me/food_logs").catch(() => []),
-        ]);
-        setEnrollments(Array.isArray(enrollList) ? enrollList.map(e => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : null })) : []);
-        setUpcomingAppts(Array.isArray(apptList) ? apptList.filter((a: any) => new Date(a.scheduled_at) >= new Date()).slice(0, 5) : []);
-        setRecentVitals(Array.isArray(vitalsList) ? vitalsList.slice(0, 5) : []);
-        setFoodLogs(Array.isArray(logsList) ? logsList : []);
-      } catch {
-        setEnrollments([]);
-        setUpcomingAppts([]);
-        setRecentVitals([]);
-        setFoodLogs([]);
-      }
-      setLoading(false);
-    };
-    fetchAll();
-  }, [user, session?.patient]);
+  }, [user, patientData, mealType, mealNotes, mealFoodItems, mealImageFile, resetMealForm, toast, queryClient]);
 
   const handleLinkRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,8 +169,7 @@ const PatientOverview = () => {
     try {
       await api.post("me/link_requests", { doctor_code: doctorCode.trim(), message: message || null });
       toast({ title: "Request sent!", description: "Your link request has been sent to the doctor." });
-      const list = await api.get<any[]>("me/link_requests");
-      setLinkRequest(list?.[0] ?? null);
+      queryClient.invalidateQueries({ queryKey: ["me", "overview"] });
     } catch (err) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     } finally {

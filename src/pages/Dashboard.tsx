@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
@@ -41,45 +42,43 @@ const CHART_COLORS = [
 const Dashboard = () => {
   const { user, session } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState<Stats>({ totalPatients: 0, activePrograms: 0, activeEnrollments: 0, atRiskPatients: 0 });
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasClinic, setHasClinic] = useState<boolean | null>(null);
-  const [clinicName, setClinicName] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    const fetchAll = async () => {
-      try {
-        const [clinics, patientsCount, progs, enrolls, atRiskCount, appts] = await Promise.all([
-          api.get<{ id: string; name: string }[]>("clinics"),
-          api.get<{ count: number }>("patients", { count: "true" }),
-          api.get<Program[]>("programs"),
-          api.get<Enrollment[]>("enrollments"),
-          api.get<{ count: number }>("patients", { status: "at_risk", count: "true" }),
-          api.get<Appointment[]>("appointments"),
-        ]);
-        setHasClinic(Array.isArray(clinics) && clinics.length > 0);
-        setClinicName(clinics?.[0]?.name || "");
-        const activeEnrolls = (enrolls || []).filter((e) => e.status === "active");
-        setStats({
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard", user?.id],
+    queryFn: async () => {
+      const [clinics, patientsCount, progs, enrolls, atRiskCount, appts] = await Promise.all([
+        api.get<{ id: string; name: string }[]>("clinics"),
+        api.get<{ count: number }>("patients", { count: "true" }),
+        api.get<Program[]>("programs"),
+        api.get<Enrollment[]>("enrollments"),
+        api.get<{ count: number }>("patients", { status: "at_risk", count: "true" }),
+        api.get<Appointment[]>("appointments"),
+      ]);
+      const activeEnrolls = (enrolls || []).filter((e) => e.status === "active");
+      return {
+        hasClinic: Array.isArray(clinics) && clinics.length > 0,
+        clinicName: clinics?.[0]?.name || "",
+        stats: {
           totalPatients: (patientsCount as { count?: number })?.count ?? 0,
           activePrograms: (progs || []).length,
           activeEnrollments: activeEnrolls.length,
           atRiskPatients: (atRiskCount as { count?: number })?.count ?? 0,
-        });
-        setPrograms(progs || []);
-        setEnrollments(enrolls || []);
-        setAppointments(appts || []);
-      } catch (_) {
-        // ignore
-      }
-      setLoading(false);
-    };
-    fetchAll();
-  }, [user]);
+        },
+        programs: progs || [],
+        enrollments: enrolls || [],
+        appointments: appts || [],
+      };
+    },
+    enabled: !!user,
+  });
+
+  const hasClinic = data?.hasClinic ?? null;
+  const clinicName = data?.clinicName ?? "";
+  const stats = data?.stats ?? { totalPatients: 0, activePrograms: 0, activeEnrollments: 0, atRiskPatients: 0 };
+  const enrollments = data?.enrollments ?? [];
+  const programs = data?.programs ?? [];
+  const appointments = data?.appointments ?? [];
+  const loading = isLoading;
 
   // --- Chart Data ---
 

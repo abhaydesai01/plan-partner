@@ -1701,6 +1701,19 @@ router.get("/patients", requireAuth, async (req, res) => {
     const count = await Patient.countDocuments(filter);
     return res.json({ count });
   }
+  const hasLimit = q.limit != null && String(q.limit).trim() !== "";
+  const hasSkip = q.skip != null && String(q.skip).trim() !== "";
+  const usePagination = hasLimit || hasSkip;
+  const limit = usePagination ? Math.min(Math.max(parseInt(String(q.limit || "50"), 10) || 50, 1), 200) : 0;
+  const skip = usePagination ? Math.max(parseInt(String(q.skip || "0"), 10) || 0, 0) : 0;
+  if (usePagination) {
+    const [list, total] = await Promise.all([
+      Patient.find(filter).sort({ full_name: 1 }).skip(skip).limit(limit).lean(),
+      Patient.countDocuments(filter),
+    ]);
+    const mapped = list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined }));
+    return res.json({ items: mapped, total });
+  }
   const list = await Patient.find(filter).sort({ full_name: 1 }).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });

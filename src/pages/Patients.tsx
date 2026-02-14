@@ -1,9 +1,12 @@
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
-import { Plus, Search, X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle } from "lucide-react";
+import { Plus, Search, X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+
+const PAGE_SIZE = 50;
 
 interface Patient {
   id: string;
@@ -75,8 +78,8 @@ const statusColors: Record<string, string> = {
 const Patients = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ full_name: "", phone: "", age: "", gender: "male", conditions: "" });
@@ -89,18 +92,35 @@ const Patients = () => {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchPatients = async () => {
-    if (!user) return;
-    try {
-      const data = await api.get<Patient[]>("patients");
-      setPatients(data || []);
-    } catch {
-      setPatients([]);
-    }
-    setLoading(false);
-  };
+  const { data, isLoading } = useQuery({
+    queryKey: ["patients", user?.id, page, PAGE_SIZE],
+    queryFn: async () => {
+      const res = await api.get<Patient[] | { items: Patient[]; total: number }>("patients", {
+        limit: PAGE_SIZE,
+        skip: page * PAGE_SIZE,
+      });
+      if (Array.isArray(res)) return { items: res, total: res.length };
+      return { items: res.items ?? [], total: res.total ?? 0 };
+    },
+    enabled: !!user,
+  });
 
-  useEffect(() => { fetchPatients(); }, [user]);
+  const patients = data?.items ?? [];
+  const totalPatients = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalPatients / PAGE_SIZE));
+  const loading = isLoading;
+
+  // Full list only when import modal is open (for duplicate check)
+  const { data: allPatientsForImport } = useQuery({
+    queryKey: ["patients", "all", user?.id],
+    queryFn: async () => {
+      const res = await api.get<Patient[] | { items: Patient[] }>("patients");
+      return Array.isArray(res) ? res : (res.items ?? []);
+    },
+    enabled: !!user && showImport && csvRows.length > 0,
+  });
+
+  const invalidatePatients = () => queryClient.invalidateQueries({ queryKey: ["patients"] });
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +137,7 @@ const Patients = () => {
       toast({ title: "Patient added" });
       setShowForm(false);
       setForm({ full_name: "", phone: "", age: "", gender: "male", conditions: "" });
-      fetchPatients();
+      invalidatePatients();
     } catch (err: unknown) {
       toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
     }
@@ -146,7 +166,8 @@ const Patients = () => {
     if (!user || csvRows.length === 0) return;
     setImporting(true);
 
-    const existingPhones = new Set(patients.map((p) => normalizePhone(p.phone)));
+    const listForDupes = allPatientsForImport ?? patients;
+    const existingPhones = new Set(listForDupes.map((p) => normalizePhone(p.phone)));
     const errors: string[] = [];
     let duplicates = 0;
     const toInsert: Array<{
@@ -205,7 +226,7 @@ const Patients = () => {
     setImportResult({ total: csvRows.length, imported, duplicates, errors });
     if (imported > 0) {
       toast({ title: `${imported} patients imported` });
-      fetchPatients();
+      invalidatePatients();
     }
     setImporting(false);
   };
@@ -219,7 +240,7 @@ const Patients = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-heading font-bold text-foreground">Patients</h1>
-          <p className="text-muted-foreground text-sm">{patients.length} total patients</p>
+          <p className="text-muted-foreground text-sm">{totalPatients} total patients</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setShowImport(true); setCsvRows([]); setImportResult(null); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-foreground font-semibold text-sm hover:bg-muted transition-colors">
@@ -380,47 +401,74 @@ const Patients = () => {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
-          {patients.length === 0 ? "No patients yet. Add your first patient to get started." : "No patients match your search."}
+          {totalPatients === 0 ? "No patients yet. Add your first patient to get started." : "No patients match your search."}
         </div>
       ) : (
-        <div className="glass-card rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Phone</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Age</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Conditions</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      <Link to={`/dashboard/patients/${p.id}`} className="hover:text-primary hover:underline transition-colors">{p.full_name}</Link>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{p.phone}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{p.age ?? "—"}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <div className="flex flex-wrap gap-1">
-                        {p.conditions?.map((c) => (
-                          <span key={c} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">{c}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[p.status] || ""}`}>
-                        {p.status.replace("_", " ")}
-                      </span>
-                    </td>
+        <>
+          <div className="glass-card rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Phone</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Age</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Conditions</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((p) => (
+                    <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        <Link to={`/dashboard/patients/${p.id}`} className="hover:text-primary hover:underline transition-colors">{p.full_name}</Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{p.phone}</td>
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{p.age ?? "—"}</td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <div className="flex flex-wrap gap-1">
+                          {p.conditions?.map((c) => (
+                            <span key={c} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">{c}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[p.status] || ""}`}>
+                          {p.status.replace("_", " ")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <p className="text-sm text-muted-foreground">
+                Page {page + 1} of {totalPages} · {totalPatients} total
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
