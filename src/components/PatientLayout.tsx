@@ -3,7 +3,6 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Heart,
-  FileText,
   Activity,
   CalendarDays,
   Upload,
@@ -18,6 +17,7 @@ import {
   Link2,
   Star,
 } from "lucide-react";
+import { PatientPwaLink } from "@/components/PatientPwaLink";
 
 const navItems = [
   { to: "/patient", icon: MessageSquare, label: "AI Assistant", exact: true },
@@ -83,6 +83,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
+        <PatientPwaLink />
         <div className="p-3 border-t border-border">
           <button
             onClick={signOut}
@@ -163,6 +164,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
           })}
         </nav>
 
+        <PatientPwaLink />
         <div className="p-3 border-t border-border">
           <button
             onClick={signOut}

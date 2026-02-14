@@ -1172,6 +1172,7 @@ router.post("/me/feedbacks", requireAuth, feedbackVideoUpload.single("video"), a
 
 // ---------- Feedbacks ----------
 // Doctor: feedbacks for my practice. Clinic: feedbacks for clinic_id (when user can act for clinic).
+// When clinic_id is requested, include feedbacks that have that clinic_id OR feedbacks with no clinic_id where the doctor is a member of the clinic.
 router.get("/feedbacks", requireAuth, async (req, res) => {
   const userId = (req as AuthRequest).user.id;
   const q = req.query as { clinic_id?: string; is_testimonial?: string; doctor_id?: string };
@@ -1179,7 +1180,11 @@ router.get("/feedbacks", requireAuth, async (req, res) => {
   if (q.clinic_id) {
     const ok = await canActForClinic(userId, q.clinic_id);
     if (!ok) return res.status(403).json({ error: "Not allowed to view this clinic's feedback" });
-    filter.clinic_id = q.clinic_id;
+    const clinicDoctorIds = await ClinicMember.find({ clinic_id: q.clinic_id }).distinct("user_id");
+    filter.$or = [
+      { clinic_id: q.clinic_id },
+      { doctor_id: { $in: clinicDoctorIds }, $or: [{ clinic_id: null }, { clinic_id: "" }, { clinic_id: { $exists: false } }] },
+    ];
   } else if (q.doctor_id) {
     // Only allow if current user is that doctor or can act for a clinic that includes that doctor
     if (q.doctor_id !== userId) {

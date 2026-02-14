@@ -50,6 +50,17 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## Patient PWA (install as app)
+
+The patient portal is a **Progressive Web App (PWA)**. Patients can install it on their phone or tablet and use it like a native app:
+
+- **Install**: On the deployed site, open the app in Chrome (Android) or Safari (iOS), then use “Add to Home Screen” / “Install app”.
+- **Start URL**: When opened from the home screen, the app opens directly at `/patient` (chat/patient home).
+- **Offline**: The service worker caches the app shell; API requests use the network when available.
+- **Updates**: New versions are applied automatically when the user revisits the app.
+
+Icons and manifest are in `public/` (`pwa-icon.svg`). The PWA is built with `vite-plugin-pwa` (see `vite.config.ts`).
+
 ## What technologies are used for this project?
 
 This project is built with:
