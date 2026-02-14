@@ -15,3 +15,9 @@
   to = "/.netlify/functions/api?path=:splat"
   status = 200
   force = true
+
+# SPA fallback: serve index.html for all other routes so client-side routing works (direct links, refresh)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
