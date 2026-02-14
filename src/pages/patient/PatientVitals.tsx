@@ -264,9 +264,9 @@ const PatientVitals = () => {
 
       {/* Filter tabs: wrap on small screens, no horizontal scroll */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => setSelectedType("all")} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${selectedType === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>All</button>
+        <button onClick={() => setSelectedType("all")} className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 touch-manipulation ${selectedType === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>All</button>
         {VITAL_TYPES.map(t => (
-          <button key={t.value} onClick={() => setSelectedType(t.value)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${selectedType === t.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t.label}</button>
+          <button key={t.value} onClick={() => setSelectedType(t.value)} className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 touch-manipulation ${selectedType === t.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>{t.label}</button>
         ))}
       </div>
 

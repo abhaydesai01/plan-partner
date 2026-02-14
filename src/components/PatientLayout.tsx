@@ -55,7 +55,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
             </div>
             <span className="text-lg font-heading font-bold text-foreground truncate">My Health</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="p-2 -mr-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation">
+          <button onClick={() => setSidebarOpen(false)} className="touch-target p-2 rounded-xl hover:bg-muted active:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation" aria-label="Close menu">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -70,7 +70,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
                 key={item.to}
                 to={item.to}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 min-h-[44px] px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation ${
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -96,22 +96,23 @@ export function PatientLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-hidden">
-        <header className="safe-area-header h-16 min-h-[4rem] border-b border-border bg-card flex items-center gap-2 sticky top-0 z-30 flex-shrink-0 px-3 sm:px-4">
+        <header className="safe-area-header h-14 min-h-[3.5rem] sm:h-16 sm:min-h-[4rem] border-b border-border bg-card flex items-center gap-1 sm:gap-2 sticky top-0 z-30 flex-shrink-0 px-4">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation"
+            className="touch-target p-2 rounded-xl hover:bg-muted active:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation -ml-0.5"
             aria-label="Open menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-6 h-6 sm:w-5 sm:h-5" />
           </button>
-          <h2 className="text-base sm:text-lg font-heading font-semibold text-foreground truncate min-w-0 flex-1">
+          <h2 className="text-base sm:text-lg font-heading font-semibold text-foreground truncate min-w-0 flex-1 pl-1">
             {navItems.find((i) => i.exact ? location.pathname === i.to : location.pathname === i.to || location.pathname.startsWith(i.to + "/"))?.label || "My Health"}
           </h2>
           <Link
             to="/patient"
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+            className="touch-target flex-shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-primary hover:bg-primary/10 active:bg-primary/20 transition-colors touch-manipulation"
+            aria-label="Go to Home"
           >
-            <Home className="w-4 h-4" />
+            <Home className="w-5 h-5 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Home</span>
           </Link>
         </header>
@@ -147,7 +148,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
             </div>
             <span className="text-lg font-heading font-bold text-foreground truncate">My Health</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="p-2 -mr-1 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation">
+          <button onClick={() => setSidebarOpen(false)} className="touch-target p-2 rounded-xl hover:bg-muted active:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation" aria-label="Close menu">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -162,7 +163,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
                 key={item.to}
                 to={item.to}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 min-h-[44px] px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation ${
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"

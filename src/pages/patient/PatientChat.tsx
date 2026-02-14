@@ -230,25 +230,26 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   return (
     <div className="h-screen w-full flex-1 flex flex-col bg-background overflow-hidden min-h-[100dvh]">
       {/* Header: safe-area so logo/link/hamburger aren't cut in PWA */}
-      <header className="safe-area-header flex items-center justify-between gap-2 flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 min-h-[3.5rem]">
+      <header className="safe-area-header flex items-center justify-between gap-1 sm:gap-2 flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 min-h-[3.5rem] px-4">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <button
             onClick={onOpenMenu}
-            className="p-2 -ml-1 rounded-lg hover:bg-muted transition-colors text-muted-foreground flex-shrink-0 touch-manipulation"
+            className="touch-target p-2 rounded-xl hover:bg-muted active:bg-muted transition-colors text-muted-foreground flex-shrink-0 touch-manipulation -ml-0.5"
             aria-label="Open menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-6 h-6 sm:w-5 sm:h-5" />
           </button>
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Heart className="w-3.5 h-3.5 text-primary" />
+          <div className="flex items-center gap-2 min-w-0 pl-1">
+            <div className="w-8 h-8 sm:w-7 sm:h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Heart className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-primary" />
             </div>
-            <span className="font-heading font-bold text-foreground truncate">Mediimate AI</span>
+            <span className="font-heading font-bold text-foreground truncate text-sm sm:text-base">Mediimate AI</span>
           </div>
         </div>
         <Link
           to="/patient/overview"
-          className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 whitespace-nowrap touch-manipulation"
+          className="touch-target min-w-[44px] inline-flex items-center justify-center px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 active:bg-muted transition-colors flex-shrink-0 whitespace-nowrap touch-manipulation"
+          aria-label="Go to Dashboard"
         >
           Dashboard
         </Link>

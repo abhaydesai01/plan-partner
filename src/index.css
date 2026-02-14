@@ -114,14 +114,28 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-lg border border-border/50 shadow-lg;
   }
-  /* PWA: keep header content below notch / status bar */
+  /* PWA: keep header content below notch / status bar; extra horizontal padding so icons aren’t cut on mobile */
   .safe-area-header {
     padding-top: var(--sat);
-    padding-left: max(1rem, var(--sal));
-    padding-right: max(1rem, var(--sar));
+    padding-left: max(0.75rem, var(--sal));
+    padding-right: max(0.75rem, var(--sar));
     padding-bottom: 0.5rem;
+  }
+  @media (max-width: 640px) {
+    .safe-area-header {
+      padding-left: max(1rem, var(--sal));
+      padding-right: max(1rem, var(--sar));
+    }
   }
   .safe-area-bottom {
     padding-bottom: var(--sab);
+  }
+  /* Mobile: minimum 44px touch target for header buttons (accessibility) */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
