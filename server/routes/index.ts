@@ -517,6 +517,10 @@ router.post("/me/patient_documents/upload-and-analyze", requireAuth, upload.sing
     const analysis = isPdf
       ? await analyzeDocumentWithGemini(GEMINI_API_KEY, { type: "pdf", buffer: buf, fileName: file.originalname || file.filename })
       : await analyzeDocumentWithGemini(GEMINI_API_KEY, { type: "image", base64: buf.toString("base64"), mimeType: mime });
+    const extractedData: Record<string, unknown> = { key_points: analysis.key_points };
+    if (analysis.chart_data) extractedData.chart_data = analysis.chart_data;
+    if (analysis.prescription_summary) extractedData.prescription_summary = analysis.prescription_summary;
+    if (analysis.medications?.length) extractedData.medications = analysis.medications;
     const doc = await PatientDocument.create({
       patient_id: link.patient_id,
       doctor_id: link.doctor_id,
@@ -529,7 +533,7 @@ router.post("/me/patient_documents/upload-and-analyze", requireAuth, upload.sing
       notes: notes || null,
       ai_summary: analysis.summary || null,
       layman_summary: analysis.layman_summary || null,
-      extracted_data: analysis.chart_data ? { chart_data: analysis.chart_data, key_points: analysis.key_points } : { key_points: analysis.key_points },
+      extracted_data: extractedData,
       analyzed_at: new Date(),
     });
     res.status(201).json(doc.toJSON());
@@ -1573,6 +1577,10 @@ router.post("/patient_documents/upload-and-analyze", requireAuth, upload.single(
     const analysis = isPdf
       ? await analyzeDocumentWithGemini(GEMINI_API_KEY, { type: "pdf", buffer: buf, fileName: file.originalname || file.filename })
       : await analyzeDocumentWithGemini(GEMINI_API_KEY, { type: "image", base64: buf.toString("base64"), mimeType: mime });
+    const extractedData: Record<string, unknown> = { key_points: analysis.key_points };
+    if (analysis.chart_data) extractedData.chart_data = analysis.chart_data;
+    if (analysis.prescription_summary) extractedData.prescription_summary = analysis.prescription_summary;
+    if (analysis.medications?.length) extractedData.medications = analysis.medications;
     const doc = await PatientDocument.create({
       patient_id,
       doctor_id: doctorId,
@@ -1585,7 +1593,7 @@ router.post("/patient_documents/upload-and-analyze", requireAuth, upload.single(
       notes: notes || null,
       ai_summary: analysis.summary || null,
       layman_summary: analysis.layman_summary || null,
-      extracted_data: analysis.chart_data ? { chart_data: analysis.chart_data, key_points: analysis.key_points } : { key_points: analysis.key_points },
+      extracted_data: extractedData,
       analyzed_at: new Date(),
     });
     res.status(201).json(doc.toJSON());
@@ -2125,21 +2133,62 @@ async function analyzeLabResultsForReport(
   };
 }
 
-const DOCUMENT_ANALYSIS_PROMPT = `You are a medical document analyst. Analyze this document (report, prescription, referral, imaging report, etc.) and extract:
-1. A brief professional summary (2-4 sentences) for the doctor.
-2. A simple explanation in plain language for the patient (2-4 sentences).
-3. Key points as a list of short strings (e.g. important findings, medications, dates).
-4. If the document contains numeric data or values that can be visualized (e.g. lab-like values, scores over time), provide chart_data for a bar or line chart.
+const DOCUMENT_ANALYSIS_PROMPT = `You are a medical document analyst. Read and understand the FULL document (report, prescription, referral, imaging report, etc.) and extract the following.
 
-Return ONLY valid JSON (no markdown): {
-  "summary": "string",
-  "layman_summary": "string",
-  "key_points": ["string", "..."],
-  "chart_data": { "labels": ["label1", "..."], "datasets": [{ "label": "Series name", "values": [number, ...] }] }
+For EVERY document return:
+1. summary: Brief professional summary (2-4 sentences) for the doctor.
+2. layman_summary: Simple explanation in plain language for the patient (2-4 sentences).
+3. key_points: List of short strings (important findings, dates, names, facility).
+4. chart_data: Only if the document has numeric data to visualize (e.g. lab-like values); otherwise omit. Format: { "labels": ["label1", "..."], "datasets": [{ "label": "Series name", "values": [number, ...] }] }.
+
+If the document is a PRESCRIPTION or contains a list of medications, ALSO extract:
+5. prescription_summary: A short patient-friendly summary of the prescription, e.g. "💊 *Your Prescription Summary*\\n\\n1. *MED NAME* - dosage, frequency, duration\\n2. ..." (one line per medication).
+6. medications: Array of objects, one per medication. For each medication extract everything you can read from the document. Use empty string or empty array when not specified. Structure:
+   {
+     "medicine": "Full medicine name (include strength/form if visible, e.g. SOTRET NF 8MG CAP 10'S (ISOTRETINOIN))",
+     "dosage": "Amount per dose (e.g. 1, 2 tabs, 5ml, Local)",
+     "frequency": "How often (e.g. Once a day, Twice daily, Three times a day, Once)",
+     "duration": "How long (e.g. 30 Days, 2 weeks, 5 days)",
+     "instructions": "Special instructions (e.g. After meals, As directed, Before food)",
+     "timing_display": "Time of day if mentioned (e.g. Morning, Night, Afternoon)",
+     "suggested_time": "Suggested time in HH:MM 24h if inferrable (e.g. 08:00, 20:00), else empty string",
+     "food_relation": "Relation to food (e.g. after food, before food, with food, any time)",
+     "timings": ["08:00", "20:00"]  // array of time strings if multiple times per day; empty array if once daily or not specified
+   }
+
+Return ONLY valid JSON (no markdown). For non-prescription documents omit prescription_summary and medications or set medications to [].
+Example with prescription:
+{
+  "summary": "Prescription for John Doe dated ...",
+  "layman_summary": "Your doctor prescribed ...",
+  "key_points": ["Patient: John Doe", "Date: ...", "Medications: ..."],
+  "prescription_summary": "💊 *Your Prescription Summary*\\n\\n1. *MED A* - dosage, frequency, duration\\n2. *MED B* - ...",
+  "medications": [
+    { "medicine": "Full name (INGREDIENT)", "dosage": "1", "frequency": "Once a day", "duration": "30 Days", "instructions": "After meals", "timing_display": "Night", "suggested_time": "20:00", "food_relation": "after food", "timings": [] }
+  ]
 }
-Omit chart_data if there is nothing to chart. Use short labels. Always return valid JSON only.`;
+Always return valid JSON only.`;
 
-function parseDocumentAnalysisResponse(content: string): { summary: string; layman_summary: string; key_points: string[]; chart_data?: { labels: string[]; datasets: { label: string; values: number[] }[] } } {
+type ExtractedMedication = {
+  medicine: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+  timing_display: string;
+  suggested_time: string;
+  food_relation: string;
+  timings: string[];
+};
+
+function parseDocumentAnalysisResponse(content: string): {
+  summary: string;
+  layman_summary: string;
+  key_points: string[];
+  chart_data?: { labels: string[]; datasets: { label: string; values: number[] }[] };
+  prescription_summary?: string;
+  medications?: ExtractedMedication[];
+} {
   let raw = content.trim();
   const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlock) raw = codeBlock[1].trim();
@@ -2148,11 +2197,28 @@ function parseDocumentAnalysisResponse(content: string): { summary: string; laym
   const toParse = raw.replace(/,(\s*[}\]])/g, "$1");
   try {
     const parsed = JSON.parse(toParse);
+    const medications: ExtractedMedication[] = Array.isArray(parsed.medications)
+      ? parsed.medications
+          .filter((m: any) => m && (m.medicine || m.dosage))
+          .map((m: any) => ({
+            medicine: String(m.medicine ?? ""),
+            dosage: String(m.dosage ?? ""),
+            frequency: String(m.frequency ?? ""),
+            duration: String(m.duration ?? ""),
+            instructions: String(m.instructions ?? ""),
+            timing_display: String(m.timing_display ?? ""),
+            suggested_time: String(m.suggested_time ?? ""),
+            food_relation: String(m.food_relation ?? ""),
+            timings: Array.isArray(m.timings) ? m.timings.map((t: any) => String(t)) : [],
+          }))
+      : [];
     return {
       summary: parsed.summary || "",
       layman_summary: parsed.layman_summary || "",
       key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
       chart_data: parsed.chart_data && typeof parsed.chart_data === "object" ? parsed.chart_data : undefined,
+      prescription_summary: typeof parsed.prescription_summary === "string" ? parsed.prescription_summary : undefined,
+      medications: medications.length ? medications : undefined,
     };
   } catch {
     return { summary: "", layman_summary: "", key_points: [] };
@@ -2162,7 +2228,14 @@ function parseDocumentAnalysisResponse(content: string): { summary: string; laym
 async function analyzeDocumentWithGemini(
   apiKey: string | undefined,
   opts: { type: "image"; base64: string; mimeType: string } | { type: "pdf"; buffer: Buffer; fileName: string }
-): Promise<{ summary: string; layman_summary: string; key_points: string[]; chart_data?: { labels: string[]; datasets: { label: string; values: number[] }[] } }> {
+): Promise<{
+  summary: string;
+  layman_summary: string;
+  key_points: string[];
+  chart_data?: { labels: string[]; datasets: { label: string; values: number[] }[] };
+  prescription_summary?: string;
+  medications?: ExtractedMedication[];
+}> {
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const systemInstruction = { parts: [{ text: DOCUMENT_ANALYSIS_PROMPT }] };
   const generationConfig = { temperature: 0.2, maxOutputTokens: 8192 };
@@ -2260,7 +2333,27 @@ Infer meal_type from food type. For Indian foods use common serving sizes. Alway
   });
 });
 
-async function buildPatientContext(patientId: string) {
+/** Format medications for AI context: supports string[] or object[] (medicine, dosage, frequency_per_day, timings, etc.) */
+function formatMedicationsForContext(medications: unknown): string {
+  if (!medications || !Array.isArray(medications) || medications.length === 0) return "None recorded";
+  return medications
+    .map((m: any) => {
+      if (typeof m === "string") return m;
+      if (m && typeof m === "object" && m.medicine) {
+        const parts = [m.medicine];
+        if (m.dosage) parts.push(m.dosage);
+        if (m.frequency_per_day) parts.push(`${m.frequency_per_day}x/day`);
+        if (m.timings?.length) parts.push(`at ${m.timings.join(", ")}`);
+        if (m.duration_days) parts.push(`for ${m.duration_days} days`);
+        if (m.meal_instruction) parts.push(`(${m.meal_instruction})`);
+        return parts.join(" — ");
+      }
+      return String(m);
+    })
+    .join("\n");
+}
+
+async function buildPatientContext(patientId: string, patient?: any) {
   const [vitals, labs, appointments, enrollments, docs] = await Promise.all([
     Vital.find({ patient_id: patientId }).sort({ recorded_at: -1 }).limit(20).lean(),
     LabResult.find({ patient_id: patientId }).sort({ tested_at: -1 }).limit(20).lean(),
@@ -2269,6 +2362,12 @@ async function buildPatientContext(patientId: string) {
     PatientDocument.find({ patient_id: patientId }).sort({ created_at: -1 }).limit(10).lean(),
   ]);
   const parts: string[] = [];
+  if (patient) {
+    const medsText = formatMedicationsForContext(patient.medications);
+    parts.push(
+      `PATIENT PROFILE:\n- Name: ${patient.full_name || "Unknown"}\n- Age: ${patient.age ?? "Unknown"}\n- Gender: ${patient.gender ?? "Unknown"}\n- Conditions: ${(patient.conditions?.length && patient.conditions.join(", ")) || "None"}\n- Medications:\n${medsText === "None recorded" ? "  None recorded" : medsText.split("\n").map((line) => "  " + line).join("\n")}\n- Status: ${patient.status || "active"}`
+    );
+  }
   if (vitals.length) parts.push("RECENT VITALS:\n" + vitals.map((v: any) => `- ${v.vital_type}: ${v.value_text}${v.unit ? ` ${v.unit}` : ""} (${new Date(v.recorded_at).toLocaleDateString()})`).join("\n"));
   if (labs.length) parts.push("LAB RESULTS:\n" + labs.map((l: any) => `- ${l.test_name}: ${l.result_value} (${new Date(l.tested_at).toLocaleDateString()})`).join("\n"));
   if (appointments.length) parts.push("APPOINTMENTS:\n" + appointments.map((a: any) => `- ${a.title}: ${new Date(a.scheduled_at).toLocaleString()} (${a.status})`).join("\n"));
@@ -2285,7 +2384,7 @@ router.post("/chat/patient", requireAuth, async (req, res) => {
   let contextParts = "";
   if (patient) {
     const pid = (patient as any)._id.toString();
-    contextParts = await buildPatientContext(pid);
+    contextParts = await buildPatientContext(pid, patient);
   }
   const systemPrompt = `You are Mediimate AI — a caring health assistant for patients. You have access to the patient's health records below. You are NOT a doctor; recommend consulting their doctor for medical decisions. Be empathetic and concise.\n\n${contextParts || "No patient records found."}\n\nRespond in a friendly, professional tone.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
@@ -2331,7 +2430,7 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
   const patient = await Patient.findOne({ _id: patient_id, doctor_id: userId }).lean();
   if (!patient) return res.status(404).json({ error: "Patient not found" });
   const pid = (patient as any)._id.toString();
-  const contextParts = await buildPatientContext(pid);
+  const contextParts = await buildPatientContext(pid, patient);
   const systemPrompt = `You are a clinical copilot for doctors. Patient records:\n\n${contextParts}\n\nBe precise and clinical.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
   const streamRes = await fetch(
