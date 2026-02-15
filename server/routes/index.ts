@@ -42,6 +42,7 @@ import {
   DoctorMessage,
   UserBadge,
   UserWeeklyChallenge,
+  MilestoneReward,
 } from "../models/index.js";
 
 const router = Router();
@@ -825,6 +826,14 @@ const WEEKLY_CHALLENGES: { key: string; title: string; target_days: number; rewa
   { key: "med_7_days", title: "Log medication 7 days this week", target_days: 7, reward_points: 50, type: "med_days" },
 ];
 
+// Layer 7: Milestone rewards — tangible real-world benefits
+const MILESTONE_DEFINITIONS: { key: string; title: string; description: string; required_logs: number; icon: string }[] = [
+  { key: "free_consultation", title: "Free Doctor Consultation", description: "Complete 20 health logs to unlock a free doctor consultation", required_logs: 20, icon: "stethoscope" },
+  { key: "medicine_discount", title: "Medicine Discount", description: "Complete 40 health logs to unlock a medicine discount", required_logs: 40, icon: "pill" },
+  { key: "health_report", title: "Health Report", description: "Complete 60 health logs to unlock a detailed health report", required_logs: 60, icon: "file-text" },
+  { key: "premium_checkup", title: "Premium Health Checkup", description: "Complete 100 health logs to unlock a premium health checkup", required_logs: 100, icon: "heart-pulse" },
+];
+
 async function getDaysCountByType(filter: RewardsFilter): Promise<{ bp_days: number; sugar_days: number; food_days: number; med_days: number }> {
   const [bp, sugar, food, med] = await Promise.all([
     Vital.aggregate<{ _id: string }>([{ $match: { ...filter, vital_type: "blood_pressure" } }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$recorded_at" } } } }]).exec(),
@@ -865,11 +874,15 @@ router.get("/me/gamification", requireAuth, async (req, res) => {
   const filter: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const patientId = link.patient_id;
 
-  const [rewards, dates, daysByType, earnedBadgesList] = await Promise.all([
+  const [rewards, dates, daysByType, earnedBadgesList, bpCount, sugarCount, foodCount, medCount] = await Promise.all([
     getRewardsForFilter(filter),
     getDistinctLogDates(filter),
     getDaysCountByType(filter),
     UserBadge.find({ patient_id: patientId }).sort({ earned_at: -1 }).lean(),
+    Vital.countDocuments({ ...filter, vital_type: "blood_pressure" }),
+    Vital.countDocuments({ ...filter, vital_type: "blood_sugar" }),
+    FoodLog.countDocuments(filter),
+    MedicationLog.countDocuments(filter),
   ]);
 
   const streak_days = computeStreak(dates);
@@ -936,6 +949,36 @@ router.get("/me/gamification", requireAuth, async (req, res) => {
     });
   }
 
+  // --- Layer 7: Milestone rewards (real-world benefits) ---
+  const totalLogs = bpCount + sugarCount + foodCount + medCount;
+  const existingMilestones = await MilestoneReward.find({ patient_id: patientId }).lean();
+
+  const milestoneResults: { key: string; title: string; description: string; required_logs: number; current_logs: number; unlocked: boolean; unlocked_at?: string; claimed: boolean; claimed_at?: string; icon: string }[] = [];
+  for (const m of MILESTONE_DEFINITIONS) {
+    const existing = existingMilestones.find((e: any) => e.milestone_key === m.key);
+    const unlocked = existing != null || totalLogs >= m.required_logs;
+    if (totalLogs >= m.required_logs && !existing) {
+      try {
+        await MilestoneReward.create({ patient_id: patientId, milestone_key: m.key });
+      } catch (err: any) {
+        if (err?.code !== 11000) throw err;
+      }
+    }
+    const doc = existing || (unlocked ? await MilestoneReward.findOne({ patient_id: patientId, milestone_key: m.key }).lean() : null);
+    milestoneResults.push({
+      key: m.key,
+      title: m.title,
+      description: m.description,
+      required_logs: m.required_logs,
+      current_logs: totalLogs,
+      unlocked,
+      unlocked_at: (doc as any)?.unlocked_at?.toISOString?.(),
+      claimed: (doc as any)?.claimed ?? false,
+      claimed_at: (doc as any)?.claimed_at?.toISOString?.(),
+      icon: m.icon,
+    });
+  }
+
   res.json({
     streak_days,
     badges,
@@ -943,7 +986,23 @@ router.get("/me/gamification", requireAuth, async (req, res) => {
     level_label,
     total_points: rewards.total_points,
     weekly_challenges,
+    milestones: milestoneResults,
   });
+});
+
+// Layer 7: Claim a milestone reward
+router.post("/me/milestones/:key/claim", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const patientId = link.patient_id;
+  const key = req.params.key;
+  const milestone = await MilestoneReward.findOne({ patient_id: patientId, milestone_key: key });
+  if (!milestone) return res.status(404).json({ error: "Milestone not unlocked yet" });
+  if ((milestone as any).claimed) return res.status(400).json({ error: "Already claimed" });
+  (milestone as any).claimed = true;
+  (milestone as any).claimed_at = new Date();
+  await milestone.save();
+  res.json({ success: true, claimed_at: (milestone as any).claimed_at.toISOString() });
 });
 
 router.get("/me/rewards", requireAuth, async (req, res) => {

@@ -518,6 +518,20 @@ const UserWeeklyChallengeSchema = new mongoose.Schema(
 );
 UserWeeklyChallengeSchema.index({ patient_id: 1, challenge_key: 1, week_start: 1 }, { unique: true });
 
+/** Layer 7: Milestone rewards (real-world benefits unlocked after N total logs). */
+const MilestoneRewardSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    milestone_key: { type: String, required: true }, // e.g. "free_consultation", "medicine_discount"
+    unlocked_at: { type: Date, default: Date.now },
+    claimed: { type: Boolean, default: false },
+    claimed_at: { type: Date },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+MilestoneRewardSchema.index({ patient_id: 1, milestone_key: 1 }, { unique: true });
+MilestoneRewardSchema.index({ patient_id: 1, unlocked_at: -1 });
+
 export const AuthUser = mongoose.model("AuthUser", AuthUserSchema);
 export const Alert = mongoose.model("Alert", AlertSchema);
 export const AppointmentCheckin = mongoose.model("AppointmentCheckin", AppointmentCheckinSchema);
@@ -551,3 +565,4 @@ export const FamilyConnection = mongoose.model("FamilyConnection", FamilyConnect
 export const DoctorMessage = mongoose.model("DoctorMessage", DoctorMessageSchema);
 export const UserBadge = mongoose.model("UserBadge", UserBadgeSchema);
 export const UserWeeklyChallenge = mongoose.model("UserWeeklyChallenge", UserWeeklyChallengeSchema);
+export const MilestoneReward = mongoose.model("MilestoneReward", MilestoneRewardSchema);

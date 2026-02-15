@@ -1,6 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Flame, Award, Star, Target } from "lucide-react";
+import { Flame, Award, Star, Target, Gift, Stethoscope, Pill, FileText, HeartPulse, Lock, Check } from "lucide-react";
+
+export type MilestoneData = {
+  key: string;
+  title: string;
+  description: string;
+  required_logs: number;
+  current_logs: number;
+  unlocked: boolean;
+  unlocked_at?: string;
+  claimed: boolean;
+  claimed_at?: string;
+  icon: string;
+};
 
 export type GamificationData = {
   streak_days: number;
@@ -17,6 +30,7 @@ export type GamificationData = {
     completed: boolean;
     completed_at?: string;
   }[];
+  milestones: MilestoneData[];
 };
 
 export function useGamification(enabled = true) {
@@ -145,7 +159,114 @@ export function WeeklyChallengesList({ data }: { data: GamificationData | undefi
   );
 }
 
-/** Full gamification block for dashboard: streak, level, badges, weekly challenges */
+const MILESTONE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  stethoscope: Stethoscope,
+  pill: Pill,
+  "file-text": FileText,
+  "heart-pulse": HeartPulse,
+};
+
+/** Milestone rewards: real-world benefits unlocked by logging */
+export function MilestoneRewardsList({ data }: { data: GamificationData | undefined }) {
+  const queryClient = useQueryClient();
+  if (data == null || !data.milestones || data.milestones.length === 0) return null;
+
+  const handleClaim = async (key: string) => {
+    try {
+      await api.post(`me/milestones/${key}/claim`, {});
+      queryClient.invalidateQueries({ queryKey: ["me", "gamification"] });
+    } catch {
+      // already claimed or not unlocked
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 sm:p-4 min-w-0 overflow-hidden">
+      <div className="flex items-center gap-2 mb-3">
+        <Gift className="w-4 h-4 text-primary flex-shrink-0" />
+        <span className="text-sm font-medium text-foreground">Rewards</span>
+      </div>
+      <ul className="space-y-3">
+        {data.milestones.map((m) => {
+          const Icon = MILESTONE_ICONS[m.icon] ?? Gift;
+          const pct = Math.min(100, Math.round((m.current_logs / m.required_logs) * 100));
+          return (
+            <li
+              key={m.key}
+              className={`rounded-lg border p-3 transition-colors ${
+                m.unlocked
+                  ? m.claimed
+                    ? "border-green-500/30 bg-green-500/5"
+                    : "border-primary/30 bg-primary/5"
+                  : "border-border/60 bg-muted/20"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    m.unlocked
+                      ? m.claimed
+                        ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                        : "bg-primary/15 text-primary"
+                      : "bg-muted/60 text-muted-foreground"
+                  }`}
+                >
+                  {m.unlocked ? (
+                    m.claimed ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />
+                  ) : (
+                    <Lock className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={`text-sm font-medium ${m.unlocked ? "text-foreground" : "text-muted-foreground"}`}>
+                      {m.title}
+                    </p>
+                    {m.unlocked && !m.claimed && (
+                      <button
+                        type="button"
+                        onClick={() => handleClaim(m.key)}
+                        className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors touch-manipulation"
+                      >
+                        Claim
+                      </button>
+                    )}
+                    {m.claimed && (
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400">Claimed ✓</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
+                  {!m.unlocked && (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary/60 transition-all duration-300"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                          {m.current_logs}/{m.required_logs}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {m.unlocked && m.unlocked_at && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Unlocked {new Date(m.unlocked_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** Full gamification block for dashboard: streak, level, badges, weekly challenges, milestones */
 export function GamificationBlock({ data }: { data: GamificationData | undefined }) {
   if (data == null) return null;
   return (
@@ -156,6 +277,7 @@ export function GamificationBlock({ data }: { data: GamificationData | undefined
       </div>
       <BadgesList data={data} />
       <WeeklyChallengesList data={data} />
+      <MilestoneRewardsList data={data} />
     </div>
   );
 }
