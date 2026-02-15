@@ -3836,6 +3836,131 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
   }
 });
 
+// ---------- Chat: extract health data from a user message and auto-log ----------
+router.post("/me/chat-extract-and-log", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const { message } = req.body;
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return res.json({ logged: [] });
+  }
+  if (!GEMINI_API_KEY) return res.json({ logged: [] });
+
+  let extractedActions: any[] = [];
+  try {
+    const extractionPrompt = `Extract any health data the user is reporting in this message. Return ONLY valid JSON.
+
+User message: "${message}"
+
+Return this exact format:
+{
+  "actions": [
+    { "type": "blood_pressure", "value": "120/80" },
+    { "type": "blood_sugar", "value": "110" },
+    { "type": "food", "meal_type": "breakfast", "notes": "description of food eaten" },
+    { "type": "medication", "taken": true, "medication_name": "medicine name" }
+  ]
+}
+
+Rules:
+- Only include data explicitly mentioned by the user (numbers, food items, medication names)
+- blood_pressure: must have systolic/diastolic (e.g. "120/80", "my bp is 130 over 85")
+- blood_sugar: must be a number (e.g. "sugar was 110", "glucose 95")
+- food: include meal_type (breakfast/lunch/dinner/snack) and notes about what they ate
+- medication: set taken=true if they said they took it, false if skipped; include medication_name if mentioned
+- If the message is just a question or greeting with no health data, return empty actions: { "actions": [] }
+- Return ONLY the JSON, no explanation`;
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: extractionPrompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+        }),
+      }
+    );
+    if (geminiRes.ok) {
+      const aiResult = await geminiRes.json();
+      const content = aiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+      try {
+        const parsed = JSON.parse(jsonMatch[1]!.trim());
+        extractedActions = Array.isArray(parsed.actions) ? parsed.actions : [];
+      } catch { /* ignore */ }
+    }
+  } catch { /* best effort */ }
+
+  if (extractedActions.length === 0) return res.json({ logged: [] });
+
+  const filter: Record<string, unknown> = link.patient_ids.length > 1
+    ? { patient_id: { $in: link.patient_ids } }
+    : { patient_id: link.patient_id };
+  const logged: any[] = [];
+
+  for (const action of extractedActions) {
+    try {
+      if (action.type === "blood_pressure" && action.value) {
+        const parts = String(action.value).split("/");
+        const upper = parseFloat(parts[0]);
+        await Vital.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          vital_type: "blood_pressure",
+          value_text: action.value,
+          value_numeric: Number.isFinite(upper) ? upper : undefined,
+          unit: "mmHg",
+          source: "chat",
+        });
+        await resolveReminderEscalation(link.patient_id, "blood_pressure");
+        await updateGamificationState(link.patient_id, "blood_pressure", filter as any);
+        logged.push({ type: "blood_pressure", value: action.value });
+      } else if (action.type === "blood_sugar" && action.value) {
+        const num = parseFloat(action.value);
+        await Vital.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          vital_type: "blood_sugar",
+          value_text: action.value,
+          value_numeric: Number.isFinite(num) ? num : undefined,
+          unit: "mg/dL",
+          source: "chat",
+        });
+        await resolveReminderEscalation(link.patient_id, "blood_sugar");
+        await updateGamificationState(link.patient_id, "blood_sugar", filter as any);
+        logged.push({ type: "blood_sugar", value: action.value });
+      } else if (action.type === "food") {
+        await FoodLog.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          meal_type: action.meal_type || "other",
+          notes: action.notes || undefined,
+          source: "chat",
+        });
+        await updateGamificationState(link.patient_id, "food", filter as any);
+        logged.push({ type: "food", meal_type: action.meal_type, notes: action.notes });
+      } else if (action.type === "medication") {
+        await MedicationLog.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          taken: action.taken !== false,
+          medication_name: action.medication_name || undefined,
+          source: "chat",
+        });
+        await resolveReminderEscalation(link.patient_id, "medication");
+        await updateGamificationState(link.patient_id, "medication", filter as any);
+        logged.push({ type: "medication", taken: action.taken, medication_name: action.medication_name });
+      }
+    } catch (err) {
+      console.error("Chat auto-log error:", err);
+    }
+  }
+
+  res.json({ logged, extracted: extractedActions });
+});
+
 // ---------- Voice Doctor: AI doctor persona chat (streaming) ----------
 const DOCTOR_PERSONAS: Record<string, { name: string; style: string; gender: "female" | "male" }> = {
   dr_priya: {

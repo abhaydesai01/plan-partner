@@ -23,7 +23,13 @@ export function useVoiceInput(opts?: {
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const callbackRef = useRef(opts?.onFinalTranscript);
   const supported = !!SpeechRecognitionImpl;
+
+  // Keep callback ref always up-to-date so recognition.onend never uses a stale closure
+  useEffect(() => {
+    callbackRef.current = opts?.onFinalTranscript;
+  }, [opts?.onFinalTranscript]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -67,8 +73,9 @@ export function useVoiceInput(opts?: {
     recognition.onend = () => {
       setIsListening(false);
       setInterimTranscript("");
-      if (finalText.trim()) {
-        opts?.onFinalTranscript?.(finalText.trim());
+      const text = finalText.trim();
+      if (text) {
+        callbackRef.current?.(text);
       }
     };
 
@@ -82,7 +89,7 @@ export function useVoiceInput(opts?: {
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
-  }, [opts?.lang, opts?.continuous, opts?.onFinalTranscript, stopListening]);
+  }, [opts?.lang, opts?.continuous, stopListening]);
 
   useEffect(() => {
     return () => {

@@ -113,8 +113,9 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const [voiceMode, setVoiceMode] = useState(false);
   const voiceInput = useVoiceInput({
     onFinalTranscript: (text) => {
-      if (voiceMode && text.trim()) {
-        send(text);
+      if (text.trim()) {
+        setInput(text.trim());
+        send(text.trim());
       }
     },
   });
@@ -271,6 +272,24 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
       if (voiceMode && assistantSoFar.trim()) {
         voiceOutput.speak(assistantSoFar.trim());
       }
+      // Auto-extract and log health data from the user's message
+      try {
+        const logResult = await api.post("me/chat-extract-and-log", { message: text }) as { logged?: any[] };
+        if (logResult.logged && logResult.logged.length > 0) {
+          const items = logResult.logged.map((l: any) =>
+            l.type === "blood_pressure" ? `BP ${l.value}` :
+            l.type === "blood_sugar" ? `Sugar ${l.value}` :
+            l.type === "food" ? `Meal logged` :
+            l.type === "medication" ? `Medication logged` : l.type
+          ).join(", ");
+          toast({ title: "Auto-logged from your message", description: items });
+          queryClient.invalidateQueries({ queryKey: ["me", "vitals"] });
+          queryClient.invalidateQueries({ queryKey: ["me", "rewards"] });
+          queryClient.invalidateQueries({ queryKey: ["me", "gamification"] });
+          queryClient.invalidateQueries({ queryKey: ["me", "quick-log", "last"] });
+          queryClient.invalidateQueries({ queryKey: ["me", "overview"] });
+        }
+      } catch { /* extraction is best-effort */ }
     } catch (e) {
       console.error("Chat error:", e);
       toast({ title: "Error", description: "Failed to get response", variant: "destructive" });
