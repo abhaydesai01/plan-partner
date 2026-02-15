@@ -556,6 +556,37 @@ const MedicationSchema = new mongoose.Schema(
 MedicationSchema.index({ patient_id: 1, active: 1 });
 MedicationSchema.index({ patient_id: 1, added_at: -1 });
 
+/** Persisted gamification state: streak, points, level, etc. Updated on every log action. */
+const PatientGamificationSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true, unique: true },
+    // Streak
+    current_streak: { type: Number, default: 0 },
+    longest_streak: { type: Number, default: 0 },
+    last_log_date: { type: String }, // YYYY-MM-DD of last log
+    // Points
+    total_points: { type: Number, default: 0 },
+    points_bp: { type: Number, default: 0 },
+    points_sugar: { type: Number, default: 0 },
+    points_food: { type: Number, default: 0 },
+    points_medication: { type: Number, default: 0 },
+    // Level
+    level: { type: Number, default: 1 },
+    level_label: { type: String, default: "Beginner" },
+    // Health score (today's progress, reset daily)
+    health_score: { type: Number, default: 0 },
+    health_score_date: { type: String }, // YYYY-MM-DD
+    // Counts (for milestones)
+    total_logs: { type: Number, default: 0 },
+    bp_logs: { type: Number, default: 0 },
+    sugar_logs: { type: Number, default: 0 },
+    food_logs: { type: Number, default: 0 },
+    medication_logs: { type: Number, default: 0 },
+  },
+  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" }, toJSON: toJsonOptions }
+);
+PatientGamificationSchema.index({ patient_id: 1 }, { unique: true });
+
 export const AuthUser = mongoose.model("AuthUser", AuthUserSchema);
 export const Alert = mongoose.model("Alert", AlertSchema);
 export const AppointmentCheckin = mongoose.model("AppointmentCheckin", AppointmentCheckinSchema);
@@ -591,3 +622,4 @@ export const UserBadge = mongoose.model("UserBadge", UserBadgeSchema);
 export const UserWeeklyChallenge = mongoose.model("UserWeeklyChallenge", UserWeeklyChallengeSchema);
 export const MilestoneReward = mongoose.model("MilestoneReward", MilestoneRewardSchema);
 export const Medication = mongoose.model("Medication", MedicationSchema);
+export const PatientGamification = mongoose.model("PatientGamification", PatientGamificationSchema);

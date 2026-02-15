@@ -44,6 +44,7 @@ import {
   UserWeeklyChallenge,
   MilestoneReward,
   Medication,
+  PatientGamification,
 } from "../models/index.js";
 
 const router = Router();
@@ -699,6 +700,8 @@ router.post("/me/vitals/bulk", requireAuth, async (req, res) => {
   const points_earned = (hasBp ? POINTS.blood_pressure : 0) + (hasSugar ? POINTS.blood_sugar : 0);
   const filterBulk: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterBulk);
+  if (hasBp) await updateGamificationState(link.patient_id, "blood_pressure", filterBulk);
+  if (hasSugar) await updateGamificationState(link.patient_id, "blood_sugar", filterBulk);
   return res.status(201).json({ created: created.length, ids: created.map((d: any) => d._id?.toString()), points_earned, ...rewards });
 });
 
@@ -720,6 +723,7 @@ router.post("/me/vitals", requireAuth, async (req, res) => {
   const points_earned = vitalType ? POINTS[vitalType] : 0;
   const filterVital: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewardsVital = await getRewardsForFilter(filterVital);
+  if (vitalType) await updateGamificationState(link.patient_id, vitalType, filterVital);
   res.status(201).json({ ...doc.toJSON(), points_earned, ...rewardsVital });
 });
 
@@ -834,6 +838,95 @@ const MILESTONE_DEFINITIONS: { key: string; title: string; description: string; 
   { key: "health_report", title: "Health Report", description: "Complete 60 health logs to unlock a detailed health report", required_logs: 60, icon: "file-text" },
   { key: "premium_checkup", title: "Premium Health Checkup", description: "Complete 100 health logs to unlock a premium health checkup", required_logs: 100, icon: "heart-pulse" },
 ];
+
+/**
+ * Update the persisted gamification state for a patient after a log action.
+ * Call this after every BP, sugar, food, or medication log.
+ */
+async function updateGamificationState(
+  patientId: string,
+  logType: "blood_pressure" | "blood_sugar" | "food" | "medication",
+  filter: RewardsFilter
+): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const pointsForLog = logType === "blood_pressure" ? POINTS.blood_pressure
+    : logType === "blood_sugar" ? POINTS.blood_sugar
+    : logType === "food" ? POINTS.food
+    : POINTS.medication;
+
+  const pointsField = logType === "blood_pressure" ? "points_bp"
+    : logType === "blood_sugar" ? "points_sugar"
+    : logType === "food" ? "points_food"
+    : "points_medication";
+
+  const countField = logType === "blood_pressure" ? "bp_logs"
+    : logType === "blood_sugar" ? "sugar_logs"
+    : logType === "food" ? "food_logs"
+    : "medication_logs";
+
+  // Upsert the gamification doc
+  let gam = await PatientGamification.findOne({ patient_id: patientId });
+  if (!gam) {
+    // First-time: bootstrap from actual DB counts
+    const [bpC, sugarC, foodC, medC] = await Promise.all([
+      Vital.countDocuments({ ...filter, vital_type: "blood_pressure" }),
+      Vital.countDocuments({ ...filter, vital_type: "blood_sugar" }),
+      FoodLog.countDocuments(filter),
+      MedicationLog.countDocuments(filter),
+    ]);
+    const dates = await getDistinctLogDates(filter);
+    const streak = computeStreak(dates);
+    const tp = bpC * POINTS.blood_pressure + sugarC * POINTS.blood_sugar + foodC * POINTS.food + medC * POINTS.medication;
+    let lv = 1; let ll = LEVELS[0].label;
+    for (let i = LEVELS.length - 1; i >= 0; i--) {
+      if (tp >= LEVELS[i].min_points) { lv = i + 1; ll = LEVELS[i].label; break; }
+    }
+    gam = await PatientGamification.create({
+      patient_id: patientId,
+      current_streak: streak, longest_streak: streak, last_log_date: today,
+      total_points: tp, points_bp: bpC * POINTS.blood_pressure, points_sugar: sugarC * POINTS.blood_sugar,
+      points_food: foodC * POINTS.food, points_medication: medC * POINTS.medication,
+      level: lv, level_label: ll,
+      total_logs: bpC + sugarC + foodC + medC,
+      bp_logs: bpC, sugar_logs: sugarC, food_logs: foodC, medication_logs: medC,
+    });
+    return;
+  }
+
+  // Increment points & counts
+  const g = gam as any;
+  g[pointsField] = (g[pointsField] || 0) + pointsForLog;
+  g.total_points = (g.total_points || 0) + pointsForLog;
+  g[countField] = (g[countField] || 0) + 1;
+  g.total_logs = (g.total_logs || 0) + 1;
+
+  // Update streak
+  const lastDate = g.last_log_date;
+  if (lastDate !== today) {
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    if (lastDate === yesterdayStr) {
+      g.current_streak = (g.current_streak || 0) + 1;
+    } else if (!lastDate || lastDate < yesterdayStr) {
+      g.current_streak = 1;
+    }
+    g.last_log_date = today;
+  }
+  if (g.current_streak > (g.longest_streak || 0)) {
+    g.longest_streak = g.current_streak;
+  }
+
+  // Update level
+  let lv = 1; let ll = LEVELS[0].label;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (g.total_points >= LEVELS[i].min_points) { lv = i + 1; ll = LEVELS[i].label; break; }
+  }
+  g.level = lv;
+  g.level_label = ll;
+
+  await gam.save();
+}
 
 async function getDaysCountByType(filter: RewardsFilter): Promise<{ bp_days: number; sugar_days: number; food_days: number; med_days: number }> {
   const [bp, sugar, food, med] = await Promise.all([
@@ -980,14 +1073,41 @@ router.get("/me/gamification", requireAuth, async (req, res) => {
     });
   }
 
+  // Persist gamification snapshot to DB
+  const gamUpdate = {
+    current_streak: streak_days,
+    longest_streak: streak_days,
+    last_log_date: dates.length > 0 ? dates[0] : undefined,
+    total_points: rewards.total_points,
+    points_bp: rewards.points_breakdown.blood_pressure,
+    points_sugar: rewards.points_breakdown.blood_sugar,
+    points_food: rewards.points_breakdown.food,
+    points_medication: rewards.points_breakdown.medication,
+    level,
+    level_label,
+    total_logs: totalLogs,
+    bp_logs: bpCount,
+    sugar_logs: sugarCount,
+    food_logs: foodCount,
+    medication_logs: medCount,
+  };
+  await PatientGamification.findOneAndUpdate(
+    { patient_id: patientId },
+    { $set: gamUpdate, $max: { longest_streak: streak_days } },
+    { upsert: true, new: true }
+  );
+
   res.json({
     streak_days,
+    longest_streak: streak_days,
     badges,
     level,
     level_label,
     total_points: rewards.total_points,
+    points_breakdown: rewards.points_breakdown,
     weekly_challenges,
     milestones: milestoneResults,
+    total_logs: totalLogs,
   });
 });
 
@@ -1052,6 +1172,7 @@ router.post("/me/food_logs", requireAuth, async (req, res) => {
   const points_earned = POINTS.food;
   const filterFood: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterFood);
+  await updateGamificationState(link.patient_id, "food", filterFood);
   res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
 });
 
@@ -1080,6 +1201,7 @@ router.post("/me/medication-log", requireAuth, async (req, res) => {
   const points_earned = POINTS.medication;
   const filterMed: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterMed);
+  await updateGamificationState(link.patient_id, "medication", filterMed);
   res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
 });
 
@@ -1110,6 +1232,7 @@ router.post("/me/medication-log/bulk", requireAuth, async (req, res) => {
   const points_earned = created.length > 0 ? POINTS.medication : 0;
   const filterBulkMed: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterBulkMed);
+  if (created.length > 0) await updateGamificationState(link.patient_id, "medication", filterBulkMed);
   res.status(201).json({ created: created.length, ids: created.map((d: any) => d._id?.toString()), points_earned, ...rewards });
 });
 
@@ -1341,6 +1464,8 @@ router.post("/me/quick-log-from-notification", requireAuth, async (req, res) => 
   const points_earned = t.type === "blood_pressure" ? POINTS.blood_pressure : t.type === "blood_sugar" ? POINTS.blood_sugar : t.type === "food" ? POINTS.food : t.type === "medication" ? POINTS.medication : 0;
   const filterQ: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterQ);
+  const logTypeMap: Record<string, "blood_pressure" | "blood_sugar" | "food" | "medication"> = { blood_pressure: "blood_pressure", blood_sugar: "blood_sugar", food: "food", medication: "medication" };
+  if (logTypeMap[t.type]) await updateGamificationState(link.patient_id, logTypeMap[t.type], filterQ);
   res.json({ ok: true, points_earned, ...rewards });
 });
 
