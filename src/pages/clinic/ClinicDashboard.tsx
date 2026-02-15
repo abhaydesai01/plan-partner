@@ -12,7 +12,7 @@ const ClinicDashboard = () => {
     if (!clinic?.id) return;
     Promise.all([
       api.get<any[]>("clinic_members", { clinic_id: clinic.id }).then((m) => (Array.isArray(m) ? m.length : 0)),
-      api.get<any[]>("patients", { clinic_id: clinic.id }).then((p) => (Array.isArray(p) ? p.length : 0)),
+      api.get<{ items: unknown[]; total: number }>("patients", { clinic_id: clinic.id, limit: "1", skip: "0" }).then((r) => r?.total ?? 0),
       api.get<any[]>("appointments", { clinic_id: clinic.id }).then((a) => (Array.isArray(a) ? a.length : 0)),
     ]).then(([members, patients, appointments]) => setStats({ members, patients, appointments }));
   }, [clinic?.id]);

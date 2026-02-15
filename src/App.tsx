@@ -16,6 +16,7 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Contact from "./pages/Contact";
 import { ClinicLayout } from "./components/ClinicLayout";
+import { FamilyLayout } from "./components/FamilyLayout";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Patients = lazy(() => import("./pages/Patients"));
@@ -51,6 +52,8 @@ const ClinicPatients = lazy(() => import("./pages/clinic/ClinicPatients"));
 const ClinicAppointments = lazy(() => import("./pages/clinic/ClinicAppointments"));
 const ClinicSettingsPage = lazy(() => import("./pages/clinic/ClinicSettingsPage"));
 const ClinicFeedback = lazy(() => import("./pages/clinic/ClinicFeedback"));
+const FamilyDashboard = lazy(() => import("./pages/family/FamilyDashboard"));
+const PatientAccountability = lazy(() => import("./pages/patient/PatientAccountability"));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh]">
@@ -114,6 +117,9 @@ const App = () => (
             <Route path="/clinic/appointments" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicAppointments /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/feedback" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicFeedback /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/settings" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicSettingsPage /></ClinicLayout></ProtectedRoute>} />
+
+            {/* Family Portal */}
+            <Route path="/family" element={<ProtectedRoute allowedRole="family"><FamilyLayout><FamilyDashboard /></FamilyLayout></ProtectedRoute>} />
             
             {/* Patient Portal - Chat is the landing page */}
             <Route path="/patient" element={
@@ -124,6 +130,7 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/patient/overview" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/accountability" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientAccountability /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/connect-doctor" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientConnectDoctor /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/vitals" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVitals /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/lab-results" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientLabResults /></PatientLayout></ProtectedRoute>} />

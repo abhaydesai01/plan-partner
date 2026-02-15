@@ -6,7 +6,9 @@ import fs from "fs";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import multer from "multer";
+import webpush from "web-push";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
+import { LIMITS, parseLimit, parseSkip } from "../constants.js";
 import {
   Alert,
   AuthUser,
@@ -23,15 +25,23 @@ import {
   LabReport,
   LabResult,
   LinkRequest,
+  MedicationLog,
   Notification,
+  ReminderEscalation,
   Patient,
   PatientDocument,
   PatientDoctorLink,
   PatientVaultCode,
   Profile,
   Program,
+  PushSubscription,
+  QuickLogToken,
   UserRole,
   Vital,
+  FamilyConnection,
+  DoctorMessage,
+  UserBadge,
+  UserWeeklyChallenge,
 } from "../models/index.js";
 
 const router = Router();
@@ -486,7 +496,7 @@ router.get("/me/patient_documents", requireAuth, async (req, res) => {
   const link = await getPatientForCurrentUser(req);
   if (!link) return res.status(404).json({ error: "Patient record not linked" });
   const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
-  const list = await PatientDocument.find(filter).sort({ created_at: -1 }).lean();
+  const list = await PatientDocument.find(filter).sort({ created_at: -1 }).limit(LIMITS.ME_DOCUMENTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -595,6 +605,13 @@ router.post("/me/link_requests", requireAuth, async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+router.get("/me/patient", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const patient = await Patient.findOne({ patient_user_id: userId }).lean();
+  if (!patient) return res.status(404).json({ error: "Patient record not linked" });
+  res.json({ ...patient, id: (patient as any)._id?.toString(), _id: undefined, __v: undefined });
+});
+
 router.patch("/me/patient", requireAuth, async (req, res) => {
   const userId = (req as AuthRequest).user.id;
   const updated = await Patient.findOneAndUpdate(
@@ -673,7 +690,14 @@ router.post("/me/vitals/bulk", requireAuth, async (req, res) => {
   }
   if (valid.length === 0) return res.status(400).json({ error: "No valid vitals (need vital_type and value_text per row)" });
   const created = await Vital.insertMany(valid);
-  return res.status(201).json({ created: created.length, ids: created.map((d: any) => d._id?.toString()) });
+  const hasBp = valid.some((v) => v.vital_type === "blood_pressure");
+  const hasSugar = valid.some((v) => v.vital_type === "blood_sugar");
+  if (hasBp) await resolveReminderEscalation(link.patient_id, "blood_pressure");
+  if (hasSugar) await resolveReminderEscalation(link.patient_id, "blood_sugar");
+  const points_earned = (hasBp ? POINTS.blood_pressure : 0) + (hasSugar ? POINTS.blood_sugar : 0);
+  const filterBulk: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewards = await getRewardsForFilter(filterBulk);
+  return res.status(201).json({ created: created.length, ids: created.map((d: any) => d._id?.toString()), points_earned, ...rewards });
 });
 
 router.post("/me/vitals", requireAuth, async (req, res) => {
@@ -689,7 +713,263 @@ router.post("/me/vitals", requireAuth, async (req, res) => {
     if (remark) body.notes = remark;
   }
   const doc = await Vital.create(body);
-  res.status(201).json(doc.toJSON());
+  const vitalType = (body.vital_type as string) === "blood_pressure" || (body.vital_type as string) === "blood_sugar" ? (body.vital_type as "blood_pressure" | "blood_sugar") : null;
+  if (vitalType) await resolveReminderEscalation(link.patient_id, vitalType);
+  const points_earned = vitalType ? POINTS[vitalType] : 0;
+  const filterVital: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewardsVital = await getRewardsForFilter(filterVital);
+  res.status(201).json({ ...doc.toJSON(), points_earned, ...rewardsVital });
+});
+
+// ---------- Instant rewards (points, health score, today progress) ----------
+const POINTS = { blood_pressure: 10, blood_sugar: 15, food: 5, medication: 20 } as const;
+const HEALTH_SCORE_PER_ITEM = 25; // 4 items × 25 = 100
+
+type RewardsFilter = { patient_id: string } | { patient_id: { $in: string[] } };
+async function getRewardsForFilter(filter: RewardsFilter): Promise<{
+  total_points: number;
+  health_score: number;
+  today_progress: { bp: boolean; food: boolean; sugar: boolean; medication: boolean };
+  points_breakdown: { blood_pressure: number; blood_sugar: number; food: number; medication: number };
+}> {
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  const [bpCount, sugarCount, foodCount, medCount, bpToday, sugarToday, foodToday, medToday] = await Promise.all([
+    Vital.countDocuments({ ...filter, vital_type: "blood_pressure" }),
+    Vital.countDocuments({ ...filter, vital_type: "blood_sugar" }),
+    FoodLog.countDocuments(filter),
+    MedicationLog.countDocuments(filter),
+    Vital.exists({ ...filter, vital_type: "blood_pressure", recorded_at: { $gte: startOfToday } }),
+    Vital.exists({ ...filter, vital_type: "blood_sugar", recorded_at: { $gte: startOfToday } }),
+    FoodLog.exists({ ...filter, logged_at: { $gte: startOfToday } }),
+    MedicationLog.exists({ ...filter, logged_at: { $gte: startOfToday } }),
+  ]);
+  const points_breakdown = {
+    blood_pressure: bpCount * POINTS.blood_pressure,
+    blood_sugar: sugarCount * POINTS.blood_sugar,
+    food: foodCount * POINTS.food,
+    medication: medCount * POINTS.medication,
+  };
+  const total_points = points_breakdown.blood_pressure + points_breakdown.blood_sugar + points_breakdown.food + points_breakdown.medication;
+  const health_score =
+    (!!bpToday ? HEALTH_SCORE_PER_ITEM : 0) +
+    (!!sugarToday ? HEALTH_SCORE_PER_ITEM : 0) +
+    (!!foodToday ? HEALTH_SCORE_PER_ITEM : 0) +
+    (!!medToday ? HEALTH_SCORE_PER_ITEM : 0);
+  return {
+    total_points,
+    health_score,
+    today_progress: { bp: !!bpToday, food: !!foodToday, sugar: !!sugarToday, medication: !!medToday },
+    points_breakdown,
+  };
+}
+
+// ---------- Gamification: streak, badges, levels, weekly challenges ----------
+function getWeekStart(d: Date): Date {
+  const x = new Date(d);
+  x.setUTCHours(0, 0, 0, 0);
+  const day = x.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday = start
+  x.setUTCDate(x.getUTCDate() + diff);
+  return x;
+}
+
+async function getDistinctLogDates(filter: RewardsFilter): Promise<string[]> {
+  const dateProject = { $dateToString: { format: "%Y-%m-%d", date: "$recorded_at" } };
+  const [vitalDates, foodDates, medDates] = await Promise.all([
+    Vital.aggregate<{ _id: string }>([{ $match: { ...filter } }, { $group: { _id: dateProject } }]).exec(),
+    FoodLog.aggregate<{ _id: string }>([{ $match: { ...filter } }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$logged_at" } } } }]).exec(),
+    MedicationLog.aggregate<{ _id: string }>([{ $match: { ...filter } }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$logged_at" } } } }]).exec(),
+  ]);
+  const set = new Set<string>();
+  for (const r of vitalDates) set.add(r._id);
+  for (const r of foodDates) set.add(r._id);
+  for (const r of medDates) set.add(r._id);
+  return [...set].sort();
+}
+
+function computeStreak(dates: string[]): number {
+  if (dates.length === 0) return 0;
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const set = new Set(dates);
+  if (!set.has(todayStr)) return 0;
+  let streak = 0;
+  const d = new Date(todayStr);
+  while (true) {
+    const s = d.toISOString().slice(0, 10);
+    if (!set.has(s)) break;
+    streak++;
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return streak;
+}
+
+const BADGE_DEFINITIONS: { key: string; title: string; requirement: number; type: "bp_days" | "sugar_days" | "food_days" | "med_days" }[] = [
+  { key: "bp_30_days", title: "Heart Guardian", requirement: 30, type: "bp_days" },
+  { key: "sugar_30_days", title: "Sugar Sentinel", requirement: 30, type: "sugar_days" },
+  { key: "food_14_days", title: "Nutrition Navigator", requirement: 14, type: "food_days" },
+  { key: "med_30_days", title: "Medication Master", requirement: 30, type: "med_days" },
+];
+
+const LEVELS: { min_points: number; label: string }[] = [
+  { min_points: 0, label: "Beginner" },
+  { min_points: 100, label: "Consistent" },
+  { min_points: 500, label: "Health Champion" },
+];
+
+const WEEKLY_CHALLENGES: { key: string; title: string; target_days: number; reward_points: number; type: "bp_days" | "sugar_days" | "food_days" | "med_days" }[] = [
+  { key: "bp_7_days", title: "Log BP 7 days this week", target_days: 7, reward_points: 50, type: "bp_days" },
+  { key: "sugar_5_days", title: "Log blood sugar 5 days this week", target_days: 5, reward_points: 40, type: "sugar_days" },
+  { key: "food_7_days", title: "Log food 7 days this week", target_days: 7, reward_points: 35, type: "food_days" },
+  { key: "med_7_days", title: "Log medication 7 days this week", target_days: 7, reward_points: 50, type: "med_days" },
+];
+
+async function getDaysCountByType(filter: RewardsFilter): Promise<{ bp_days: number; sugar_days: number; food_days: number; med_days: number }> {
+  const [bp, sugar, food, med] = await Promise.all([
+    Vital.aggregate<{ _id: string }>([{ $match: { ...filter, vital_type: "blood_pressure" } }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$recorded_at" } } } }]).exec(),
+    Vital.aggregate<{ _id: string }>([{ $match: { ...filter, vital_type: "blood_sugar" } }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$recorded_at" } } } }]).exec(),
+    FoodLog.aggregate<{ _id: string }>([{ $match: filter }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$logged_at" } } } }]).exec(),
+    MedicationLog.aggregate<{ _id: string }>([{ $match: filter }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$logged_at" } } } }]).exec(),
+  ]);
+  return { bp_days: bp.length, sugar_days: sugar.length, food_days: food.length, med_days: med.length };
+}
+
+async function getDaysThisWeekByType(filter: RewardsFilter, weekStart: Date): Promise<{ bp_days: number; sugar_days: number; food_days: number; med_days: number }> {
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+  const [bp, sugar, food, med] = await Promise.all([
+    Vital.aggregate<{ _id: string }>([
+      { $match: { ...filter, vital_type: "blood_pressure", recorded_at: { $gte: weekStart, $lt: weekEnd } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$recorded_at" } } } },
+    ]).exec(),
+    Vital.aggregate<{ _id: string }>([
+      { $match: { ...filter, vital_type: "blood_sugar", recorded_at: { $gte: weekStart, $lt: weekEnd } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$recorded_at" } } } },
+    ]).exec(),
+    FoodLog.aggregate<{ _id: string }>([
+      { $match: { ...filter, logged_at: { $gte: weekStart, $lt: weekEnd } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$logged_at" } } } },
+    ]).exec(),
+    MedicationLog.aggregate<{ _id: string }>([
+      { $match: { ...filter, logged_at: { $gte: weekStart, $lt: weekEnd } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$logged_at" } } } },
+    ]).exec(),
+  ]);
+  return { bp_days: bp.length, sugar_days: sugar.length, food_days: food.length, med_days: med.length };
+}
+
+router.get("/me/gamification", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const patientId = link.patient_id;
+
+  const [rewards, dates, daysByType, earnedBadgesList] = await Promise.all([
+    getRewardsForFilter(filter),
+    getDistinctLogDates(filter),
+    getDaysCountByType(filter),
+    UserBadge.find({ patient_id: patientId }).sort({ earned_at: -1 }).lean(),
+  ]);
+
+  const streak_days = computeStreak(dates);
+
+  const badges: { key: string; title: string; earned_at?: string }[] = [];
+  for (const b of earnedBadgesList) {
+    const def = BADGE_DEFINITIONS.find((d) => d.key === (b as any).badge_key);
+    badges.push({ key: (b as any).badge_key, title: def?.title ?? (b as any).badge_key, earned_at: (b as any).earned_at?.toISOString?.() ?? undefined });
+  }
+  for (const def of BADGE_DEFINITIONS) {
+    const count = daysByType[def.type];
+    if (count >= def.requirement && !earnedBadgesList.some((e: any) => e.badge_key === def.key)) {
+      await UserBadge.create({ patient_id: patientId, badge_key: def.key });
+      badges.push({ key: def.key, title: def.title, earned_at: new Date().toISOString() });
+    }
+  }
+  badges.sort((a, b) => (b.earned_at ?? "").localeCompare(a.earned_at ?? ""));
+
+  let level = 1;
+  let level_label = LEVELS[0].label;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (rewards.total_points >= LEVELS[i].min_points) {
+      level = i + 1;
+      level_label = LEVELS[i].label;
+      break;
+    }
+  }
+
+  const weekStart = getWeekStart(new Date());
+  const [daysThisWeek, existingWeekly] = await Promise.all([
+    getDaysThisWeekByType(filter, weekStart),
+    UserWeeklyChallenge.find({ patient_id: patientId, week_start: weekStart }).lean(),
+  ]);
+
+  const weekly_challenges: { id: string; title: string; target_days: number; current_days: number; reward_points: number; completed: boolean; completed_at?: string }[] = [];
+  for (const ch of WEEKLY_CHALLENGES) {
+    const current_days = daysThisWeek[ch.type];
+    const existing = existingWeekly.find((e: any) => e.challenge_key === ch.key);
+    const completed = existing != null || current_days >= ch.target_days;
+    let completed_at: string | undefined = (existing as any)?.completed_at?.toISOString?.();
+    if (current_days >= ch.target_days && !existing) {
+      try {
+        const created = await UserWeeklyChallenge.create({
+          patient_id: patientId,
+          challenge_key: ch.key,
+          week_start: weekStart,
+          reward_points_awarded: ch.reward_points,
+          completed_at: new Date(),
+        });
+        completed_at = (created as any).completed_at?.toISOString?.();
+      } catch (err: any) {
+        if (err?.code !== 11000) throw err;
+        completed_at = new Date().toISOString();
+      }
+    }
+    weekly_challenges.push({
+      id: ch.key,
+      title: ch.title,
+      target_days: ch.target_days,
+      current_days,
+      reward_points: ch.reward_points,
+      completed: !!existing || current_days >= ch.target_days,
+      completed_at,
+    });
+  }
+
+  res.json({
+    streak_days,
+    badges,
+    level,
+    level_label,
+    total_points: rewards.total_points,
+    weekly_challenges,
+  });
+});
+
+router.get("/me/rewards", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewards = await getRewardsForFilter(filter);
+  res.json(rewards);
+});
+
+router.get("/me/quick-log/last", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const [lastBp, lastSugar, lastFood, lastMed] = await Promise.all([
+    Vital.findOne({ ...filter, vital_type: "blood_pressure" }).sort({ recorded_at: -1 }).select("value_text recorded_at").lean(),
+    Vital.findOne({ ...filter, vital_type: "blood_sugar" }).sort({ recorded_at: -1 }).select("value_text recorded_at").lean(),
+    FoodLog.findOne(filter).sort({ logged_at: -1 }).select("meal_type logged_at").lean(),
+    MedicationLog.findOne(filter).sort({ logged_at: -1 }).select("taken logged_at").lean(),
+  ]);
+  res.json({
+    blood_pressure: lastBp ? { value_text: (lastBp as any).value_text, recorded_at: (lastBp as any).recorded_at } : null,
+    blood_sugar: lastSugar ? { value_text: (lastSugar as any).value_text, recorded_at: (lastSugar as any).recorded_at } : null,
+    food: lastFood ? { meal_type: (lastFood as any).meal_type, logged_at: (lastFood as any).logged_at } : null,
+    medication: lastMed ? { taken: (lastMed as any).taken, logged_at: (lastMed as any).logged_at } : null,
+  });
 });
 
 router.get("/me/food_logs", requireAuth, async (req, res) => {
@@ -709,7 +989,701 @@ router.post("/me/food_logs", requireAuth, async (req, res) => {
     doctor_id: link.doctor_id,
   };
   const doc = await FoodLog.create(body);
-  res.status(201).json(doc.toJSON());
+  const points_earned = POINTS.food;
+  const filterFood: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewards = await getRewardsForFilter(filterFood);
+  res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
+});
+
+router.get("/me/medication-log", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const list = await MedicationLog.find(filter).sort({ logged_at: -1 }).limit(30).lean();
+  res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
+});
+
+router.post("/me/medication-log", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const taken = req.body?.taken === true || req.body?.taken === "true";
+  const body = {
+    patient_id: link.patient_id,
+    doctor_id: link.doctor_id,
+    taken,
+    source: req.body?.source || "quick_log",
+    time_of_day: req.body?.time_of_day || undefined,
+    medication_name: req.body?.medication_name || undefined,
+  };
+  const doc = await MedicationLog.create(body);
+  await resolveReminderEscalation(link.patient_id, "medication");
+  const points_earned = POINTS.medication;
+  const filterMed: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewards = await getRewardsForFilter(filterMed);
+  res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
+});
+
+router.post("/me/medication-log/bulk", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const entries = req.body?.entries;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ error: "entries array required (each: time_of_day, medication_name, taken)" });
+  }
+  const created = [];
+  for (const e of entries) {
+    const time_of_day = e.time_of_day && ["morning", "afternoon", "evening", "night"].includes(String(e.time_of_day)) ? e.time_of_day : undefined;
+    const medication_name = e.medication_name != null ? String(e.medication_name).trim() : undefined;
+    const taken = e.taken === true || e.taken === "true";
+    created.push(
+      await MedicationLog.create({
+        patient_id: link.patient_id,
+        doctor_id: link.doctor_id,
+        taken,
+        time_of_day: time_of_day || undefined,
+        medication_name: medication_name || undefined,
+        source: "quick_log",
+      })
+    );
+  }
+  if (created.length > 0) await resolveReminderEscalation(link.patient_id, "medication");
+  const points_earned = created.length > 0 ? POINTS.medication : 0;
+  const filterBulkMed: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewards = await getRewardsForFilter(filterBulkMed);
+  res.status(201).json({ created: created.length, ids: created.map((d: any) => d._id?.toString()), points_earned, ...rewards });
+});
+
+// ---------- Push subscriptions (Solution 6) ----------
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
+if (VAPID_PUBLIC && VAPID_PRIVATE) {
+  webpush.setVapidDetails("mailto:support@mediimate.com", VAPID_PUBLIC, VAPID_PRIVATE);
+}
+
+router.post("/me/push-subscribe", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const { subscription } = req.body as { subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } } };
+  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+    return res.status(400).json({ error: "subscription with endpoint and keys (p256dh, auth) required" });
+  }
+  const userAgent = (req.get("user-agent") || "").slice(0, 200);
+  await PushSubscription.findOneAndUpdate(
+    { endpoint: subscription.endpoint },
+    { user_id: userId, endpoint: subscription.endpoint, keys: subscription.keys, user_agent: userAgent, updated_at: new Date() },
+    { upsert: true, new: true }
+  );
+  res.json({ ok: true });
+});
+
+router.delete("/me/push-subscribe", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const endpoint = (req.body?.endpoint || req.query?.endpoint) as string | undefined;
+  if (!endpoint) return res.status(400).json({ error: "endpoint required" });
+  await PushSubscription.deleteOne({ user_id: userId, endpoint });
+  res.json({ ok: true });
+});
+
+router.get("/me/push-subscribe", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const sub = await PushSubscription.findOne({ user_id: userId }).select("endpoint updated_at").lean();
+  res.json({ subscribed: !!sub, endpoint: sub ? (sub as any).endpoint : null });
+});
+
+// One-time token redeem: log from notification (Solution 6)
+router.post("/me/quick-log-from-notification", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const { token } = req.body as { token?: string };
+  if (!token || typeof token !== "string") return res.status(400).json({ error: "token required" });
+  const doc = await QuickLogToken.findOne({ token, user_id: userId }).lean();
+  if (!doc) return res.status(404).json({ error: "Invalid or expired token" });
+  const t = doc as { used_at?: Date; type: string; value_text?: string; meal_type?: string; taken?: boolean };
+  if (t.used_at) return res.status(400).json({ error: "Token already used" });
+  if (new Date() > new Date((doc as any).expires_at)) return res.status(400).json({ error: "Token expired" });
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  if (t.type === "blood_pressure" || t.type === "blood_sugar") {
+    const unit = t.type === "blood_pressure" ? "mmHg" : "mg/dL";
+    const num = t.value_text ? parseFloat(t.value_text.replace(/\/.*/, "")) : undefined;
+    await Vital.create({
+      patient_id: link.patient_id,
+      doctor_id: link.doctor_id,
+      vital_type: t.type,
+      value_text: t.value_text || "",
+      value_numeric: Number.isFinite(num) ? num : undefined,
+      unit,
+      source: "push",
+    });
+    await resolveReminderEscalation(link.patient_id, t.type as "blood_pressure" | "blood_sugar");
+  } else if (t.type === "food") {
+    await FoodLog.create({
+      patient_id: link.patient_id,
+      doctor_id: link.doctor_id,
+      meal_type: t.meal_type || "other",
+      source: "push",
+    });
+  } else if (t.type === "medication") {
+    await MedicationLog.create({
+      patient_id: link.patient_id,
+      doctor_id: link.doctor_id,
+      taken: t.taken === true,
+      source: "push",
+    });
+    await resolveReminderEscalation(link.patient_id, "medication");
+  }
+  await QuickLogToken.updateOne({ token }, { used_at: new Date() });
+  const points_earned = t.type === "blood_pressure" ? POINTS.blood_pressure : t.type === "blood_sugar" ? POINTS.blood_sugar : t.type === "food" ? POINTS.food : t.type === "medication" ? POINTS.medication : 0;
+  const filterQ: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const rewards = await getRewardsForFilter(filterQ);
+  res.json({ ok: true, points_earned, ...rewards });
+});
+
+// ---------- Layer 4: Accountability (doctor / family visibility) ----------
+/** Get today's log status (UTC) for a set of patient_ids. */
+async function getTodayLogStatus(patientIds: string[]): Promise<{ bp: boolean; food: boolean; sugar: boolean; medication: boolean }> {
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  const filter = patientIds.length > 1 ? { patient_id: { $in: patientIds } } : { patient_id: patientIds[0] };
+  const [bp, food, sugar, medication] = await Promise.all([
+    Vital.findOne({ ...filter, vital_type: "blood_pressure", recorded_at: { $gte: startOfToday } }).select("_id").lean(),
+    FoodLog.findOne({ ...filter, logged_at: { $gte: startOfToday } }).select("_id").lean(),
+    Vital.findOne({ ...filter, vital_type: "blood_sugar", recorded_at: { $gte: startOfToday } }).select("_id").lean(),
+    MedicationLog.findOne({ ...filter, logged_at: { $gte: startOfToday } }).select("_id").lean(),
+  ]);
+  return { bp: !!bp, food: !!food, sugar: !!sugar, medication: !!medication };
+}
+
+/** GET /me/accountability - patient: doctor visibility, family connections, doctor messages (for UI). */
+router.get("/me/accountability", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const link = await getPatientForCurrentUser(req);
+  let doctor_can_see_logs = false;
+  let doctor_name: string | null = null;
+  if (link && link.doctor_id !== userId) {
+    doctor_can_see_logs = true;
+    const profile = await Profile.findOne({ user_id: link.doctor_id }).select("full_name").lean();
+    doctor_name = (profile as { full_name?: string })?.full_name || null;
+  }
+  const connections = await FamilyConnection.find({ patient_user_id: userId }).lean();
+  const family_connections = (connections as any[]).map((c) => ({
+    id: c._id?.toString(),
+    relationship: c.relationship,
+    invite_email: c.invite_email,
+    status: c.status,
+    family_user_id: c.family_user_id || null,
+  }));
+  const patientIds = link?.patient_ids ?? [];
+  const doctor_messages: { id: string; message: string; created_at: string; doctor_name?: string }[] = [];
+  if (patientIds.length > 0) {
+    const messages = await DoctorMessage.find({ patient_id: { $in: patientIds } })
+      .sort({ created_at: -1 })
+      .limit(20)
+      .lean();
+    const doctorIds = [...new Set((messages as any[]).map((m) => m.doctor_id))];
+    const profiles = await Profile.find({ user_id: { $in: doctorIds } }).select("user_id full_name").lean();
+    const nameByDoctor: Record<string, string> = {};
+    for (const p of profiles as { user_id: string; full_name?: string }[]) nameByDoctor[p.user_id] = p.full_name || "";
+    for (const m of messages as any[]) {
+      doctor_messages.push({
+        id: m._id?.toString(),
+        message: m.message,
+        created_at: m.created_at?.toISOString?.() ?? new Date().toISOString(),
+        doctor_name: nameByDoctor[m.doctor_id] || undefined,
+      });
+    }
+  }
+  res.json({ doctor_can_see_logs, doctor_name, family_connections, doctor_messages });
+});
+
+router.get("/me/doctor-messages", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const patientIds = link.patient_ids;
+  const list = await DoctorMessage.find({ patient_id: { $in: patientIds } })
+    .sort({ created_at: -1 })
+    .limit(50)
+    .lean();
+  const doctorIds = [...new Set((list as any[]).map((m) => m.doctor_id))];
+  const profiles = await Profile.find({ user_id: { $in: doctorIds } }).select("user_id full_name").lean();
+  const nameByDoctor: Record<string, string> = {};
+  for (const p of profiles as { user_id: string; full_name?: string }[]) nameByDoctor[p.user_id] = p.full_name || "";
+  res.json(
+    (list as any[]).map((m) => ({
+      id: m._id?.toString(),
+      message: m.message,
+      created_at: m.created_at?.toISOString?.() ?? new Date().toISOString(),
+      doctor_name: nameByDoctor[m.doctor_id] || "Doctor",
+    }))
+  );
+});
+
+router.get("/me/family-connections", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const list = await FamilyConnection.find({ patient_user_id: userId }).sort({ created_at: -1 }).lean();
+  res.json(
+    list.map((d: any) => ({
+      id: d._id?.toString(),
+      relationship: d.relationship,
+      invite_email: d.invite_email,
+      status: d.status,
+      family_user_id: d.family_user_id || null,
+      created_at: d.created_at?.toISOString?.() ?? new Date().toISOString(),
+    }))
+  );
+});
+
+router.post("/me/family-connections", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const { invite_email, relationship } = req.body as { invite_email?: string; relationship?: string };
+  const email = invite_email ? String(invite_email).trim().toLowerCase() : "";
+  if (!email) return res.status(400).json({ error: "invite_email required" });
+  const rel = relationship === "son" || relationship === "daughter" || relationship === "spouse" ? relationship : "other";
+  const existing = await FamilyConnection.findOne({ patient_user_id: userId, invite_email: email }).lean();
+  if (existing) return res.status(400).json({ error: "Already invited this email" });
+  const doc = await FamilyConnection.create({
+    patient_user_id: userId,
+    invite_email: email,
+    relationship: rel,
+    status: "pending",
+  });
+  res.status(201).json({
+    id: doc._id?.toString(),
+    relationship: rel,
+    invite_email: email,
+    status: "pending",
+    family_user_id: null,
+  });
+});
+
+router.delete("/me/family-connections/:id", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const deleted = await FamilyConnection.findOneAndDelete({
+    _id: req.params.id,
+    patient_user_id: userId,
+  });
+  if (!deleted) return res.status(404).json({ error: "Not found" });
+  res.json({ ok: true });
+});
+
+/** Family dashboard: linked patients' today log status (for family role users). */
+router.get("/family/dashboard", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const connections = await FamilyConnection.find({ family_user_id: userId, status: "active" }).lean();
+  if (connections.length === 0) {
+    return res.json({ patients: [] });
+  }
+  const patientUserIds = [...new Set((connections as any[]).map((c) => c.patient_user_id))];
+  const patients = await Patient.find({ patient_user_id: { $in: patientUserIds } }).select("_id patient_user_id full_name").lean();
+  const patientIdsByUser: Record<string, string[]> = {};
+  for (const p of patients as { _id: unknown; patient_user_id: string }[]) {
+    const uid = p.patient_user_id;
+    if (!patientIdsByUser[uid]) patientIdsByUser[uid] = [];
+    patientIdsByUser[uid].push(p._id?.toString());
+  }
+  const relByPatient: Record<string, string> = {};
+  for (const c of connections as any[]) {
+    relByPatient[c.patient_user_id] = c.relationship;
+  }
+  const results: { patient_user_id: string; full_name: string; relationship: string; today: { bp: boolean; food: boolean; sugar: boolean; medication: boolean } }[] = [];
+  for (const uid of patientUserIds) {
+    const ids = patientIdsByUser[uid] || [];
+    const today = await getTodayLogStatus(ids);
+    const first = (patients as any[]).find((p) => p.patient_user_id === uid);
+    results.push({
+      patient_user_id: uid,
+      full_name: first?.full_name ?? "Patient",
+      relationship: relByPatient[uid] ?? "other",
+      today,
+    });
+  }
+  res.json({ patients: results });
+});
+
+/** Doctor sends a message to patient (shown in patient app). */
+router.post("/patients/:id/message", requireAuth, async (req, res) => {
+  const doctorId = (req as AuthRequest).user.id;
+  const patientId = req.params.id;
+  const canAccess = await doctorCanAccessPatient(doctorId, patientId);
+  if (!canAccess) return res.status(404).json({ error: "Patient not found" });
+  const { message } = req.body as { message?: string };
+  const text = message != null ? String(message).trim() : "";
+  if (!text) return res.status(400).json({ error: "message required" });
+  const doc = await DoctorMessage.create({ doctor_id: doctorId, patient_id: patientId, message: text });
+  res.status(201).json({
+    id: doc._id?.toString(),
+    message: text,
+    created_at: (doc as any).created_at?.toISOString?.() ?? new Date().toISOString(),
+  });
+});
+
+// ---------- Routine detection (Solution 7): usual log times in UTC (frontend uses browser local) ----------
+router.get("/me/quick-log/routine", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const lookback = new Date();
+  lookback.setDate(lookback.getDate() - 14);
+
+  const aggHour = (collection: mongoose.Model<mongoose.Document>, match: Record<string, unknown>) =>
+    collection.aggregate([
+      { $match: { ...filter, ...match } },
+      { $match: { recorded_at: { $gte: lookback } } },
+      { $project: { hour: { $hour: "$recorded_at" }, minute: { $minute: "$recorded_at" } } },
+      { $group: { _id: { hour: "$hour", minute: "$minute" }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 1 },
+    ]);
+
+  const [bp, sugar, food, med] = await Promise.all([
+    aggHour(Vital as any, { vital_type: "blood_pressure" }).then((r) => r[0] as { _id?: { hour: number; minute: number } } | undefined),
+    aggHour(Vital as any, { vital_type: "blood_sugar" }).then((r) => r[0] as { _id?: { hour: number; minute: number } } | undefined),
+    FoodLog.aggregate([
+      { $match: filter },
+      { $match: { logged_at: { $gte: lookback } } },
+      { $project: { hour: { $hour: "$logged_at" }, minute: { $minute: "$logged_at" } } },
+      { $group: { _id: { hour: "$hour", minute: "$minute" }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 1 },
+    ]).then((r) => r[0] as { _id?: { hour: number; minute: number } } | undefined),
+    MedicationLog.aggregate([
+      { $match: filter },
+      { $match: { logged_at: { $gte: lookback } } },
+      { $project: { hour: { $hour: "$logged_at" }, minute: { $minute: "$logged_at" } } },
+      { $group: { _id: { hour: "$hour", minute: "$minute" }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 1 },
+    ]).then((r) => r[0] as { _id?: { hour: number; minute: number } } | undefined),
+  ]);
+
+  const toRoutine = (r: { _id?: { hour: number; minute: number } } | undefined) =>
+    r?._id ? { hour_utc: r._id.hour, minute_utc: r._id.minute } : null;
+
+  res.json({
+    blood_pressure: toRoutine(bp),
+    blood_sugar: toRoutine(sugar),
+    food: toRoutine(food),
+    medication: toRoutine(med),
+  });
+});
+
+// Internal: send routine pushes (call from cron / Netlify scheduled function). Requires CRON_SECRET.
+async function getRoutineForUserId(userId: string): Promise<{ blood_pressure: { hour_utc: number; minute_utc: number } | null; blood_sugar: { hour_utc: number; minute_utc: number } | null }> {
+  const patients = await Patient.find({ patient_user_id: userId }).select("_id").lean();
+  if (patients.length === 0) return { blood_pressure: null, blood_sugar: null };
+  const patientIds = (patients as { _id: unknown }[]).map((p) => p._id?.toString()).filter(Boolean) as string[];
+  const filter = patientIds.length > 1 ? { patient_id: { $in: patientIds } } : { patient_id: patientIds[0] };
+  const lookback = new Date();
+  lookback.setDate(lookback.getDate() - 14);
+  const agg = (vitalType: string) =>
+    Vital.aggregate([
+      { $match: { ...filter, vital_type: vitalType } },
+      { $match: { recorded_at: { $gte: lookback } } },
+      { $project: { hour: { $hour: "$recorded_at" }, minute: { $minute: "$recorded_at" } } },
+      { $group: { _id: { hour: "$hour", minute: "$minute" }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 1 },
+    ]).then((r) => (r[0] as { _id?: { hour: number; minute: number } })?._id ?? null);
+  const [bp, sugar] = await Promise.all([agg("blood_pressure"), agg("blood_sugar")]);
+  return {
+    blood_pressure: bp ? { hour_utc: bp.hour, minute_utc: bp.minute } : null,
+    blood_sugar: sugar ? { hour_utc: sugar.hour, minute_utc: sugar.minute } : null,
+  };
+}
+
+router.post("/internal/send-routine-pushes", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ sent: 0, error: "VAPID not configured" });
+  const now = new Date();
+  const hourUtc = now.getUTCHours();
+  const batchSize = LIMITS.PUSH_SUBSCRIPTION_BATCH;
+  let sent = 0;
+  let skip = 0;
+  let batch: { user_id: string; endpoint: string; keys: { p256dh: string; auth: string } }[];
+  do {
+    batch = (await PushSubscription.find({}).skip(skip).limit(batchSize).lean()) as typeof batch;
+    for (const sub of batch) {
+    try {
+      const routine = await getRoutineForUserId(sub.user_id);
+      const defaultBp = "120/80";
+      const defaultSugar = "100";
+      if (routine.blood_pressure && routine.blood_pressure.hour_utc === hourUtc) {
+        const token = crypto.randomBytes(24).toString("hex");
+        await QuickLogToken.create({
+          token,
+          user_id: sub.user_id,
+          type: "blood_pressure",
+          value_text: defaultBp,
+          expires_at: new Date(Date.now() + 15 * 60 * 1000),
+        });
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          JSON.stringify({
+            title: "Log BP now",
+            body: `Tap to log ${defaultBp}`,
+            tag: "routine-bp",
+            data: { token, type: "blood_pressure", value: defaultBp },
+          }),
+          { TTL: 60 * 15 }
+        );
+        sent++;
+      }
+      if (routine.blood_sugar && routine.blood_sugar.hour_utc === hourUtc) {
+        const token = crypto.randomBytes(24).toString("hex");
+        await QuickLogToken.create({
+          token,
+          user_id: sub.user_id,
+          type: "blood_sugar",
+          value_text: defaultSugar,
+          expires_at: new Date(Date.now() + 15 * 60 * 1000),
+        });
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          JSON.stringify({
+            title: "Log blood sugar now",
+            body: `Tap to log ${defaultSugar} mg/dL`,
+            tag: "routine-sugar",
+            data: { token, type: "blood_sugar", value: defaultSugar },
+          }),
+          { TTL: 60 * 15 }
+        );
+        sent++;
+      }
+    } catch {
+      // Skip failed subscription (expired/invalid)
+    }
+    }
+    skip += batchSize;
+  } while (batch.length === batchSize);
+  res.json({ sent });
+});
+
+// ---------- Smart reminders: Layer 2 (triggers) + Layer 3 (adaptive escalation) ----------
+/** Resolve any open reminder escalation when user logs (BP, sugar, or medication). */
+async function resolveReminderEscalation(patientId: string, triggerType: "blood_pressure" | "blood_sugar" | "medication") {
+  await ReminderEscalation.updateMany(
+    { patient_id: patientId, trigger_type: triggerType, resolved_at: null },
+    { resolved_at: new Date() }
+  );
+}
+
+/** Get patient link by user_id (for cron, no request). */
+async function getPatientLinkByUserId(userId: string): Promise<{ patient_id: string; doctor_id: string; patient_ids: string[] } | null> {
+  const patients = await Patient.find({ patient_user_id: userId }).select("_id doctor_id").lean();
+  if (!patients?.length) return null;
+  const patient_ids = (patients as { _id: unknown }[]).map((p) => p._id?.toString()).filter(Boolean) as string[];
+  const activeLink = await PatientDoctorLink.findOne({ patient_user_id: userId, status: "active" })
+    .select("doctor_user_id")
+    .sort({ responded_at: -1 })
+    .lean();
+  if (activeLink) {
+    const docId = (activeLink as { doctor_user_id: string }).doctor_user_id;
+    const linked = (patients as { _id: unknown; doctor_id: string }[]).find((p) => p.doctor_id === docId);
+    if (linked) return { patient_id: linked._id?.toString() as string, doctor_id: docId, patient_ids };
+  }
+  const underDoctor = (patients as { _id: unknown; doctor_id: string }[]).find((p) => p.doctor_id && p.doctor_id !== userId);
+  if (underDoctor) return { patient_id: underDoctor._id?.toString() as string, doctor_id: underDoctor.doctor_id, patient_ids };
+  const first = patients[0] as { _id: unknown; doctor_id: string };
+  return { patient_id: first._id?.toString() as string, doctor_id: first.doctor_id, patient_ids };
+}
+
+/** Check if patient logged this trigger type today (UTC). */
+async function didPatientLogToday(patientIds: string[], triggerType: "blood_pressure" | "blood_sugar" | "medication"): Promise<boolean> {
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  const filter = patientIds.length > 1 ? { patient_id: { $in: patientIds } } : { patient_id: patientIds[0] };
+  if (triggerType === "blood_pressure" || triggerType === "blood_sugar") {
+    const last = await Vital.findOne({
+      ...filter,
+      vital_type: triggerType,
+      recorded_at: { $gte: startOfToday },
+    })
+      .select("_id")
+      .lean();
+    return !!last;
+  }
+  const last = await MedicationLog.findOne({
+    ...filter,
+    logged_at: { $gte: startOfToday },
+  })
+    .select("_id")
+    .lean();
+  return !!last;
+}
+
+/** Days since anchor (UTC date diff). */
+function daysSince(date: Date): number {
+  const start = new Date(date);
+  start.setUTCHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
+  return Math.floor((now.getTime() - start.getTime()) / 86400000);
+}
+
+const ESCALATION_MESSAGES = {
+  blood_pressure: {
+    day1: { title: "Reminder: Log your BP", body: "Don't forget to log your blood pressure today. It only takes a moment." },
+    day2: { title: "We noticed you haven't logged BP", body: "Logging regularly helps your doctor care for you. Tap to log now." },
+    day3: { title: "Important: Please log your BP", body: "Your care team is here if you need help. Log your blood pressure when you can." },
+  },
+  blood_sugar: {
+    day1: { title: "Reminder: Log your blood sugar", body: "Don't forget to log your blood sugar today." },
+    day2: { title: "We noticed you haven't logged blood sugar", body: "Regular logging helps your doctor support you. Tap to log now." },
+    day3: { title: "Important: Please log your blood sugar", body: "Your care team is here if you need help. Log when you can." },
+  },
+  medication: {
+    day1: { title: "Reminder: Did you take your medication?", body: "Mark your medications in the app when you take them." },
+    day2: { title: "We noticed you haven't logged medication", body: "Logging helps your doctor track your care. Tap to log now." },
+    day3: { title: "Important: Please log your medication", body: "Your care team is here if you need help. Log when you can." },
+  },
+};
+
+/** Internal: process adaptive reminder escalations (Day 1 → 2 → 3 → 5). Call from cron daily. */
+router.post("/internal/process-reminder-escalations", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  const now = new Date();
+  const results = { day1: 0, day2: 0, day3: 0, day5: 0, resolved: 0 };
+  const subs = await PushSubscription.find({}).select("user_id").lean();
+  const userIds = [...new Set((subs as { user_id: string }[]).map((s) => s.user_id))];
+  for (const userId of userIds) {
+    const link = await getPatientLinkByUserId(userId);
+    if (!link) continue;
+    const { patient_id, doctor_id, patient_ids } = link;
+    const patient = await Patient.findById(patient_id).select("full_name emergency_contact medications").lean();
+    if (!patient) continue;
+    const p = patient as { full_name?: string; emergency_contact?: string; medications?: string[] };
+    const triggerTypes: ("blood_pressure" | "blood_sugar" | "medication")[] = ["blood_pressure", "blood_sugar", "medication"];
+    for (const triggerType of triggerTypes) {
+      const loggedToday = await didPatientLogToday(patient_ids, triggerType);
+      if (loggedToday) {
+        await resolveReminderEscalation(patient_id, triggerType);
+        results.resolved++;
+        continue;
+      }
+      const hasRoutine = await (async () => {
+        if (triggerType === "medication") return (p.medications?.length ?? 0) > 0;
+        const routine = await getRoutineForUserId(userId);
+        return triggerType === "blood_pressure" ? !!routine.blood_pressure : !!routine.blood_sugar;
+      })();
+      if (!hasRoutine) continue;
+      let esc = await ReminderEscalation.findOne({
+        user_id: userId,
+        patient_id,
+        trigger_type: triggerType,
+        resolved_at: null,
+      }).lean();
+      if (!esc) {
+        const created = await ReminderEscalation.create({
+          user_id: userId,
+          patient_id,
+          doctor_id,
+          trigger_type: triggerType,
+          anchor_date: now,
+        });
+        esc = created.toObject();
+      }
+      const e = esc as { anchor_date: Date; day1_sent_at?: Date; day2_sent_at?: Date; day3_sent_at?: Date; day5_sent_at?: Date };
+      const day = daysSince(new Date(e.anchor_date));
+      const sub = await PushSubscription.findOne({ user_id: userId }).lean();
+      const pushPayload = sub as { endpoint: string; keys: { p256dh: string; auth: string } } | null;
+      const triggerLabel = triggerType === "blood_pressure" ? "BP" : triggerType === "blood_sugar" ? "blood sugar" : "medication";
+      if (day >= 1 && !e.day1_sent_at) {
+        const msg = ESCALATION_MESSAGES[triggerType].day1;
+        if (pushPayload && VAPID_PUBLIC && VAPID_PRIVATE) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: pushPayload.endpoint, keys: pushPayload.keys },
+              JSON.stringify({ title: msg.title, body: msg.body, tag: `escalation-${triggerType}-1`, data: { type: triggerType } }),
+              { TTL: 86400 }
+            );
+          } catch (err) {
+            console.error("Escalation push day1 failed", userId, err);
+          }
+        }
+        await Notification.create({
+          user_id: userId,
+          title: msg.title,
+          message: msg.body,
+          category: "reminder",
+          related_type: "reminder_escalation",
+        });
+        await ReminderEscalation.updateOne({ _id: (esc as any)._id }, { day1_sent_at: now });
+        results.day1++;
+      }
+      if (day >= 2 && !e.day2_sent_at) {
+        const msg = ESCALATION_MESSAGES[triggerType].day2;
+        if (pushPayload && VAPID_PUBLIC && VAPID_PRIVATE) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: pushPayload.endpoint, keys: pushPayload.keys },
+              JSON.stringify({ title: msg.title, body: msg.body, tag: `escalation-${triggerType}-2`, data: { type: triggerType } }),
+              { TTL: 86400 }
+            );
+          } catch (err) {
+            console.error("Escalation push day2 failed", userId, err);
+          }
+        }
+        await Notification.create({
+          user_id: userId,
+          title: msg.title,
+          message: msg.body,
+          category: "reminder",
+          related_type: "reminder_escalation",
+        });
+        await ReminderEscalation.updateOne({ _id: (esc as any)._id }, { day2_sent_at: now });
+        results.day2++;
+      }
+      if (day >= 3 && !e.day3_sent_at) {
+        const msg = ESCALATION_MESSAGES[triggerType].day3;
+        if (pushPayload && VAPID_PUBLIC && VAPID_PRIVATE) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: pushPayload.endpoint, keys: pushPayload.keys },
+              JSON.stringify({
+                title: msg.title,
+                body: msg.body,
+                tag: `escalation-${triggerType}-3`,
+                data: { type: triggerType, whatsapp_reminder: true },
+              }),
+              { TTL: 86400 }
+            );
+          } catch (err) {
+            console.error("Escalation push day3 failed", userId, err);
+          }
+        }
+        await Notification.create({
+          user_id: userId,
+          title: msg.title,
+          message: msg.body,
+          category: "reminder",
+          related_type: "reminder_escalation",
+        });
+        await ReminderEscalation.updateOne({ _id: (esc as any)._id }, { day3_sent_at: now });
+        results.day3++;
+      }
+      if (day >= 5 && !e.day5_sent_at) {
+        const emergencyContact = p.emergency_contact || "Not set";
+        const alert = await Alert.create({
+          doctor_id,
+          patient_id,
+          title: `Reminder escalation: ${triggerLabel} not logged for 5 days`,
+          description: `${p.full_name || "Patient"} has not logged ${triggerLabel} for 5 days. Consider contacting emergency contact: ${emergencyContact}.`,
+          severity: "medium",
+          status: "open",
+          related_type: "reminder_escalation",
+          alert_type: "reminder_escalation",
+        });
+        await ReminderEscalation.updateOne(
+          { _id: (esc as any)._id },
+          { day5_sent_at: now, day5_alert_id: alert._id?.toString() }
+        );
+        results.day5++;
+      }
+    }
+  }
+  res.json({ ok: true, results });
 });
 
 const mealUploadDir = path.join(UPLOAD_DIR, "meals");
@@ -759,7 +1733,7 @@ router.get("/alerts", requireAuth, async (req, res) => {
     const count = await Alert.countDocuments(filter);
     return res.json({ count });
   }
-  const list = await Alert.find(filter).sort({ created_at: -1 }).lean();
+  const list = await Alert.find(filter).sort({ created_at: -1 }).limit(LIMITS.ALERTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -793,7 +1767,7 @@ router.get("/appointments", requireAuth, async (req, res) => {
       filter.doctor_id = userId;
     }
   }
-  const list = await Appointment.find(filter).sort({ scheduled_at: -1 }).lean();
+  const list = await Appointment.find(filter).sort({ scheduled_at: -1 }).limit(LIMITS.APPOINTMENTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -848,7 +1822,7 @@ router.get("/appointment_checkins", requireAuth, async (req, res) => {
   const q = req.query as { patient_id?: string };
   const filter: Record<string, string> = { doctor_id: (req as AuthRequest).user.id };
   if (q.patient_id) filter.patient_id = q.patient_id;
-  const list = await AppointmentCheckin.find(filter).sort({ checked_in_at: -1 }).lean();
+  const list = await AppointmentCheckin.find(filter).sort({ checked_in_at: -1 }).limit(LIMITS.APPOINTMENT_CHECKINS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -988,7 +1962,7 @@ router.get("/clinic_invites", requireAuth, async (req, res) => {
   if (asClinicId) filter.clinic_id = asClinicId;
   else if (q.clinic_id) filter.clinic_id = q.clinic_id;
   else return res.json([]);
-  const list = await ClinicInvite.find(filter).sort({ created_at: -1 }).lean();
+  const list = await ClinicInvite.find(filter).sort({ created_at: -1 }).limit(200).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1048,7 +2022,7 @@ router.get("/enrollments", requireAuth, async (req, res) => {
     if (!canAccess) return res.status(404).json({ error: "Patient not found" });
     filter = { patient_id: q.patient_id };
   }
-  const list = await Enrollment.find(filter).sort({ enrolled_at: -1 }).lean();
+  const list = await Enrollment.find(filter).sort({ enrolled_at: -1 }).limit(LIMITS.ENROLLMENTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1073,7 +2047,7 @@ router.get("/feedback_requests", requireAuth, async (req, res) => {
   const q = req.query as { token?: string };
   const filter: Record<string, string> = {};
   if (q.token) filter.token = q.token;
-  const list = await FeedbackRequest.find(filter).lean();
+  const list = await FeedbackRequest.find(filter).limit(LIMITS.FEEDBACK_REQUESTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1085,7 +2059,10 @@ router.get("/me/feedback_requests", requireAuth, async (req, res) => {
     patient_user_id: userId,
     status: "pending",
     expires_at: { $gt: now },
-  }).sort({ created_at: -1 }).lean();
+  })
+    .sort({ created_at: -1 })
+    .limit(LIMITS.FEEDBACK_REQUESTS_MAX)
+    .lean();
   if (list.length === 0) return res.json([]);
   const doctorIds = [...new Set((list as any[]).map((r) => r.doctor_id))];
   const clinicIds = [...new Set((list as any[]).map((r) => r.clinic_id).filter(Boolean))];
@@ -1257,7 +2234,7 @@ router.get("/food_logs", requireAuth, async (req, res) => {
     const count = await FoodLog.countDocuments(filter);
     return res.json({ count });
   }
-  const list = await FoodLog.find(filter).sort({ logged_at: -1 }).lean();
+  const list = await FoodLog.find(filter).sort({ logged_at: -1 }).limit(LIMITS.FOOD_LOGS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1281,7 +2258,7 @@ router.get("/lab_results", requireAuth, async (req, res) => {
     const count = await LabResult.countDocuments(filter);
     return res.json({ count });
   }
-  const list = await LabResult.find(filter).sort({ tested_at: -1 }).lean();
+  const list = await LabResult.find(filter).sort({ tested_at: -1 }).limit(LIMITS.LAB_RESULTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1372,7 +2349,7 @@ router.post("/lab_results", requireAuth, async (req, res) => {
 
 // ---------- Link requests ----------
 router.get("/link_requests", requireAuth, async (req, res) => {
-  const list = await LinkRequest.find({ doctor_id: (req as AuthRequest).user.id }).sort({ created_at: -1 }).lean();
+  const list = await LinkRequest.find({ doctor_id: (req as AuthRequest).user.id }).sort({ created_at: -1 }).limit(LIMITS.LINK_REQUESTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1443,7 +2420,7 @@ router.patch("/link_requests/:id", requireAuth, async (req, res) => {
 
 // ---------- Notifications ----------
 router.get("/notifications", requireAuth, async (req, res) => {
-  const list = await Notification.find({ user_id: (req as AuthRequest).user.id }).sort({ created_at: -1 }).lean();
+  const list = await Notification.find({ user_id: (req as AuthRequest).user.id }).sort({ created_at: -1 }).limit(LIMITS.NOTIFICATIONS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1472,7 +2449,7 @@ router.get("/patient_doctor_links", requireAuth, async (req, res) => {
     if (q.patient_user_id !== userId) return res.status(403).json({ error: "Forbidden" });
     filter.patient_user_id = q.patient_user_id;
   }
-  const list = await PatientDoctorLink.find(filter).lean();
+  const list = await PatientDoctorLink.find(filter).limit(500).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1538,7 +2515,7 @@ router.get("/patient_documents", requireAuth, async (req, res) => {
     const count = await PatientDocument.countDocuments(filter);
     return res.json({ count });
   }
-  const list = await PatientDocument.find(filter).sort({ created_at: -1 }).lean();
+  const list = await PatientDocument.find(filter).sort({ created_at: -1 }).limit(LIMITS.DOCUMENTS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1663,7 +2640,40 @@ router.delete("/patient_documents/:id", requireAuth, async (req, res) => {
 });
 
 // ---------- Patients ----------
-// More specific route first so /patients/:id is not matched as /patients
+// More specific routes first so /patients/:id/medication-logs and /patients/:id are matched correctly
+/** Doctor: list medication logs for a patient (adherence). Paginated for scale. */
+router.get("/patients/:id/medication-logs", requireAuth, async (req, res) => {
+  const patientId = req.params.id;
+  const doctorId = (req as AuthRequest).user.id;
+  if (!patientId) return res.status(404).json({ error: "Not found" });
+  const canAccess = await doctorCanAccessPatient(doctorId, patientId);
+  if (!canAccess) return res.status(404).json({ error: "Not found" });
+  const q = req.query as { count?: string; limit?: string; skip?: string };
+  if (q.count === "true" || q.count === "1") {
+    const count = await MedicationLog.countDocuments({ patient_id: patientId });
+    return res.json({ count });
+  }
+  const limit = Math.min(Math.max(parseInt(String(q.limit || "20"), 10) || 20, 1), 100);
+  const skip = Math.max(parseInt(String(q.skip || "0"), 10) || 0, 0);
+  const [list, total] = await Promise.all([
+    MedicationLog.find({ patient_id: patientId })
+      .sort({ logged_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    MedicationLog.countDocuments({ patient_id: patientId }),
+  ]);
+  const items = list.map((d: any) => ({
+    id: d._id?.toString(),
+    logged_at: d.logged_at,
+    taken: d.taken,
+    time_of_day: d.time_of_day,
+    medication_name: d.medication_name,
+    source: d.source,
+  }));
+  res.json({ items, total });
+});
+
 router.get("/patients/:id", requireAuth, async (req, res) => {
   const id = req.params.id;
   const userId = (req as AuthRequest).user.id;
@@ -1709,21 +2719,14 @@ router.get("/patients", requireAuth, async (req, res) => {
     const count = await Patient.countDocuments(filter);
     return res.json({ count });
   }
-  const hasLimit = q.limit != null && String(q.limit).trim() !== "";
-  const hasSkip = q.skip != null && String(q.skip).trim() !== "";
-  const usePagination = hasLimit || hasSkip;
-  const limit = usePagination ? Math.min(Math.max(parseInt(String(q.limit || "50"), 10) || 50, 1), 200) : 0;
-  const skip = usePagination ? Math.max(parseInt(String(q.skip || "0"), 10) || 0, 0) : 0;
-  if (usePagination) {
-    const [list, total] = await Promise.all([
-      Patient.find(filter).sort({ full_name: 1 }).skip(skip).limit(limit).lean(),
-      Patient.countDocuments(filter),
-    ]);
-    const mapped = list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined }));
-    return res.json({ items: mapped, total });
-  }
-  const list = await Patient.find(filter).sort({ full_name: 1 }).lean();
-  res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
+  const limit = parseLimit(q.limit, LIMITS.PATIENTS_DEFAULT, LIMITS.PATIENTS_MAX);
+  const skip = parseSkip(q.skip);
+  const [list, total] = await Promise.all([
+    Patient.find(filter).sort({ full_name: 1 }).skip(skip).limit(limit).lean(),
+    Patient.countDocuments(filter),
+  ]);
+  const mapped = list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined }));
+  res.json({ items: mapped, total });
 });
 
 router.post("/patients", requireAuth, async (req, res) => {
@@ -1732,8 +2735,12 @@ router.post("/patients", requireAuth, async (req, res) => {
   res.status(201).json(doc.toJSON());
 });
 
+const MAX_BULK_PATIENTS = 500;
 router.post("/patients/bulk", requireAuth, async (req, res) => {
   const body = Array.isArray(req.body) ? req.body : [];
+  if (body.length > MAX_BULK_PATIENTS) {
+    return res.status(400).json({ error: `Maximum ${MAX_BULK_PATIENTS} patients per bulk import. Split into smaller batches.` });
+  }
   const doctorId = (req as AuthRequest).user.id;
   const docs = await Patient.insertMany(body.map((p: Record<string, unknown>) => ({ ...p, doctor_id: doctorId })));
   res.status(201).json(docs.map((d) => d.toJSON()));
@@ -1755,7 +2762,7 @@ router.get("/profiles", requireAuth, async (req, res) => {
   const filter: Record<string, string> = {};
   if (q.user_id) filter.user_id = q.user_id;
   if (q.doctor_code != null && q.doctor_code !== "") filter.doctor_code = String(q.doctor_code).toUpperCase();
-  const list = await Profile.find(filter).lean();
+  const list = await Profile.find(filter).limit(500).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1781,7 +2788,7 @@ router.get("/programs", requireAuth, async (req, res) => {
   const q = req.query as { doctor_id?: string; is_active?: string };
   const filter: Record<string, unknown> = { doctor_id: (req as AuthRequest).user.id };
   if (q.is_active === "true") filter.is_active = true;
-  const list = await Program.find(filter).sort({ name: 1 }).lean();
+  const list = await Program.find(filter).sort({ name: 1 }).limit(200).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1805,7 +2812,7 @@ router.patch("/programs/:id", requireAuth, async (req, res) => {
 router.get("/user_roles", requireAuth, async (req, res) => {
   const q = req.query as { user_id?: string };
   const filter = q.user_id ? { user_id: q.user_id } : {};
-  const list = await UserRole.find(filter).lean();
+  const list = await UserRole.find(filter).limit(500).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -1828,7 +2835,7 @@ router.get("/vitals", requireAuth, async (req, res) => {
     const count = await Vital.countDocuments(filter);
     return res.json({ count });
   }
-  const list = await Vital.find(filter).sort({ recorded_at: -1 }).lean();
+  const list = await Vital.find(filter).sort({ recorded_at: -1 }).limit(LIMITS.VITALS_MAX).lean();
   res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
@@ -2489,9 +3496,8 @@ router.post("/clinical-evidence", requireAuth, async (req, res) => {
 });
 
 router.post("/contact", async (req, res) => {
-  const { email, message, name } = req.body;
+  const { message } = req.body;
   if (!message) return res.status(400).json({ error: "Message required" });
-  console.log("Contact form:", { email, name, message });
   res.json({ ok: true });
 });
 

@@ -12,7 +12,7 @@ const toJsonOptions = {
 
 // Enums
 const clinicRoleEnum = ["owner", "admin", "doctor", "nurse", "staff"];
-const appRoleEnum = ["doctor", "patient", "clinic"];
+const appRoleEnum = ["doctor", "patient", "clinic", "family"];
 
 const AuthUserSchema = new mongoose.Schema(
   {
@@ -41,6 +41,8 @@ const AlertSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+AlertSchema.index({ doctor_id: 1, created_at: -1 });
+AlertSchema.index({ patient_id: 1, created_at: -1 });
 
 const AppointmentCheckinSchema = new mongoose.Schema(
   {
@@ -74,6 +76,9 @@ const AppointmentSchema = new mongoose.Schema(
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
+AppointmentSchema.index({ doctor_id: 1, scheduled_at: -1 });
+AppointmentSchema.index({ patient_id: 1, scheduled_at: -1 });
+AppointmentSchema.index({ clinic_id: 1, scheduled_at: -1 });
 
 const ClinicInviteSchema = new mongoose.Schema(
   {
@@ -97,6 +102,8 @@ const ClinicMemberSchema = new mongoose.Schema(
   },
   { toJSON: toJsonOptions }
 );
+ClinicMemberSchema.index({ clinic_id: 1, user_id: 1 });
+ClinicMemberSchema.index({ user_id: 1 });
 
 const ClinicSchema = new mongoose.Schema(
   {
@@ -141,6 +148,8 @@ const EnrollmentSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+EnrollmentSchema.index({ doctor_id: 1, enrolled_at: -1 });
+EnrollmentSchema.index({ patient_id: 1, enrolled_at: -1 });
 
 const FeedbackRequestSchema = new mongoose.Schema(
   {
@@ -207,6 +216,8 @@ const FoodLogSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+FoodLogSchema.index({ patient_id: 1, logged_at: -1 });
+FoodLogSchema.index({ doctor_id: 1, logged_at: -1 });
 
 const LabResultSchema = new mongoose.Schema(
   {
@@ -223,6 +234,9 @@ const LabResultSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+LabResultSchema.index({ patient_id: 1, tested_at: -1 });
+LabResultSchema.index({ doctor_id: 1, tested_at: -1 });
+LabResultSchema.index({ lab_report_id: 1 });
 
 const LabReportSchema = new mongoose.Schema(
   {
@@ -239,6 +253,7 @@ const LabReportSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+LabReportSchema.index({ patient_id: 1, tested_at: -1 });
 
 const LinkRequestSchema = new mongoose.Schema(
   {
@@ -266,6 +281,7 @@ const NotificationSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+NotificationSchema.index({ user_id: 1, created_at: -1 });
 
 const PatientDoctorLinkSchema = new mongoose.Schema(
   {
@@ -278,6 +294,8 @@ const PatientDoctorLinkSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+PatientDoctorLinkSchema.index({ doctor_user_id: 1, status: 1 });
+PatientDoctorLinkSchema.index({ patient_user_id: 1, status: 1 });
 
 const PatientDocumentSchema = new mongoose.Schema(
   {
@@ -297,6 +315,8 @@ const PatientDocumentSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+PatientDocumentSchema.index({ patient_id: 1, created_at: -1 });
+PatientDocumentSchema.index({ doctor_id: 1, created_at: -1 });
 
 const PatientVaultCodeSchema = new mongoose.Schema(
   {
@@ -327,6 +347,9 @@ const PatientSchema = new mongoose.Schema(
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
+PatientSchema.index({ doctor_id: 1, full_name: 1 });
+PatientSchema.index({ patient_user_id: 1 });
+PatientSchema.index({ clinic_id: 1 });
 
 const ProfileSchema = new mongoose.Schema(
   {
@@ -367,6 +390,7 @@ const VitalSchema = new mongoose.Schema(
     notes: String,
     patient_id: { type: String, required: true },
     recorded_at: { type: Date, default: Date.now },
+    source: { type: String, default: "manual" }, // manual | quick_log | whatsapp | auto
     unit: String,
     value_numeric: Number,
     value_text: { type: String, required: true },
@@ -374,6 +398,125 @@ const VitalSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
+VitalSchema.index({ patient_id: 1, recorded_at: -1 });
+VitalSchema.index({ doctor_id: 1, recorded_at: -1 });
+VitalSchema.index({ patient_id: 1, vital_type: 1, recorded_at: -1 });
+
+const MedicationLogSchema = new mongoose.Schema(
+  {
+    doctor_id: { type: String, required: true },
+    patient_id: { type: String, required: true },
+    logged_at: { type: Date, default: Date.now },
+    source: { type: String, default: "manual" }, // manual | quick_log | whatsapp | auto | push
+    taken: { type: Boolean, required: true }, // true = took medication, false = skipped
+    time_of_day: String, // morning | afternoon | evening | night
+    medication_name: String, // which medication (when using maker-checker by time)
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+MedicationLogSchema.index({ patient_id: 1, logged_at: -1 });
+
+/** Smart reminders (Layer 2/3): adaptive escalation when user ignores reminders. */
+const ReminderEscalationSchema = new mongoose.Schema(
+  {
+    user_id: { type: String, required: true },
+    patient_id: { type: String, required: true },
+    doctor_id: { type: String, required: true },
+    trigger_type: { type: String, required: true }, // blood_pressure | blood_sugar | medication
+    anchor_date: { type: Date, required: true }, // day 0 (first missed / first reminder)
+    day1_sent_at: Date,
+    day2_sent_at: Date,
+    day3_sent_at: Date,
+    day5_sent_at: Date,
+    day5_alert_id: String, // Alert created for doctor (notify family)
+    resolved_at: Date, // user logged → stop escalating
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+ReminderEscalationSchema.index({ user_id: 1, trigger_type: 1 });
+ReminderEscalationSchema.index({ patient_id: 1, trigger_type: 1 });
+ReminderEscalationSchema.index({ resolved_at: 1 });
+
+const PushSubscriptionSchema = new mongoose.Schema(
+  {
+    user_id: { type: String, required: true },
+    endpoint: { type: String, required: true },
+    keys: { type: mongoose.Schema.Types.Mixed, required: true }, // { p256dh, auth }
+    user_agent: String,
+    updated_at: { type: Date, default: Date.now },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+PushSubscriptionSchema.index({ user_id: 1 });
+PushSubscriptionSchema.index({ endpoint: 1 }, { unique: true });
+
+const QuickLogTokenSchema = new mongoose.Schema(
+  {
+    token: { type: String, required: true, unique: true },
+    user_id: { type: String, required: true }, // patient user_id (who can redeem)
+    type: { type: String, required: true }, // blood_pressure | blood_sugar | food | medication
+    value_text: String, // for bp/sugar
+    meal_type: String, // for food
+    taken: Boolean, // for medication
+    expires_at: { type: Date, required: true },
+    used_at: Date,
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+QuickLogTokenSchema.index({ token: 1 });
+QuickLogTokenSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 }); // TTL optional
+
+/** Layer 4 Accountability: family can see patient's daily log status (BP ✓ / missed). */
+const FamilyConnectionSchema = new mongoose.Schema(
+  {
+    patient_user_id: { type: String, required: true },
+    family_user_id: { type: String, default: null }, // set when family signs up or accepts
+    invite_email: { type: String, default: null }, // when inviting by email before signup
+    relationship: { type: String, required: true, enum: ["son", "daughter", "spouse", "other"] },
+    status: { type: String, default: "pending", enum: ["pending", "active"] },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+FamilyConnectionSchema.index({ patient_user_id: 1 });
+FamilyConnectionSchema.index({ family_user_id: 1 });
+FamilyConnectionSchema.index({ invite_email: 1 });
+
+/** Layer 4: Doctor message shown in patient app ("Dr. Sharma requested daily BP logging"). */
+const DoctorMessageSchema = new mongoose.Schema(
+  {
+    doctor_id: { type: String, required: true },
+    patient_id: { type: String, required: true }, // Patient _id
+    message: { type: String, required: true },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+DoctorMessageSchema.index({ patient_id: 1, created_at: -1 });
+DoctorMessageSchema.index({ doctor_id: 1 });
+
+/** Layer 5 Gamification: badge earned by patient (e.g. Heart Guardian for 30 BP logs). */
+const UserBadgeSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    badge_key: { type: String, required: true }, // bp_30_days | food_30_days | streak_7 | etc.
+    earned_at: { type: Date, default: Date.now },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+UserBadgeSchema.index({ patient_id: 1, badge_key: 1 }, { unique: true });
+UserBadgeSchema.index({ patient_id: 1, earned_at: -1 });
+
+/** Layer 5: weekly challenge completion (award points once per week per challenge). */
+const UserWeeklyChallengeSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    challenge_key: { type: String, required: true }, // bp_7_days | full_week_4 | etc.
+    week_start: { type: Date, required: true }, // Monday 00:00 UTC
+    reward_points_awarded: { type: Number, default: 0 },
+    completed_at: { type: Date, default: Date.now },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+UserWeeklyChallengeSchema.index({ patient_id: 1, challenge_key: 1, week_start: 1 }, { unique: true });
 
 export const AuthUser = mongoose.model("AuthUser", AuthUserSchema);
 export const Alert = mongoose.model("Alert", AlertSchema);
@@ -400,3 +543,11 @@ export const Profile = mongoose.model("Profile", ProfileSchema);
 export const Program = mongoose.model("Program", ProgramSchema);
 export const UserRole = mongoose.model("UserRole", UserRoleSchema);
 export const Vital = mongoose.model("Vital", VitalSchema);
+export const MedicationLog = mongoose.model("MedicationLog", MedicationLogSchema);
+export const ReminderEscalation = mongoose.model("ReminderEscalation", ReminderEscalationSchema);
+export const PushSubscription = mongoose.model("PushSubscription", PushSubscriptionSchema);
+export const QuickLogToken = mongoose.model("QuickLogToken", QuickLogTokenSchema);
+export const FamilyConnection = mongoose.model("FamilyConnection", FamilyConnectionSchema);
+export const DoctorMessage = mongoose.model("DoctorMessage", DoctorMessageSchema);
+export const UserBadge = mongoose.model("UserBadge", UserBadgeSchema);
+export const UserWeeklyChallenge = mongoose.model("UserWeeklyChallenge", UserWeeklyChallengeSchema);

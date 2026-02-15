@@ -37,7 +37,7 @@ const DoctorVitals = () => {
     try {
       const [vitalsList, patientsList] = await Promise.all([
         api.get<any[]>("vitals").catch(() => []),
-        api.get<any[]>("patients").catch(() => []),
+        api.get<{ items: any[] }>("patients", { limit: "200", skip: "0" }).then((r) => r.items ?? []).catch(() => []),
       ]);
       setVitals(Array.isArray(vitalsList) ? vitalsList.slice(0, 50) : []);
       setPatients(Array.isArray(patientsList) ? patientsList : []);

@@ -95,11 +95,10 @@ const Patients = () => {
   const { data, isLoading } = useQuery({
     queryKey: ["patients", user?.id, page, PAGE_SIZE],
     queryFn: async () => {
-      const res = await api.get<Patient[] | { items: Patient[]; total: number }>("patients", {
-        limit: PAGE_SIZE,
-        skip: page * PAGE_SIZE,
+      const res = await api.get<{ items: Patient[]; total: number }>("patients", {
+        limit: String(PAGE_SIZE),
+        skip: String(page * PAGE_SIZE),
       });
-      if (Array.isArray(res)) return { items: res, total: res.length };
       return { items: res.items ?? [], total: res.total ?? 0 };
     },
     enabled: !!user,
@@ -114,8 +113,8 @@ const Patients = () => {
   const { data: allPatientsForImport } = useQuery({
     queryKey: ["patients", "all", user?.id],
     queryFn: async () => {
-      const res = await api.get<Patient[] | { items: Patient[] }>("patients");
-      return Array.isArray(res) ? res : (res.items ?? []);
+      const res = await api.get<{ items: Patient[]; total: number }>("patients", { limit: "200", skip: "0" });
+      return res.items ?? [];
     },
     enabled: !!user && showImport && csvRows.length > 0,
   });

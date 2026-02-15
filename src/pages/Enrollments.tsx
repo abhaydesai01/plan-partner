@@ -51,16 +51,17 @@ const Enrollments = () => {
   const fetchData = async () => {
     if (!user) return;
     try {
-      const [enrollRes, patientRes, programRes] = await Promise.all([
+      const [enrollRes, patientResRaw, programRes] = await Promise.all([
         api.get<Enrollment[]>("enrollments"),
-        api.get<Patient[]>("patients"),
+        api.get<{ items: Patient[] }>("patients", { limit: "200", skip: "0" }),
         api.get<Program[]>("programs", { is_active: "true" }),
       ]);
+      const patientRes = patientResRaw?.items ?? [];
       const patientMap: Record<string, string> = {};
       const programMap: Record<string, { name: string; type: string }> = {};
-      (patientRes || []).forEach((p) => { patientMap[p.id] = p.full_name; });
+      patientRes.forEach((p) => { patientMap[p.id] = p.full_name; });
       (programRes || []).forEach((p) => { programMap[p.id] = { name: p.name, type: p.type }; });
-      setPatients(patientRes || []);
+      setPatients(patientRes);
       setPrograms(programRes || []);
       setEnrollments(
         (enrollRes || []).map((e) => ({

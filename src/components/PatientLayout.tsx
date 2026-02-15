@@ -16,12 +16,14 @@ import {
   UtensilsCrossed,
   Link2,
   Star,
+  Users,
 } from "lucide-react";
 import { PatientPwaLink } from "@/components/PatientPwaLink";
 
 const navItems = [
   { to: "/patient", icon: MessageSquare, label: "AI Assistant", exact: true },
   { to: "/patient/overview", icon: Home, label: "Overview" },
+  { to: "/patient/accountability", icon: Users, label: "Family & visibility" },
   { to: "/patient/connect-doctor", icon: Link2, label: "Connect to doctor" },
   { to: "/patient/vitals", icon: Activity, label: "Vitals" },
   { to: "/patient/lab-results", icon: FlaskConical, label: "Lab Results" },
@@ -38,13 +40,13 @@ export function PatientLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-background w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen pwa-screen flex bg-background w-full max-w-full overflow-x-hidden">
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} aria-hidden />
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-card border-r border-border flex flex-col transition-transform ${
+        className={`fixed top-0 left-0 z-50 w-64 max-w-[85vw] h-full max-h-[100dvh] bg-card border-r border-border flex flex-col transition-transform ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -60,7 +62,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto overflow-x-hidden min-h-0">
           {navItems.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.to
@@ -76,7 +78,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                <item.icon className="w-5 h-5" />
+                <item.icon className="w-5 h-5 flex-shrink-0" />
                 {item.label}
               </NavLink>
             );
@@ -87,15 +89,15 @@ export function PatientLayout({ children }: { children: ReactNode }) {
         <div className="p-3 border-t border-border safe-area-bottom">
           <button
             onClick={signOut}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors"
+            className="flex items-center gap-3 min-h-[44px] px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors touch-manipulation"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5 flex-shrink-0" />
             Sign Out
           </button>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-hidden min-h-[100dvh]">
         <header className="safe-area-header h-14 min-h-[3.5rem] sm:h-16 sm:min-h-[4rem] border-b border-border bg-card flex items-center gap-1 sm:gap-2 sticky top-0 z-30 flex-shrink-0 px-4">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -116,7 +118,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
             <span className="hidden sm:inline">Home</span>
           </Link>
         </header>
-        <main className="safe-area-bottom flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto min-w-0">
+        <main className="safe-area-bottom flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto min-w-0 pwa-safe-x">
           {children}
         </main>
       </div>
@@ -131,13 +133,13 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-background w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen pwa-screen flex bg-background w-full max-w-full overflow-x-hidden">
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} aria-hidden />
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-card border-r border-border flex flex-col transition-transform ${
+        className={`fixed top-0 left-0 z-50 w-64 max-w-[85vw] h-full max-h-[100dvh] bg-card border-r border-border flex flex-col transition-transform ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -153,7 +155,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto overflow-x-hidden min-h-0">
           {navItems.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.to
@@ -169,7 +171,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                <item.icon className="w-5 h-5" />
+                <item.icon className="w-5 h-5 flex-shrink-0" />
                 {item.label}
               </NavLink>
             );
@@ -180,9 +182,9 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
         <div className="p-3 border-t border-border safe-area-bottom">
           <button
             onClick={signOut}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors"
+            className="flex items-center gap-3 min-h-[44px] px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors touch-manipulation"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5 flex-shrink-0" />
             Sign Out
           </button>
         </div>

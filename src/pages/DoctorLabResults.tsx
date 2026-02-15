@@ -62,7 +62,7 @@ const DoctorLabResults = () => {
     try {
       const [resultsList, patientsList] = await Promise.all([
         api.get<any[]>("lab_results").catch(() => []),
-        api.get<any[]>("patients").catch(() => []),
+        api.get<{ items: any[] }>("patients", { limit: "200", skip: "0" }).then((r) => r.items ?? []).catch(() => []),
       ]);
       setResults(Array.isArray(resultsList) ? resultsList.slice(0, 100) : []);
       setPatients(Array.isArray(patientsList) ? patientsList : []);

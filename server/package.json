@@ -10,7 +10,9 @@
     "clear-db": "tsx scripts/clear-db.ts",
     "seed": "tsx scripts/seed-db.ts",
     "remove-duplicates": "tsx scripts/remove-duplicates.ts",
-    "test:api": "NODE_ENV=test tsx scripts/test-api.ts"
+    "test:api": "NODE_ENV=test tsx scripts/test-api.ts",
+    "generate-vapid": "node scripts/generate-vapid.cjs",
+    "trigger-reminders": "tsx scripts/trigger-reminder-escalations.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -20,15 +22,19 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
+    "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.8.0",
     "multer": "^1.4.5-lts.1",
-    "typescript": "^5.8.3"
+    "node-cron": "^4.2.1",
+    "typescript": "^5.8.3",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.12",
+    "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.2"
   }
 }

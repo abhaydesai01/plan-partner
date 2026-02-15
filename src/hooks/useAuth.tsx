@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { api } from "@/lib/api";
 import { getStoredToken, setStoredToken, setStoredDoctorToken, getStoredDoctorToken } from "@/lib/api";
 
-type AppRole = "doctor" | "patient" | "clinic";
+type AppRole = "doctor" | "patient" | "clinic" | "family";
 
 export interface AuthUser {
   id: string;

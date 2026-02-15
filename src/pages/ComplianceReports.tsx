@@ -25,7 +25,7 @@ const ComplianceReports = () => {
       try {
         const [enrollList, patientList, programList] = await Promise.all([
           api.get<any[]>("enrollments").catch(() => []),
-          api.get<any[]>("patients").catch(() => []),
+          api.get<{ items: any[] }>("patients", { limit: "200", skip: "0" }).then((r) => r.items ?? []).catch(() => []),
           api.get<any[]>("programs").catch(() => []),
         ]);
         setEnrollments((Array.isArray(enrollList) ? enrollList : []).map(e => ({ ...e, adherence_pct: e.adherence_pct ? Number(e.adherence_pct) : 0 })));

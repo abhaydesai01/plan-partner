@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
-export function ProtectedRoute({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "doctor" | "patient" | "clinic" }) {
+export function ProtectedRoute({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "doctor" | "patient" | "clinic" | "family" }) {
   const { user, loading, role } = useAuth();
 
   if (loading) {
@@ -25,7 +25,7 @@ export function ProtectedRoute({ children, allowedRole }: { children: React.Reac
 
   // Redirect to correct portal if wrong role
   if (allowedRole && role !== allowedRole) {
-    const to = role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : "/dashboard";
+    const to = role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : role === "family" ? "/family" : "/dashboard";
     return <Navigate to={to} replace />;
   }
 

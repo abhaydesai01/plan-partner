@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import {
   ArrowLeft, Phone, User, Calendar, Activity, TrendingUp, AlertTriangle,
-  FileText, FlaskConical, Heart, ClipboardList, Stethoscope, UtensilsCrossed
+  FileText, FlaskConical, Heart, ClipboardList, Stethoscope, UtensilsCrossed, Pill, MessageSquare
 } from "lucide-react";
 import DoctorCopilot from "@/components/DoctorCopilot";
 import { format } from "date-fns";
@@ -76,7 +76,12 @@ const PatientDetail = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState({ vitals: 0, labs: 0, docs: 0, alerts: 0, food: 0 });
+  const [counts, setCounts] = useState({ vitals: 0, labs: 0, docs: 0, alerts: 0, food: 0, medicationLogs: 0 });
+  const [medicationLogs, setMedicationLogs] = useState<{ id: string; logged_at: string; taken: boolean; time_of_day?: string; medication_name?: string; source?: string }[]>([]);
+  const [medicationLogsTotal, setMedicationLogsTotal] = useState(0);
+  const [medicationLogsLoadingMore, setMedicationLogsLoadingMore] = useState(false);
+  const [doctorMessage, setDoctorMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   useEffect(() => {
     setError(null);
@@ -96,7 +101,7 @@ const PatientDetail = () => {
         const patientRes = await api.get<Patient>("patients/" + id);
         setPatient(patientRes);
 
-        const [enrollRes, apptRes, programRes, vitalsCount, labsCount, docsCount, alertsCount, foodCount] = await Promise.all([
+        const [enrollRes, apptRes, programRes, vitalsCount, labsCount, docsCount, alertsCount, foodCount, medLogsCountRes, medLogsList] = await Promise.all([
           api.get<Enrollment[]>("enrollments", { patient_id: id }).catch(() => []),
           api.get<Appointment[]>("appointments", { patient_id: id }).catch(() => []),
           api.get<{ id: string; name: string; type: string }[]>("programs").catch(() => []),
@@ -105,6 +110,8 @@ const PatientDetail = () => {
           api.get<{ count: number }>("patient_documents", { patient_id: id, count: "true" }).catch(() => ({ count: 0 })),
           api.get<{ count: number }>("alerts", { patient_id: id, status: "open", count: "true" }).catch(() => ({ count: 0 })),
           api.get<{ count: number }>("food_logs", { patient_id: id, count: "true" }).catch(() => ({ count: 0 })),
+          api.get<{ count: number }>(`patients/${id}/medication-logs`, { count: "true" }).catch(() => ({ count: 0 })),
+          api.get<{ items: { id: string; logged_at: string; taken: boolean; time_of_day?: string; medication_name?: string; source?: string }[]; total: number }>(`patients/${id}/medication-logs`, { limit: "20", skip: "0" }).catch(() => ({ items: [], total: 0 })),
         ]);
         setCounts({
           vitals: (vitalsCount as { count?: number })?.count ?? 0,
@@ -112,7 +119,11 @@ const PatientDetail = () => {
           docs: (docsCount as { count?: number })?.count ?? 0,
           alerts: (alertsCount as { count?: number })?.count ?? 0,
           food: (foodCount as { count?: number })?.count ?? 0,
+          medicationLogs: (medLogsCountRes as { count?: number })?.count ?? 0,
         });
+        const medData = medLogsList as { items?: unknown[]; total?: number };
+        setMedicationLogs(Array.isArray(medData?.items) ? medData.items as { id: string; logged_at: string; taken: boolean; time_of_day?: string; medication_name?: string; source?: string }[] : []);
+        setMedicationLogsTotal(typeof medData?.total === "number" ? medData.total : 0);
         const programMap: Record<string, { name: string; type: string }> = {};
         (programRes || []).forEach((p) => { programMap[p.id] = { name: p.name, type: p.type }; });
         if (enrollRes?.length) {
@@ -216,8 +227,43 @@ const PatientDetail = () => {
         </div>
       </div>
 
+      {/* Doctor message to patient (Layer 4 Accountability) */}
+      <div className="glass-card rounded-xl p-4 sm:p-5">
+        <h3 className="font-heading font-semibold text-foreground flex items-center gap-2 mb-2">
+          <MessageSquare className="w-4 h-4 text-primary" />
+          Message patient
+        </h3>
+        <p className="text-sm text-muted-foreground mb-3">They will see this in the app (e.g. &quot;Please log BP daily&quot;).</p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={doctorMessage}
+            onChange={(e) => setDoctorMessage(e.target.value)}
+            placeholder="e.g. Please log your BP every morning"
+            className="flex-1 min-w-0 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          <button
+            type="button"
+            disabled={!doctorMessage.trim() || sendingMessage}
+            onClick={async () => {
+              if (!id || !doctorMessage.trim()) return;
+              setSendingMessage(true);
+              try {
+                await api.post(`patients/${id}/message`, { message: doctorMessage.trim() });
+                setDoctorMessage("");
+              } finally {
+                setSendingMessage(false);
+              }
+            }}
+            className="px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+          >
+            {sendingMessage ? "Sending..." : "Send"}
+          </button>
+        </div>
+      </div>
+
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 sm:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <div className="glass-card rounded-xl p-3 text-center">
           <Activity className="w-4 h-4 text-primary mx-auto mb-1" />
           <p className="text-lg font-heading font-bold text-foreground">{enrollments.length}</p>
@@ -253,37 +299,45 @@ const PatientDetail = () => {
           <p className="text-lg font-heading font-bold text-foreground">{counts.food}</p>
           <p className="text-[10px] text-muted-foreground">Food Logs</p>
         </div>
+        <div className="glass-card rounded-xl p-3 text-center">
+          <Pill className="w-4 h-4 text-violet-500 mx-auto mb-1" />
+          <p className="text-lg font-heading font-bold text-foreground">{counts.medicationLogs}</p>
+          <p className="text-[10px] text-muted-foreground">Med logs</p>
+        </div>
       </div>
 
       {/* Tabbed Content */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="w-full flex overflow-x-auto bg-muted/50 p-1 rounded-xl">
-          <TabsTrigger value="overview" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <Stethoscope className="w-3.5 h-3.5 hidden sm:block" /> Overview
+      <Tabs defaultValue="overview" className="space-y-4 w-full min-w-0">
+        <TabsList className="w-full flex overflow-x-auto overflow-y-hidden bg-muted/50 p-1 rounded-xl min-h-[44px] flex-nowrap gap-0.5 sm:gap-1 [&>button]:min-h-[40px] [&>button]:touch-manipulation [&>button]:flex-shrink-0">
+          <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <Stethoscope className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Overview
           </TabsTrigger>
-          <TabsTrigger value="vitals" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <Heart className="w-3.5 h-3.5 hidden sm:block" /> Vitals
+          <TabsTrigger value="vitals" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <Heart className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Vitals
           </TabsTrigger>
-          <TabsTrigger value="labs" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <FlaskConical className="w-3.5 h-3.5 hidden sm:block" /> Labs
+          <TabsTrigger value="labs" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <FlaskConical className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Labs
           </TabsTrigger>
-          <TabsTrigger value="documents" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <FileText className="w-3.5 h-3.5 hidden sm:block" /> Docs
+          <TabsTrigger value="documents" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <FileText className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Docs
           </TabsTrigger>
-          <TabsTrigger value="appointments" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <Calendar className="w-3.5 h-3.5 hidden sm:block" /> Appts
+          <TabsTrigger value="appointments" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <Calendar className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Appts
           </TabsTrigger>
-          <TabsTrigger value="alerts" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <AlertTriangle className="w-3.5 h-3.5 hidden sm:block" /> Alerts
+          <TabsTrigger value="alerts" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <AlertTriangle className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Alerts
           </TabsTrigger>
-          <TabsTrigger value="food" className="flex-1 gap-1.5 text-xs sm:text-sm">
-            <UtensilsCrossed className="w-3.5 h-3.5 hidden sm:block" /> Food
+          <TabsTrigger value="food" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <UtensilsCrossed className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Food
+          </TabsTrigger>
+          <TabsTrigger value="medication" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+            <Pill className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Medication
           </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid lg:grid-cols-2 gap-6">
+        <TabsContent value="overview" className="space-y-6 mt-4 min-w-0 overflow-x-hidden">
+          <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Enrollments */}
             <div className="glass-card rounded-xl p-5 space-y-3">
               <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">
@@ -351,22 +405,22 @@ const PatientDetail = () => {
         </TabsContent>
 
         {/* Vitals Tab */}
-        <TabsContent value="vitals">
+        <TabsContent value="vitals" className="min-w-0 overflow-x-hidden mt-4">
           <PatientVitalsTab patientId={patient.id} doctorId={user!.id} />
         </TabsContent>
 
         {/* Labs Tab */}
-        <TabsContent value="labs">
+        <TabsContent value="labs" className="min-w-0 overflow-x-hidden mt-4">
           <PatientLabsTab patientId={patient.id} doctorId={user!.id} />
         </TabsContent>
 
         {/* Documents Tab */}
-        <TabsContent value="documents">
+        <TabsContent value="documents" className="min-w-0 overflow-x-hidden mt-4">
           <PatientDocsTab patientId={patient.id} doctorId={user!.id} />
         </TabsContent>
 
         {/* Appointments Tab */}
-        <TabsContent value="appointments" className="space-y-4">
+        <TabsContent value="appointments" className="space-y-4 min-w-0 overflow-x-hidden mt-4">
           <div className="glass-card rounded-xl p-5 space-y-3">
             <h3 className="font-heading font-semibold text-foreground">All Appointments</h3>
             {appointments.length === 0 ? (
@@ -411,13 +465,65 @@ const PatientDetail = () => {
         </TabsContent>
 
         {/* Alerts Tab */}
-        <TabsContent value="alerts">
+        <TabsContent value="alerts" className="min-w-0 overflow-x-hidden mt-4">
           <PatientAlertsTab patientId={patient.id} doctorId={user!.id} />
         </TabsContent>
 
         {/* Food Tab */}
-        <TabsContent value="food">
+        <TabsContent value="food" className="min-w-0 overflow-x-hidden mt-4">
           <PatientFoodTab patientId={patient.id} doctorId={user!.id} />
+        </TabsContent>
+
+        {/* Medication adherence tab: list of logs (taken/skipped, time, medication name) */}
+        <TabsContent value="medication" className="space-y-4 min-w-0 overflow-x-hidden mt-4">
+          <div className="glass-card rounded-xl p-5 space-y-3">
+            <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">
+              <Pill className="w-4 h-4 text-violet-500" /> Medication adherence
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Logs from the patient app (Quick Log). Patient adds their medication list in <strong>Overview → Health Profile</strong> and marks when they took them from the AI Assistant.
+            </p>
+            {medicationLogs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No medication logs yet. Ask the patient to add medications in Overview and use Quick Log to mark when they take them.</p>
+            ) : (
+              <>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {medicationLogs.map((log) => (
+                    <div key={log.id} className={`p-3 rounded-lg border flex flex-wrap items-center justify-between gap-2 ${log.taken ? "border-primary/30 bg-primary/5" : "border-border/50 bg-muted/20"}`}>
+                      <div className="min-w-0">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${log.taken ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                          {log.taken ? "Taken" : "Skipped"}
+                        </span>
+                        {log.medication_name && <span className="ml-2 text-sm text-foreground">{log.medication_name}</span>}
+                        {log.time_of_day && <span className="ml-2 text-xs text-muted-foreground capitalize">{log.time_of_day}</span>}
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatDate(log.logged_at, "MMM d, HH:mm")}</span>
+                    </div>
+                  ))}
+                </div>
+                {medicationLogs.length < medicationLogsTotal && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!id || medicationLogsLoadingMore) return;
+                      setMedicationLogsLoadingMore(true);
+                      try {
+                        const res = await api.get<{ items: { id: string; logged_at: string; taken: boolean; time_of_day?: string; medication_name?: string; source?: string }[]; total: number }>(`patients/${id}/medication-logs`, { limit: "20", skip: String(medicationLogs.length) });
+                        const data = res as { items?: typeof medicationLogs; total?: number };
+                        if (Array.isArray(data?.items)) setMedicationLogs((prev) => [...prev, ...data.items!]);
+                      } finally {
+                        setMedicationLogsLoadingMore(false);
+                      }
+                    }}
+                    disabled={medicationLogsLoadingMore}
+                    className="mt-3 w-full py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+                  >
+                    {medicationLogsLoadingMore ? "Loading…" : `Load more (${medicationLogs.length} of ${medicationLogsTotal})`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 

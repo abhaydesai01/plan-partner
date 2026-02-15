@@ -5,7 +5,7 @@ import { Router } from "express";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { AuthUser, Clinic, ClinicMember, Patient, Profile, UserRole } from "../models/index.js";
+import { AuthUser, Clinic, ClinicMember, FamilyConnection, Patient, Profile, UserRole } from "../models/index.js";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
@@ -27,11 +27,20 @@ router.post("/auth/register", async (req, res) => {
   const existing = await AuthUser.findOne({ email: (email as string).toLowerCase() }).lean();
   if (existing) return res.status(400).json({ error: "Email already registered" });
 
-  const roleChoice = role === "patient" ? "patient" : role === "clinic" ? "clinic" : "doctor";
+  const roleChoice = role === "patient" ? "patient" : role === "clinic" ? "clinic" : role === "family" ? "family" : "doctor";
   const user_id = crypto.randomUUID();
   const password_hash = await bcrypt.hash(password, 10);
 
-  if (roleChoice === "clinic") {
+  if (roleChoice === "family") {
+    await AuthUser.create({ email: (email as string).toLowerCase(), password_hash, user_id });
+    await Profile.create({ user_id, full_name: full_name || "", phone: phoneTrimmed });
+    await UserRole.create({ user_id, role: "family" });
+    // If this email was invited as family, link the connection
+    await FamilyConnection.updateMany(
+      { invite_email: (email as string).toLowerCase().trim(), status: "pending" },
+      { $set: { family_user_id: user_id, status: "active" } }
+    );
+  } else if (roleChoice === "clinic") {
     if (!clinic_name || String(clinic_name).trim() === "") {
       return res.status(400).json({ error: "Clinic name is required for clinic signup" });
     }

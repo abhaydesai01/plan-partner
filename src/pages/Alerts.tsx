@@ -72,9 +72,9 @@ const Alerts = () => {
       if (filterStatus !== "all") params.status = filterStatus;
       if (filterType !== "all") params.alert_type = filterType;
       const data = await api.get<Alert[]>("alerts", params);
-      const patients = await api.get<{ id: string; full_name: string }[]>("patients").catch(() => []);
+      const patientsRes = await api.get<{ items: { id: string; full_name: string }[] }>("patients", { limit: "500", skip: "0" }).catch(() => ({ items: [] }));
       const patientMap: Record<string, string> = {};
-      (patients || []).forEach((p) => { patientMap[p.id] = p.full_name; });
+      (patientsRes?.items ?? []).forEach((p) => { patientMap[p.id] = p.full_name; });
       setAlerts((data || []).map((a) => ({ ...a, patients: a.patient_id ? { full_name: patientMap[a.patient_id] || "Unknown" } : null })));
     } catch {
       setAlerts([]);

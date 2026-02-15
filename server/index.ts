@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import app from "./app.js";
+import { startScheduler } from "./scheduler.js";
 
 const DEFAULT_MONGODB_URI = "mongodb://localhost:27017/plan-partner";
 const MONGODB_URI = process.env.MONGODB_URI || DEFAULT_MONGODB_URI;
@@ -18,8 +19,12 @@ async function start() {
     process.exit(1);
   }
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log("MongoDB connected");
+    await mongoose.connect(MONGODB_URI, {
+      maxPoolSize: 100,
+      minPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+    });
+    if (!isProduction) console.log("MongoDB connected");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("MongoDB connection failed:", msg);
@@ -33,7 +38,10 @@ async function start() {
   }
   // Bind to 0.0.0.0 so the server is reachable on all interfaces (public port)
   const host = "0.0.0.0";
-  const server = app.listen(PORT, host, () => console.log(`Server listening on http://${host}:${PORT}`));
+  const server = app.listen(PORT, host, () => {
+    if (!isProduction) console.log(`Server listening on http://${host}:${PORT}`);
+    startScheduler();
+  });
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
       console.error(`Port ${PORT} is already in use. Stop the other process or set PORT to a different value (e.g. PORT=3002).`);

@@ -12,7 +12,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"doctor" | "patient" | "clinic">("doctor");
+  const [selectedRole, setSelectedRole] = useState<"doctor" | "patient" | "clinic" | "family">("doctor");
   const [clinicName, setClinicName] = useState("");
   const [clinicAddress, setClinicAddress] = useState("");
   const [clinicPhone, setClinicPhone] = useState("");
@@ -21,7 +21,7 @@ const Auth = () => {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
   if (user && role) {
-    const to = role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : "/dashboard";
+    const to = role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : role === "family" ? "/family" : "/dashboard";
     return <Navigate to={to} replace />;
   }
   if (user && !role) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
@@ -84,7 +84,7 @@ const Auth = () => {
             <>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">I am signing up as</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedRole("doctor")}
@@ -95,6 +95,17 @@ const Auth = () => {
                     }`}
                   >
                     Doctor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole("patient")}
+                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      selectedRole === "patient"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    Patient
                   </button>
                   <button
                     type="button"
@@ -109,16 +120,19 @@ const Auth = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSelectedRole("patient")}
+                    onClick={() => setSelectedRole("family")}
                     className={`py-2.5 rounded-lg text-sm font-medium transition-colors border ${
-                      selectedRole === "patient"
+                      selectedRole === "family"
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-background text-muted-foreground border-border hover:bg-muted"
                     }`}
                   >
-                    Patient
+                    Family
                   </button>
                 </div>
+                {selectedRole === "family" && (
+                  <p className="text-xs text-muted-foreground">View a loved one&apos;s daily health logs (they must invite you first).</p>
+                )}
               </div>
               {selectedRole === "clinic" ? (
                 <>

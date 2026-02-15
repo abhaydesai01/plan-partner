@@ -18,7 +18,11 @@ const ClinicPatients = () => {
 
   useEffect(() => {
     if (!clinic?.id) return;
-    api.get<Patient[]>("patients", { clinic_id: clinic.id }).then((list) => setPatients(Array.isArray(list) ? list : [])).catch(() => setPatients([])).finally(() => setLoading(false));
+    api
+    .get<{ items: Patient[]; total: number }>("patients", { clinic_id: clinic.id, limit: "200", skip: "0" })
+    .then((r) => setPatients(r?.items ?? []))
+    .catch(() => setPatients([]))
+    .finally(() => setLoading(false));
   }, [clinic?.id]);
 
   if (!clinic) {

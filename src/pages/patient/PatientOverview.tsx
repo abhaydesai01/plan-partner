@@ -5,6 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import { api, getStoredToken } from "@/lib/api";
 import { Activity, FileText, CalendarDays, TrendingUp, Heart, Search, CheckCircle, Clock, Send, Edit3, Save, X, UtensilsCrossed, ImagePlus, Sparkles, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { useRewards, HealthScore, TodayProgress } from "@/components/RewardsSection";
+import { useGamification, GamificationBlock } from "@/components/GamificationSection";
+import { showPointsEarned } from "@/lib/rewards";
 
 const MEAL_TYPES = [
   { value: "breakfast", label: "Breakfast" },
@@ -49,6 +52,8 @@ const PatientOverview = () => {
   const foodLogs = data?.foodLogs ?? [];
   const linkRequest = data?.linkRequest ?? null;
   const loading = isLoading;
+  const { data: rewards } = useRewards(!!user && !!patientFromSession);
+  const { data: gamification } = useGamification(!!user && !!patientFromSession);
 
   useEffect(() => {
     setPatientData(patientFromSession ?? null);
@@ -146,15 +151,18 @@ const PatientOverview = () => {
         const { path } = await res.json();
         imagePath = path;
       }
-      await api.post("me/food_logs", {
+      const resMeal = await api.post("me/food_logs", {
         meal_type: mealType,
         notes: mealNotes.trim() || undefined,
         food_items: mealFoodItems.length > 0 ? mealFoodItems : undefined,
         image_path: imagePath,
-      });
+      }) as { points_earned?: number };
       toast({ title: "Meal logged", description: "Your meal has been saved." });
+      showPointsEarned(resMeal, toast);
       resetMealForm();
       queryClient.invalidateQueries({ queryKey: ["me", "overview"] });
+      queryClient.invalidateQueries({ queryKey: ["me", "rewards"] });
+      queryClient.invalidateQueries({ queryKey: ["me", "gamification"] });
     } catch (err) {
       toast({ title: "Failed to log meal", description: (err as Error).message, variant: "destructive" });
     } finally {
@@ -251,40 +259,54 @@ const PatientOverview = () => {
     : null;
 
   return (
-    <div className="w-full max-w-full min-w-0 space-y-6">
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden space-y-5 sm:space-y-6">
       <div className="min-w-0">
         <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Hello, {patientData.full_name}</h1>
         <p className="text-muted-foreground text-sm mt-1">Your health overview</p>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="glass-card rounded-xl p-4 text-center">
-          <Activity className="w-5 h-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-heading font-bold text-foreground">{enrollments.length}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="glass-card rounded-xl p-3 sm:p-4 text-center min-w-0">
+          <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-primary mx-auto mb-1 flex-shrink-0" />
+          <p className="text-lg sm:text-2xl font-heading font-bold text-foreground tabular-nums">{enrollments.length}</p>
           <p className="text-xs text-muted-foreground">Programs</p>
         </div>
-        <div className="glass-card rounded-xl p-4 text-center">
-          <TrendingUp className="w-5 h-5 text-whatsapp mx-auto mb-1" />
-          <p className="text-2xl font-heading font-bold text-foreground">{avgAdherence !== null ? `${avgAdherence}%` : "—"}</p>
+        <div className="glass-card rounded-xl p-3 sm:p-4 text-center min-w-0">
+          <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-whatsapp mx-auto mb-1 flex-shrink-0" />
+          <p className="text-lg sm:text-2xl font-heading font-bold text-foreground tabular-nums">{avgAdherence !== null ? `${avgAdherence}%` : "—"}</p>
           <p className="text-xs text-muted-foreground">Adherence</p>
         </div>
-        <div className="glass-card rounded-xl p-4 text-center">
-          <CalendarDays className="w-5 h-5 text-accent mx-auto mb-1" />
-          <p className="text-2xl font-heading font-bold text-foreground">{upcomingAppts.length}</p>
+        <div className="glass-card rounded-xl p-3 sm:p-4 text-center min-w-0">
+          <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-accent mx-auto mb-1 flex-shrink-0" />
+          <p className="text-lg sm:text-2xl font-heading font-bold text-foreground tabular-nums">{upcomingAppts.length}</p>
           <p className="text-xs text-muted-foreground">Upcoming Appts</p>
         </div>
-        <div className="glass-card rounded-xl p-4 text-center">
-          <FileText className="w-5 h-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-heading font-bold text-foreground">{recentVitals.length}</p>
+        <div className="glass-card rounded-xl p-3 sm:p-4 text-center min-w-0">
+          <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-primary mx-auto mb-1 flex-shrink-0" />
+          <p className="text-lg sm:text-2xl font-heading font-bold text-foreground tabular-nums">{recentVitals.length}</p>
           <p className="text-xs text-muted-foreground">Recent Vitals</p>
         </div>
       </div>
 
+      {/* Health score & today's progress */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 min-w-0">
+        <HealthScore data={rewards} />
+        <TodayProgress data={rewards} />
+      </div>
+
+      {/* Gamification: streak, level, badges, weekly challenges */}
+      {gamification != null && (
+        <div className="min-w-0">
+          <h2 className="font-heading font-semibold text-foreground mb-3">Your progress</h2>
+          <GamificationBlock data={gamification} />
+        </div>
+      )}
+
       {/* Log meal from dashboard */}
-      <div className="glass-card rounded-xl p-5 space-y-4">
+      <div className="glass-card rounded-xl p-4 sm:p-5 space-y-4 min-w-0 overflow-hidden">
         <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">
-          <UtensilsCrossed className="w-5 h-5 text-primary" />
+          <UtensilsCrossed className="w-5 h-5 text-primary flex-shrink-0" />
           Log meal
         </h3>
         <p className="text-sm text-muted-foreground">Upload a photo of your meal for AI analysis, or add details manually.</p>
@@ -298,7 +320,7 @@ const PatientOverview = () => {
                 key={t.value}
                 type="button"
                 onClick={() => setMealType(t.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium transition-colors touch-manipulation ${
                   mealType === t.value
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted/60 text-muted-foreground hover:bg-muted"
@@ -371,12 +393,12 @@ const PatientOverview = () => {
           </div>
         )}
 
-        <div className="flex gap-2 pt-1">
+        <div className="flex flex-wrap gap-2 pt-1">
           <button
             type="button"
             onClick={handleLogMeal}
             disabled={savingMeal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:opacity-50 touch-manipulation"
           >
             {savingMeal ? <Loader2 className="w-4 h-4 animate-spin" /> : <UtensilsCrossed className="w-4 h-4" />}
             {savingMeal ? "Saving..." : "Log meal"}
@@ -384,7 +406,7 @@ const PatientOverview = () => {
           <button
             type="button"
             onClick={resetMealForm}
-            className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted"
+            className="min-h-[44px] px-4 py-2.5 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted touch-manipulation"
           >
             Clear
           </button>
@@ -520,10 +542,11 @@ const PatientOverview = () => {
             </div>
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">Medications</p>
+              <p className="text-xs text-muted-foreground mb-1.5">Your doctor sees this list. Log when you take them in AI Assistant → Quick Log → Medication.</p>
               <div className="flex flex-wrap gap-1.5">
                 {patientData.medications?.length ? patientData.medications.map((m: string) => (
                   <span key={m} className="px-2.5 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium">{m}</span>
-                )) : <span className="text-sm text-muted-foreground">None recorded</span>}
+                )) : <span className="text-sm text-muted-foreground">None recorded — click Edit to add</span>}
               </div>
             </div>
             <div>

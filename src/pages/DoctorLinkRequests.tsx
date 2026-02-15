@@ -19,7 +19,7 @@ const DoctorLinkRequests = () => {
     try {
       const [reqList, patList] = await Promise.all([
         api.get<any[]>("link_requests").catch(() => []),
-        api.get<any[]>("patients").catch(() => []),
+        api.get<{ items: any[] }>("patients", { limit: "200", skip: "0" }).then((r) => r.items ?? []).catch(() => []),
       ]);
       setRequests(Array.isArray(reqList) ? reqList : []);
       setPatients(Array.isArray(patList) ? patList : []);
