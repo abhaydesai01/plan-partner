@@ -46,6 +46,7 @@ const PatientVault = lazy(() => import("./pages/patient/PatientVault"));
 const PatientFoodAnalysis = lazy(() => import("./pages/patient/PatientFoodAnalysis"));
 const PatientConnectDoctor = lazy(() => import("./pages/patient/PatientConnectDoctor"));
 const PatientFeedback = lazy(() => import("./pages/patient/PatientFeedback"));
+const PatientMedications = lazy(() => import("./pages/patient/PatientMedications"));
 const ClinicDashboard = lazy(() => import("./pages/clinic/ClinicDashboard"));
 const ClinicTeam = lazy(() => import("./pages/clinic/ClinicTeam"));
 const ClinicPatients = lazy(() => import("./pages/clinic/ClinicPatients"));
@@ -132,6 +133,7 @@ const App = () => (
             <Route path="/patient/overview" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/accountability" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientAccountability /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/connect-doctor" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientConnectDoctor /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/medications" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientMedications /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/vitals" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVitals /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/lab-results" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientLabResults /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/documents" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientDocuments /></PatientLayout></ProtectedRoute>} />

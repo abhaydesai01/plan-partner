@@ -532,6 +532,30 @@ const MilestoneRewardSchema = new mongoose.Schema(
 MilestoneRewardSchema.index({ patient_id: 1, milestone_key: 1 }, { unique: true });
 MilestoneRewardSchema.index({ patient_id: 1, unlocked_at: -1 });
 
+/** Patient medications: persistent list of medications extracted from prescriptions or added manually. */
+const MedicationSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    doctor_id: { type: String },
+    medicine: { type: String, required: true }, // Full name (e.g. "Amlodipine 5mg")
+    dosage: String, // e.g. "1 tablet"
+    frequency: String, // e.g. "Once a day", "Twice daily"
+    duration: String, // e.g. "30 days"
+    instructions: String, // e.g. "After meals"
+    timing_display: String, // e.g. "Morning", "Night"
+    suggested_time: String, // e.g. "08:00"
+    food_relation: String, // e.g. "after food"
+    timings: [String], // e.g. ["08:00", "20:00"]
+    active: { type: Boolean, default: true },
+    source: { type: String, default: "manual" }, // manual | prescription
+    prescription_document_id: String, // links to PatientDocument if from prescription
+    added_at: { type: Date, default: Date.now },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+MedicationSchema.index({ patient_id: 1, active: 1 });
+MedicationSchema.index({ patient_id: 1, added_at: -1 });
+
 export const AuthUser = mongoose.model("AuthUser", AuthUserSchema);
 export const Alert = mongoose.model("Alert", AlertSchema);
 export const AppointmentCheckin = mongoose.model("AppointmentCheckin", AppointmentCheckinSchema);
@@ -566,3 +590,4 @@ export const DoctorMessage = mongoose.model("DoctorMessage", DoctorMessageSchema
 export const UserBadge = mongoose.model("UserBadge", UserBadgeSchema);
 export const UserWeeklyChallenge = mongoose.model("UserWeeklyChallenge", UserWeeklyChallengeSchema);
 export const MilestoneReward = mongoose.model("MilestoneReward", MilestoneRewardSchema);
+export const Medication = mongoose.model("Medication", MedicationSchema);

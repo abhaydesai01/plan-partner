@@ -17,6 +17,7 @@ import {
   Link2,
   Star,
   Users,
+  Pill,
 } from "lucide-react";
 import { PatientPwaLink } from "@/components/PatientPwaLink";
 
@@ -25,6 +26,7 @@ const navItems = [
   { to: "/patient/overview", icon: Home, label: "Overview" },
   { to: "/patient/accountability", icon: Users, label: "Family & visibility" },
   { to: "/patient/connect-doctor", icon: Link2, label: "Connect to doctor" },
+  { to: "/patient/medications", icon: Pill, label: "Medications" },
   { to: "/patient/vitals", icon: Activity, label: "Vitals" },
   { to: "/patient/lab-results", icon: FlaskConical, label: "Lab Results" },
   { to: "/patient/documents", icon: Upload, label: "Documents" },

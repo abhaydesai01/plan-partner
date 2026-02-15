@@ -43,6 +43,7 @@ import {
   UserBadge,
   UserWeeklyChallenge,
   MilestoneReward,
+  Medication,
 } from "../models/index.js";
 
 const router = Router();
@@ -1112,6 +1113,153 @@ router.post("/me/medication-log/bulk", requireAuth, async (req, res) => {
   res.status(201).json({ created: created.length, ids: created.map((d: any) => d._id?.toString()), points_earned, ...rewards });
 });
 
+// ---------- Medications (persistent list) ----------
+router.get("/me/medications", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const active = req.query.active !== "false";
+  const list = await Medication.find({ ...filter, ...(active ? { active: true } : {}) }).sort({ added_at: -1 }).lean();
+  res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
+});
+
+router.post("/me/medications", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const { medicine, dosage, frequency, duration, instructions, timing_display, suggested_time, food_relation, timings } = req.body;
+  if (!medicine || !String(medicine).trim()) return res.status(400).json({ error: "medicine name required" });
+  const doc = await Medication.create({
+    patient_id: link.patient_id,
+    doctor_id: link.doctor_id,
+    medicine: String(medicine).trim(),
+    dosage: dosage || undefined,
+    frequency: frequency || undefined,
+    duration: duration || undefined,
+    instructions: instructions || undefined,
+    timing_display: timing_display || undefined,
+    suggested_time: suggested_time || undefined,
+    food_relation: food_relation || undefined,
+    timings: Array.isArray(timings) ? timings : [],
+    source: "manual",
+  });
+  res.status(201).json(doc.toJSON());
+});
+
+router.patch("/me/medications/:id", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const med = await Medication.findOne({ _id: req.params.id, ...filter });
+  if (!med) return res.status(404).json({ error: "Medication not found" });
+  const allowed = ["medicine", "dosage", "frequency", "duration", "instructions", "timing_display", "suggested_time", "food_relation", "timings", "active"];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) (med as any)[key] = req.body[key];
+  }
+  await med.save();
+  res.json(med.toJSON());
+});
+
+router.delete("/me/medications/:id", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const deleted = await Medication.findOneAndDelete({ _id: req.params.id, ...filter });
+  if (!deleted) return res.status(404).json({ error: "Medication not found" });
+  res.json({ success: true });
+});
+
+// Upload prescription → AI parse → save medications + document
+router.post("/me/medications/upload-prescription", requireAuth, upload.single("file"), async (req, res) => {
+  if (!GEMINI_API_KEY) return res.status(503).json({ error: "AI not configured (GEMINI_API_KEY)" });
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const file = (req as any).file;
+  if (!file) return res.status(400).json({ error: "file required" });
+  const mime = (file.mimetype || "").toLowerCase();
+  const isPdf = mime === "application/pdf";
+  const isImage = mime.startsWith("image/");
+  if (!isImage && !isPdf) return res.status(400).json({ error: "Only image (JPEG, PNG, WebP) or PDF supported" });
+
+  try {
+    const buf = fs.readFileSync(path.join(UPLOAD_DIR, file.filename));
+    const analysis = isPdf
+      ? await analyzeDocumentWithGemini(GEMINI_API_KEY, { type: "pdf", buffer: buf, fileName: file.originalname || file.filename })
+      : await analyzeDocumentWithGemini(GEMINI_API_KEY, { type: "image", base64: buf.toString("base64"), mimeType: mime });
+
+    // Save as PatientDocument (shows in Documents tab)
+    const extractedData: Record<string, unknown> = { key_points: analysis.key_points };
+    if (analysis.chart_data) extractedData.chart_data = analysis.chart_data;
+    if (analysis.prescription_summary) extractedData.prescription_summary = analysis.prescription_summary;
+    if (analysis.medications?.length) extractedData.medications = analysis.medications;
+
+    const patDoc = await PatientDocument.create({
+      patient_id: link.patient_id,
+      doctor_id: link.doctor_id,
+      uploaded_by: (req as AuthRequest).user.id,
+      file_name: file.originalname || file.filename,
+      file_path: file.filename,
+      file_size_bytes: file.size,
+      file_type: mime,
+      category: "prescription",
+      notes: req.body?.notes || null,
+      ai_summary: analysis.summary || null,
+      layman_summary: analysis.layman_summary || null,
+      extracted_data: extractedData,
+      analyzed_at: new Date(),
+    });
+
+    // Save extracted medications
+    const savedMeds: any[] = [];
+    if (analysis.medications && analysis.medications.length > 0) {
+      for (const m of analysis.medications) {
+        const med = await Medication.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          medicine: m.medicine || "Unknown",
+          dosage: m.dosage || undefined,
+          frequency: m.frequency || undefined,
+          duration: m.duration || undefined,
+          instructions: m.instructions || undefined,
+          timing_display: m.timing_display || undefined,
+          suggested_time: m.suggested_time || undefined,
+          food_relation: m.food_relation || undefined,
+          timings: Array.isArray(m.timings) ? m.timings : [],
+          source: "prescription",
+          prescription_document_id: patDoc._id?.toString(),
+        });
+        savedMeds.push(med.toJSON());
+      }
+    }
+
+    res.status(201).json({
+      document: patDoc.toJSON(),
+      medications: savedMeds,
+      prescription_summary: analysis.prescription_summary || null,
+      medications_count: savedMeds.length,
+    });
+  } catch (e) {
+    // If AI fails, still save the document
+    const patDoc = await PatientDocument.create({
+      patient_id: link.patient_id,
+      doctor_id: link.doctor_id,
+      uploaded_by: (req as AuthRequest).user.id,
+      file_name: file.originalname || file.filename,
+      file_path: file.filename,
+      file_size_bytes: file.size,
+      file_type: mime,
+      category: "prescription",
+      notes: req.body?.notes || null,
+    });
+    res.status(201).json({
+      document: patDoc.toJSON(),
+      medications: [],
+      prescription_summary: null,
+      medications_count: 0,
+      ai_error: "Could not analyze prescription. You can add medications manually.",
+    });
+  }
+});
+
 // ---------- Push subscriptions (Solution 6) ----------
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
@@ -1509,6 +1657,34 @@ router.post("/internal/send-routine-pushes", async (req, res) => {
           { TTL: 60 * 15 }
         );
         sent++;
+      }
+      // Medication reminders based on patient's active medications
+      const patients = await Patient.find({ patient_user_id: sub.user_id }).select("_id").lean();
+      const patIds = (patients as { _id: unknown }[]).map((p) => p._id?.toString()).filter(Boolean) as string[];
+      if (patIds.length > 0) {
+        const medFilter = patIds.length > 1 ? { patient_id: { $in: patIds } } : { patient_id: patIds[0] };
+        const activeMeds = await Medication.find({ ...medFilter, active: true }).select("medicine timing_display timings suggested_time").lean();
+        const hourStr = String(hourUtc).padStart(2, "0");
+        const medsToRemind = (activeMeds as any[]).filter((m) => {
+          if (m.timings?.length > 0) return m.timings.some((t: string) => t.startsWith(hourStr));
+          if (m.suggested_time) return m.suggested_time.startsWith(hourStr);
+          return false;
+        });
+        if (medsToRemind.length > 0) {
+          const names = medsToRemind.map((m: any) => m.medicine).slice(0, 3).join(", ");
+          const more = medsToRemind.length > 3 ? ` +${medsToRemind.length - 3} more` : "";
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: sub.keys },
+            JSON.stringify({
+              title: "Time for your medication",
+              body: `Take: ${names}${more}`,
+              tag: "routine-medication",
+              data: { type: "medication" },
+            }),
+            { TTL: 60 * 30 }
+          );
+          sent++;
+        }
       }
     } catch {
       // Skip failed subscription (expired/invalid)
