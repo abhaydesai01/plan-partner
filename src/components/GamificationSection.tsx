@@ -269,15 +269,34 @@ export function MilestoneRewardsList({ data }: { data: GamificationData | undefi
 /** Full gamification block for dashboard: streak, level, badges, weekly challenges, milestones */
 export function GamificationBlock({ data }: { data: GamificationData | undefined }) {
   if (data == null) return null;
+  const hasStreak = data.streak_days > 0;
+  const hasBadges = data.badges && data.badges.length > 0;
+  const hasChallenges = data.weekly_challenges && data.weekly_challenges.length > 0;
+  const hasMilestones = data.milestones && data.milestones.length > 0;
   return (
     <div className="space-y-4 min-w-0">
+      {/* Streak & Level */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <StreakBadge data={data} />
+        {hasStreak ? <StreakBadge data={data} /> : (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 sm:p-4 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-2 mb-1">
+              <Flame className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <span className="text-sm font-medium text-foreground">Streak</span>
+            </div>
+            <p className="text-sm text-muted-foreground">Log daily to start a streak 🔥</p>
+          </div>
+        )}
         <LevelBadge data={data} />
       </div>
-      <BadgesList data={data} />
-      <WeeklyChallengesList data={data} />
-      <MilestoneRewardsList data={data} />
+      {/* Milestones & Weekly challenges — side by side */}
+      {(hasMilestones || hasChallenges) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          {hasMilestones && <MilestoneRewardsList data={data} />}
+          {hasChallenges && <WeeklyChallengesList data={data} />}
+        </div>
+      )}
+      {/* Badges */}
+      {hasBadges && <BadgesList data={data} />}
     </div>
   );
 }
