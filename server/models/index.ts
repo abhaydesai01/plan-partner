@@ -556,6 +556,34 @@ const MedicationSchema = new mongoose.Schema(
 MedicationSchema.index({ patient_id: 1, active: 1 });
 MedicationSchema.index({ patient_id: 1, added_at: -1 });
 
+/** Voice conversations: AI doctor consultation transcripts + auto-extracted health data. */
+const VoiceConversationSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    doctor_persona: { type: String, required: true }, // "dr_priya" | "dr_abhay"
+    messages: [
+      {
+        role: { type: String, required: true }, // "user" | "assistant"
+        content: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
+    extracted_actions: [
+      {
+        type: String, // "blood_pressure" | "blood_sugar" | "food" | "medication" | "symptom"
+        value: String,
+        details: mongoose.Schema.Types.Mixed,
+        logged: { type: Boolean, default: false },
+        logged_at: Date,
+      },
+    ],
+    session_date: { type: Date, default: Date.now },
+    duration_seconds: Number,
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+VoiceConversationSchema.index({ patient_id: 1, session_date: -1 });
+
 /** Persisted gamification state: streak, points, level, etc. Updated on every log action. */
 const PatientGamificationSchema = new mongoose.Schema(
   {
@@ -623,3 +651,4 @@ export const UserWeeklyChallenge = mongoose.model("UserWeeklyChallenge", UserWee
 export const MilestoneReward = mongoose.model("MilestoneReward", MilestoneRewardSchema);
 export const Medication = mongoose.model("Medication", MedicationSchema);
 export const PatientGamification = mongoose.model("PatientGamification", PatientGamificationSchema);
+export const VoiceConversation = mongoose.model("VoiceConversation", VoiceConversationSchema);

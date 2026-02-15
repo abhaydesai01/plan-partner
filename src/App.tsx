@@ -47,6 +47,7 @@ const PatientFoodAnalysis = lazy(() => import("./pages/patient/PatientFoodAnalys
 const PatientConnectDoctor = lazy(() => import("./pages/patient/PatientConnectDoctor"));
 const PatientFeedback = lazy(() => import("./pages/patient/PatientFeedback"));
 const PatientMedications = lazy(() => import("./pages/patient/PatientMedications"));
+const PatientAIDoctor = lazy(() => import("./pages/patient/PatientAIDoctor"));
 const ClinicDashboard = lazy(() => import("./pages/clinic/ClinicDashboard"));
 const ClinicTeam = lazy(() => import("./pages/clinic/ClinicTeam"));
 const ClinicPatients = lazy(() => import("./pages/clinic/ClinicPatients"));
@@ -130,6 +131,7 @@ const App = () => (
                 </PatientLayoutWithChat>
               </ProtectedRoute>
             } />
+            <Route path="/patient/ai-doctor" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientAIDoctor /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/overview" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientOverview /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/accountability" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientAccountability /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/connect-doctor" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientConnectDoctor /></PatientLayout></ProtectedRoute>} />

@@ -4,13 +4,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { api, getStoredToken } from "@/lib/api";
 import { usePushSubscribe } from "@/hooks/usePushSubscribe";
-import { Send, Heart, Shield, Menu, Plus, Activity, Droplets, UtensilsCrossed, Pill, Bell, ImagePlus, ChevronLeft, Trophy } from "lucide-react";
+import { Send, Heart, Shield, Menu, Plus, Activity, Droplets, UtensilsCrossed, Pill, Bell, ImagePlus, ChevronLeft, Trophy, Mic, MicOff, Volume2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import { QuickLogCards, getGreeting, BP_PRESETS, SUGAR_PRESETS, MEAL_OPTIONS, type QuickLogLast } from "@/components/QuickLogSection";
 import { useRewards, TodayProgress } from "@/components/RewardsSection";
 import { useGamification, StreakBadge, LevelBadge } from "@/components/GamificationSection";
 import { showPointsEarned } from "@/lib/rewards";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { useVoiceOutput } from "@/hooks/useVoiceOutput";
 import {
   Dialog,
   DialogContent,
@@ -107,6 +109,16 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
     { id: "evening", label: "Evening" },
     { id: "night", label: "Night" },
   ] as const;
+
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceInput = useVoiceInput({
+    onFinalTranscript: (text) => {
+      if (voiceMode && text.trim()) {
+        send(text);
+      }
+    },
+  });
+  const voiceOutput = useVoiceOutput({ voiceGender: "female" });
 
   const { subscribe, subscribed, loading: pushLoading, error: pushError, checkSubscribed } = usePushSubscribe();
 
@@ -254,6 +266,10 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
             if (content) upsertAssistant(content);
           } catch { /* ignore */ }
         }
+      }
+      // Speak the full response in voice mode
+      if (voiceMode && assistantSoFar.trim()) {
+        voiceOutput.speak(assistantSoFar.trim());
       }
     } catch (e) {
       console.error("Chat error:", e);
@@ -593,14 +609,29 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                 <h2 className="text-xl sm:text-2xl md:text-3xl font-heading font-semibold text-foreground text-center w-full">
                   How are you feeling today{patientName ? `, ${patientName.split(" ")[0]}` : ""}?
                 </h2>
-                {/* Single large input + send */}
+                {/* Voice mode indicator */}
+                {voiceInput.isListening && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-red-500 animate-pulse">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                    Listening... {voiceInput.interimTranscript && <span className="text-muted-foreground italic truncate max-w-[200px]">{voiceInput.interimTranscript}</span>}
+                  </div>
+                )}
+                {voiceOutput.isSpeaking && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-primary">
+                    <Volume2 className="w-4 h-4 animate-pulse" />
+                    Speaking...
+                  </div>
+                )}
+                {/* Single large input + send + mic */}
                 <div className="relative rounded-2xl border border-border bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/50 transition-all">
                   <textarea
                     ref={textareaRef}
-                    value={input}
+                    value={voiceInput.isListening ? (voiceInput.transcript || voiceInput.interimTranscript || "") : input}
                     onChange={(e) => {
-                      setInput(e.target.value);
-                      autoResize();
+                      if (!voiceInput.isListening) {
+                        setInput(e.target.value);
+                        autoResize();
+                      }
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -608,17 +639,41 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                         send();
                       }
                     }}
-                    placeholder="Ask anything about your symptoms, treatment or health"
+                    placeholder={voiceInput.isListening ? "Listening..." : "Ask anything about your symptoms, treatment or health"}
                     rows={1}
-                    className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-base text-foreground placeholder:text-muted-foreground/60 focus:outline-none min-h-[56px]"
+                    className="w-full resize-none bg-transparent pl-4 pr-24 py-4 text-base text-foreground placeholder:text-muted-foreground/60 focus:outline-none min-h-[56px]"
                   />
-                  <button
-                    onClick={() => send()}
-                    disabled={!input.trim() || isLoading}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 min-h-[40px] rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity touch-manipulation"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {voiceInput.supported && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (voiceInput.isListening) {
+                            voiceInput.stopListening();
+                          } else {
+                            voiceOutput.stop();
+                            setVoiceMode(true);
+                            voiceInput.startListening();
+                          }
+                        }}
+                        className={`w-10 h-10 min-h-[40px] rounded-xl flex items-center justify-center transition-all touch-manipulation ${
+                          voiceInput.isListening
+                            ? "bg-red-500 text-white animate-pulse"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                        aria-label={voiceInput.isListening ? "Stop listening" : "Voice input"}
+                      >
+                        {voiceInput.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => send()}
+                      disabled={!input.trim() || isLoading}
+                      className="w-10 h-10 min-h-[40px] rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity touch-manipulation"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Row 1: My medications, Next appointment, Labs, Vitals, Conditions, + Log a vital (green) */}
@@ -724,13 +779,21 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
 
             {/* Input at bottom when chatting */}
             <div className="flex-shrink-0 pt-2 border-t border-border/30 pwa-input-bottom pwa-safe-x px-4 sm:px-4">
+              {(voiceInput.isListening || voiceOutput.isSpeaking) && (
+                <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-xs pb-1">
+                  {voiceInput.isListening && <span className="text-red-500 animate-pulse flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Listening...</span>}
+                  {voiceOutput.isSpeaking && <span className="text-primary flex items-center gap-1"><Volume2 className="w-3 h-3 animate-pulse" /> Speaking...</span>}
+                </div>
+              )}
               <div className="max-w-3xl mx-auto relative border border-border rounded-2xl bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
                 <textarea
                   ref={textareaRef}
-                  value={input}
+                  value={voiceInput.isListening ? (voiceInput.transcript || voiceInput.interimTranscript || "") : input}
                   onChange={(e) => {
-                    setInput(e.target.value);
-                    autoResize();
+                    if (!voiceInput.isListening) {
+                      setInput(e.target.value);
+                      autoResize();
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -738,17 +801,41 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                       send();
                     }
                   }}
-                  placeholder="Ask anything about your symptoms, treatment or health"
+                  placeholder={voiceInput.isListening ? "Listening..." : "Ask anything about your symptoms, treatment or health"}
                   rows={1}
-                  className="w-full resize-none bg-transparent pl-4 pr-14 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+                  className="w-full resize-none bg-transparent pl-4 pr-24 py-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
                 />
-                <button
-                  onClick={() => send()}
-                  disabled={!input.trim() || isLoading}
-                  className="absolute right-3 bottom-3 w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all touch-manipulation"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
+                <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                  {voiceInput.supported && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (voiceInput.isListening) {
+                          voiceInput.stopListening();
+                        } else {
+                          voiceOutput.stop();
+                          setVoiceMode(true);
+                          voiceInput.startListening();
+                        }
+                      }}
+                      className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center transition-all touch-manipulation ${
+                        voiceInput.isListening
+                          ? "bg-red-500 text-white animate-pulse"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                      aria-label={voiceInput.isListening ? "Stop listening" : "Voice input"}
+                    >
+                      {voiceInput.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => send()}
+                    disabled={!input.trim() || isLoading}
+                    className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all touch-manipulation"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </>

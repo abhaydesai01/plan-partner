@@ -18,11 +18,13 @@ import {
   Star,
   Users,
   Pill,
+  Phone,
 } from "lucide-react";
 import { PatientPwaLink } from "@/components/PatientPwaLink";
 
 const navItems = [
   { to: "/patient", icon: MessageSquare, label: "AI Assistant", exact: true },
+  { to: "/patient/ai-doctor", icon: Phone, label: "AI Doctor" },
   { to: "/patient/overview", icon: Home, label: "Overview" },
   { to: "/patient/accountability", icon: Users, label: "Family & visibility" },
   { to: "/patient/connect-doctor", icon: Link2, label: "Connect to doctor" },

@@ -45,6 +45,7 @@ import {
   MilestoneReward,
   Medication,
   PatientGamification,
+  VoiceConversation,
 } from "../models/index.js";
 
 const router = Router();
@@ -3833,6 +3834,280 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
   } finally {
     res.end();
   }
+});
+
+// ---------- Voice Doctor: AI doctor persona chat (streaming) ----------
+const DOCTOR_PERSONAS: Record<string, { name: string; style: string; gender: "female" | "male" }> = {
+  dr_priya: {
+    name: "Dr. Priya",
+    gender: "female",
+    style: "You are Dr. Priya, a warm, empathetic, and caring female doctor. You speak gently and encouragingly. You use simple language the patient can understand. You occasionally use Hindi phrases naturally (like 'theek hai', 'bahut accha') when appropriate.",
+  },
+  dr_abhay: {
+    name: "Dr. Abhay",
+    gender: "male",
+    style: "You are Dr. Abhay, a calm, thorough, and reassuring male doctor. You are methodical in your questioning and give clear, confident advice. You use simple language and occasionally use Hindi phrases naturally when appropriate.",
+  },
+};
+
+router.post("/chat/voice-doctor", requireAuth, async (req, res) => {
+  if (!GEMINI_API_KEY) return res.status(503).json({ error: "GEMINI_API_KEY not configured" });
+  const { messages, persona } = req.body;
+  const personaKey = persona && DOCTOR_PERSONAS[persona] ? persona : "dr_priya";
+  const doc = DOCTOR_PERSONAS[personaKey];
+  const userId = (req as AuthRequest).user.id;
+  const patient = await Patient.findOne({ patient_user_id: userId }).lean();
+  let contextParts = "";
+  if (patient) {
+    const pid = (patient as any)._id.toString();
+    contextParts = await buildPatientContext(pid, patient);
+  }
+  const patientName = (patient as any)?.full_name || "the patient";
+  const systemPrompt = `${doc.style}
+
+You are conducting a daily health check-in call with your patient ${patientName}. This is a voice conversation, so keep your responses conversational and concise (2-4 sentences max per turn). Do NOT use markdown, bullet points, or formatting -- speak naturally as you would on a phone call.
+
+Your goal each session:
+1. Ask how they are feeling today
+2. Ask about their blood pressure reading (if they monitor BP)
+3. Ask about their blood sugar level (if diabetic)
+4. Ask what they ate today (meals)
+5. Ask if they took their medications
+6. Ask about any symptoms, pain, or concerns
+7. Ask about sleep and exercise
+
+Do NOT ask all questions at once. Ask one topic at a time, listen to the answer, acknowledge it, then move to the next. Be natural and conversational. If the patient provides a health value, acknowledge whether it sounds normal or concerning.
+
+You are NOT making diagnoses. If something sounds concerning, advise them to visit their doctor in person.
+
+Patient health context:
+${contextParts || "No records available yet."}
+
+Start the conversation by greeting the patient warmly and asking how they are feeling today.`;
+
+  const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content || "" }],
+  }));
+  const streamRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: geminiContents,
+      }),
+    }
+  );
+  if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
+  res.setHeader("Content-Type", "text/event-stream");
+  const reader = streamRes.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+          try {
+            const data = JSON.parse(jsonStr);
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+          } catch { /* skip */ }
+        }
+      }
+    }
+    res.write("data: [DONE]\n\n");
+  } finally {
+    res.end();
+  }
+});
+
+// ---------- Voice Conversation: save transcript + auto-extract health data ----------
+router.post("/me/voice-conversation/save", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const { messages, persona, duration_seconds } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "messages array required" });
+  }
+  const personaKey = persona && DOCTOR_PERSONAS[persona] ? persona : "dr_priya";
+
+  // Save conversation
+  const conv = await VoiceConversation.create({
+    patient_id: link.patient_id,
+    doctor_persona: personaKey,
+    messages: messages.map((m: { role: string; content: string }) => ({
+      role: m.role,
+      content: m.content,
+    })),
+    duration_seconds: duration_seconds || undefined,
+  });
+
+  // Extract health actions from transcript using AI
+  let extractedActions: any[] = [];
+  if (GEMINI_API_KEY) {
+    try {
+      const transcript = messages.map((m: { role: string; content: string }) =>
+        `${m.role === "assistant" ? "Doctor" : "Patient"}: ${m.content}`
+      ).join("\n");
+
+      const extractionPrompt = `Extract health data from this doctor-patient conversation. Return ONLY valid JSON.
+
+Conversation:
+${transcript}
+
+Return this exact format:
+{
+  "actions": [
+    { "type": "blood_pressure", "value": "120/80" },
+    { "type": "blood_sugar", "value": "110" },
+    { "type": "food", "meal_type": "breakfast", "notes": "description of food" },
+    { "type": "medication", "taken": true, "medication_name": "medicine name" },
+    { "type": "symptom", "description": "symptom description" }
+  ]
+}
+
+Rules:
+- Only include data the PATIENT explicitly mentioned
+- blood_pressure value must be in format "systolic/diastolic" (e.g. "120/80")
+- blood_sugar value must be a number string (e.g. "110")
+- For food, include meal_type (breakfast/lunch/dinner/snack) and notes
+- For medication, include taken (true/false) and medication_name
+- For symptoms, include description
+- If the patient did not mention a type, do not include it
+- Return empty actions array if no health data was mentioned
+- Return ONLY the JSON, no other text`;
+
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: extractionPrompt }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+          }),
+        }
+      );
+
+      if (geminiRes.ok) {
+        const aiResult = await geminiRes.json();
+        const content = aiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        try {
+          const parsed = JSON.parse(jsonMatch[1]!.trim());
+          extractedActions = Array.isArray(parsed.actions) ? parsed.actions : [];
+        } catch { /* ignore parse errors */ }
+      }
+    } catch (e) {
+      console.error("Voice extraction error:", e);
+    }
+  }
+
+  // Auto-log extracted actions
+  const filter: Record<string, unknown> = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const logged: any[] = [];
+
+  for (const action of extractedActions) {
+    try {
+      if (action.type === "blood_pressure" && action.value) {
+        const parts = String(action.value).split("/");
+        const upper = parseFloat(parts[0]);
+        await Vital.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          vital_type: "blood_pressure",
+          value_text: action.value,
+          value_numeric: Number.isFinite(upper) ? upper : undefined,
+          unit: "mmHg",
+          source: "voice",
+        });
+        await resolveReminderEscalation(link.patient_id, "blood_pressure");
+        await updateGamificationState(link.patient_id, "blood_pressure", filter as any);
+        logged.push({ type: "blood_pressure", value: action.value });
+      } else if (action.type === "blood_sugar" && action.value) {
+        const num = parseFloat(action.value);
+        await Vital.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          vital_type: "blood_sugar",
+          value_text: action.value,
+          value_numeric: Number.isFinite(num) ? num : undefined,
+          unit: "mg/dL",
+          source: "voice",
+        });
+        await resolveReminderEscalation(link.patient_id, "blood_sugar");
+        await updateGamificationState(link.patient_id, "blood_sugar", filter as any);
+        logged.push({ type: "blood_sugar", value: action.value });
+      } else if (action.type === "food") {
+        await FoodLog.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          meal_type: action.meal_type || "other",
+          notes: action.notes || undefined,
+          source: "voice",
+        });
+        await updateGamificationState(link.patient_id, "food", filter as any);
+        logged.push({ type: "food", meal_type: action.meal_type, notes: action.notes });
+      } else if (action.type === "medication") {
+        await MedicationLog.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          taken: action.taken === true,
+          medication_name: action.medication_name || undefined,
+          source: "voice",
+        });
+        await resolveReminderEscalation(link.patient_id, "medication");
+        await updateGamificationState(link.patient_id, "medication", filter as any);
+        logged.push({ type: "medication", taken: action.taken, medication_name: action.medication_name });
+      } else if (action.type === "symptom") {
+        logged.push({ type: "symptom", description: action.description });
+      }
+    } catch (err) {
+      console.error("Auto-log error:", err);
+    }
+  }
+
+  // Update conversation with extracted actions
+  if (extractedActions.length > 0) {
+    await VoiceConversation.updateOne(
+      { _id: conv._id },
+      {
+        extracted_actions: extractedActions.map((a: any, i: number) => ({
+          type: a.type,
+          value: a.value || a.description || a.notes || "",
+          details: a,
+          logged: logged.some((l) => l.type === a.type),
+          logged_at: logged.some((l) => l.type === a.type) ? new Date() : undefined,
+        })),
+      }
+    );
+  }
+
+  res.status(201).json({
+    conversation_id: conv._id?.toString(),
+    messages_count: messages.length,
+    extracted_actions: extractedActions,
+    logged,
+    duration_seconds: duration_seconds || 0,
+  });
+});
+
+// Get voice conversation history
+router.get("/me/voice-conversations", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const filter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
+  const list = await VoiceConversation.find(filter).sort({ session_date: -1 }).limit(20).lean();
+  res.json(list.map((d: any) => ({ ...d, id: d._id?.toString(), _id: undefined, __v: undefined })));
 });
 
 router.post("/clinical-evidence", requireAuth, async (req, res) => {
