@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { usePatientRecord } from "@/hooks/usePatientRecord";
 import { api, API_BASE, getStoredToken } from "@/lib/api";
 import { format } from "date-fns";
-import { Upload, FileText, Download, Plus, X, ArrowLeft, Sparkles, BookOpen, BarChart3 } from "lucide-react";
+import { Upload, FileText, Download, Plus, X, ArrowLeft, Sparkles, BookOpen, BarChart3, Pill } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -16,6 +16,18 @@ const categoryColors: Record<string, string> = {
   insurance: "bg-muted text-muted-foreground",
 };
 
+interface ExtractedMedication {
+  medicine: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+  timing_display: string;
+  suggested_time: string;
+  food_relation: string;
+  timings: string[];
+}
+
 interface DocDetail {
   id: string;
   file_name: string;
@@ -23,7 +35,12 @@ interface DocDetail {
   created_at: string;
   ai_summary?: string | null;
   layman_summary?: string | null;
-  extracted_data?: { key_points?: string[]; chart_data?: { labels: string[]; datasets: { label: string; values: number[] }[] } } | null;
+  extracted_data?: {
+    key_points?: string[];
+    chart_data?: { labels: string[]; datasets: { label: string; values: number[] }[] };
+    prescription_summary?: string;
+    medications?: ExtractedMedication[];
+  } | null;
   analyzed_at?: string | null;
 }
 
@@ -178,6 +195,40 @@ const PatientDocuments = () => {
             </div>
           )}
 
+          {selectedDoc.extracted_data?.prescription_summary && (
+            <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-2">
+                <Pill className="w-4 h-4 text-accent" /> Prescription summary
+              </h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{selectedDoc.extracted_data.prescription_summary}</p>
+            </div>
+          )}
+
+          {selectedDoc.extracted_data?.medications?.length ? (
+            <div className="p-4 rounded-xl border border-border/50">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-3">
+                <Pill className="w-4 h-4" /> Medications
+              </h3>
+              <ul className="space-y-3">
+                {selectedDoc.extracted_data.medications.map((med, i) => (
+                  <li key={i} className="p-3 rounded-lg bg-muted/30 border border-border/50 text-sm">
+                    <p className="font-medium text-foreground">{med.medicine}</p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+                      {med.dosage && <span>Dosage: {med.dosage}</span>}
+                      {med.frequency && <span>Frequency: {med.frequency}</span>}
+                      {med.duration && <span>Duration: {med.duration}</span>}
+                      {med.timing_display && <span>When: {med.timing_display}</span>}
+                      {med.suggested_time && <span>Time: {med.suggested_time}</span>}
+                      {med.food_relation && <span>Food: {med.food_relation}</span>}
+                      {med.timings?.length ? <span>Times: {med.timings.join(", ")}</span> : null}
+                    </div>
+                    {med.instructions && <p className="mt-1 text-muted-foreground">{med.instructions}</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {selectedDoc.extracted_data?.key_points?.length ? (
             <div className="p-4 rounded-xl border border-border/50">
               <h3 className="font-semibold text-foreground mb-2">Key points</h3>
@@ -211,7 +262,7 @@ const PatientDocuments = () => {
             </div>
           )}
 
-          {!selectedDoc.ai_summary && !selectedDoc.layman_summary && !selectedDoc.extracted_data?.key_points?.length && chartData.length === 0 && (
+          {!selectedDoc.ai_summary && !selectedDoc.layman_summary && !selectedDoc.extracted_data?.prescription_summary && !selectedDoc.extracted_data?.medications?.length && !selectedDoc.extracted_data?.key_points?.length && chartData.length === 0 && (
             <p className="text-sm text-muted-foreground">No analysis for this document. You can download it above.</p>
           )}
         </div>
