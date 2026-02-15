@@ -184,4 +184,30 @@
     overflow-x: hidden;
     max-width: 100%;
   }
+  /* Full-screen voice consultation (AI Doctor): respect notch & home indicator */
+  .voice-header {
+    padding-top: max(0.75rem, var(--sat));
+    padding-left: max(1rem, var(--sal));
+    padding-right: max(1rem, var(--sar));
+  }
+  .voice-controls {
+    padding-bottom: max(1.25rem, calc(var(--sab) + 0.5rem));
+    padding-left: max(1rem, var(--sal));
+    padding-right: max(1rem, var(--sar));
+  }
+  /* Bottom sheet panel (rewards etc.) — above home indicator */
+  .bottom-sheet-safe {
+    padding-bottom: max(0.5rem, var(--sab));
+  }
+  /* Rewards FAB pair — adjust for smaller screens */
+  @media (max-width: 380px) {
+    .fab-position {
+      right: max(0.5rem, var(--sar));
+      bottom: calc(4.5rem + var(--sab));
+    }
+  }
+  /* Smooth scroll for panel animations */
+  .panel-slide {
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
+  }
 }

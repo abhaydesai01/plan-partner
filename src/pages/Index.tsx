@@ -1,41 +1,91 @@
 import { useState } from "react";
-import { MessageSquare, Calendar, Activity, Shield, BarChart3, Phone } from "lucide-react";
+import { MessageSquare, Calendar, Activity, Shield, BarChart3, Phone, Menu, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import heroImage from "@/assets/hero-illustration.png";
 import ContactDialog, { type ContactType } from "@/components/ContactDialog";
 import AIAgentsFlowSection from "@/components/landing/AIAgentsFlowSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
 import FAQSection from "@/components/landing/FAQSection";
+import ProgramPlanSection from "@/components/landing/ProgramPlanSection";
+import DataSecuritySection from "@/components/landing/DataSecuritySection";
+import BackedBySection from "@/components/landing/BackedBySection";
+import WhatsAppQRSection from "@/components/landing/WhatsAppQRSection";
+import PWAFeaturesSection from "@/components/landing/PWAFeaturesSection";
+import FeatureShowcaseSection from "@/components/landing/FeatureShowcaseSection";
 
-const Navbar = ({ onContact }: { onContact: (type: ContactType) => void }) => (
-  <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b">
-    <div className="container mx-auto flex items-center justify-between h-16 px-4">
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-          <MessageSquare className="w-4 h-4 text-primary-foreground" />
+const NAV_LINKS = [
+  { href: "#showcase", label: "Features" },
+  { href: "#program", label: "Programs" },
+  { href: "#security", label: "Trust" },
+  { href: "#backed-by", label: "About" },
+  { href: "#pricing", label: "Pricing" },
+];
+
+const Navbar = ({ onContact }: { onContact: (type: ContactType) => void }) => {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b">
+      <div className="container mx-auto flex items-center justify-between h-14 sm:h-16 px-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <MessageSquare className="w-4 h-4 text-primary-foreground" />
+          </div>
+          <span className="text-lg sm:text-xl font-heading font-bold text-foreground">Mediimate</span>
         </div>
-        <span className="text-xl font-heading font-bold text-foreground">Mediimate</span>
+        <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
+          {NAV_LINKS.map((l) => (
+            <a key={l.href} href={l.href} className="hover:text-foreground transition-colors">{l.label}</a>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link to="/auth" className="hidden sm:inline-flex text-sm font-medium text-foreground hover:text-primary transition-colors">
+            Log In
+          </Link>
+          <button onClick={() => onContact("free_trial")} className="hidden xs:inline-flex px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
+            Get Started
+          </button>
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors touch-manipulation"
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
-      <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-        <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-        <a href="#how-it-works" className="hover:text-foreground transition-colors">How It Works</a>
-        <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
-      </div>
-      <div className="flex items-center gap-3">
-        <Link to="/auth" className="hidden sm:inline-flex text-sm font-medium text-foreground hover:text-primary transition-colors">
-          Log In
-        </Link>
-        <button onClick={() => onContact("free_trial")} className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
-          Get Started
-        </button>
-      </div>
-    </div>
-  </nav>
-);
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-lg px-4 py-3 space-y-1">
+          {NAV_LINKS.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              onClick={() => setMobileOpen(false)}
+              className="block px-3 py-2.5 rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors touch-manipulation"
+            >
+              {l.label}
+            </a>
+          ))}
+          <div className="flex items-center gap-3 pt-2 border-t border-border/50 mt-2">
+            <Link to="/auth" className="flex-1 text-center px-3 py-2.5 rounded-lg text-sm font-medium text-foreground border border-border hover:bg-muted transition-colors">
+              Log In
+            </Link>
+            <button
+              onClick={() => { onContact("free_trial"); setMobileOpen(false); }}
+              className="flex-1 px-3 py-2.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            >
+              Get Started
+            </button>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+};
 
 const HeroSection = ({ onContact }: { onContact: (type: ContactType) => void }) => (
-  <section className="pt-32 pb-20 px-4 overflow-hidden">
-    <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center">
+  <section className="pt-24 sm:pt-32 pb-12 sm:pb-20 px-4 overflow-hidden">
+    <div className="container mx-auto grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
       <div className="space-y-6 animate-fade-up">
         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-whatsapp/10 text-sm font-medium text-whatsapp border border-whatsapp/20">
           <MessageSquare className="w-3.5 h-3.5" />
@@ -56,10 +106,10 @@ const HeroSection = ({ onContact }: { onContact: (type: ContactType) => void }) 
             Book a Demo
           </button>
         </div>
-        <div className="flex items-center gap-6 pt-4 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1.5"><Shield className="w-4 h-4 text-primary" /> HIPAA Ready</span>
-          <span className="flex items-center gap-1.5"><Activity className="w-4 h-4 text-primary" /> 100% Automated</span>
-          <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-primary" /> Zero Manual Work</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-6 pt-4 text-xs sm:text-sm text-muted-foreground">
+          <span className="flex items-center gap-1.5"><Shield className="w-4 h-4 text-primary flex-shrink-0" /> HIPAA Ready</span>
+          <span className="flex items-center gap-1.5"><Activity className="w-4 h-4 text-primary flex-shrink-0" /> 100% Automated</span>
+          <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-primary flex-shrink-0" /> Zero Manual Work</span>
         </div>
       </div>
       <div className="relative animate-fade-in" style={{ animationDelay: "0.3s" }}>
@@ -128,7 +178,7 @@ const features = [
 ];
 
 const FeaturesSection = () => (
-  <section id="features" className="py-24 px-4">
+  <section id="features" className="py-12 sm:py-24 px-4">
     <div className="container mx-auto">
       <div className="text-center mb-16 space-y-3">
         <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-foreground">
@@ -164,7 +214,7 @@ const steps = [
 ];
 
 const HowItWorksSection = () => (
-  <section id="how-it-works" className="py-24 px-4 bg-card">
+  <section id="how-it-works" className="py-12 sm:py-24 px-4 bg-card">
     <div className="container mx-auto">
       <div className="text-center mb-16 space-y-3">
         <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-foreground">
@@ -215,7 +265,7 @@ const pricingTiers = [
 ];
 
 const PricingSection = ({ onContact }: { onContact: (type: ContactType) => void }) => (
-  <section id="pricing" className="py-24 px-4">
+  <section id="pricing" className="py-12 sm:py-24 px-4">
     <div className="container mx-auto">
       <div className="text-center mb-16 space-y-3">
         <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-foreground">
@@ -229,9 +279,9 @@ const PricingSection = ({ onContact }: { onContact: (type: ContactType) => void 
         {pricingTiers.map((tier) => (
           <div
             key={tier.name}
-            className={`rounded-2xl p-8 flex flex-col ${
+            className={`rounded-2xl p-5 sm:p-8 flex flex-col ${
               tier.highlighted
-                ? "bg-primary text-primary-foreground shadow-2xl shadow-primary/25 scale-105"
+                ? "bg-primary text-primary-foreground shadow-2xl shadow-primary/25 md:scale-105"
                 : "glass-card"
             }`}
           >
@@ -275,9 +325,9 @@ const PricingSection = ({ onContact }: { onContact: (type: ContactType) => void 
 );
 
 const CTASection = ({ onContact }: { onContact: (type: ContactType) => void }) => (
-  <section className="py-24 px-4">
+  <section className="py-12 sm:py-24 px-4">
     <div className="container mx-auto">
-      <div className="relative rounded-3xl bg-gradient-to-br from-primary to-primary/80 p-12 md:p-20 text-center overflow-hidden">
+      <div className="relative rounded-2xl sm:rounded-3xl bg-gradient-to-br from-primary to-primary/80 p-6 sm:p-12 md:p-20 text-center overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-accent/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
         <div className="relative z-10 space-y-6 max-w-2xl mx-auto">
           <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-primary-foreground">
@@ -334,8 +384,13 @@ const Index = () => {
       <main>
         <HeroSection onContact={openContact} />
         <StatsSection />
-        <FeaturesSection />
+        <FeatureShowcaseSection />
+        <WhatsAppQRSection />
         <AIAgentsFlowSection />
+        <ProgramPlanSection />
+        <PWAFeaturesSection />
+        <DataSecuritySection />
+        <BackedBySection />
         <HowItWorksSection />
         <TestimonialsSection />
         <PricingSection onContact={openContact} />

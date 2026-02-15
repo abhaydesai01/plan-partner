@@ -37,7 +37,7 @@ const faqs = [
 ];
 
 const FAQSection = () => (
-  <section className="py-24 px-4 bg-card border-y border-border">
+  <section className="py-12 sm:py-24 px-4 bg-card border-y border-border">
     <div className="container mx-auto max-w-3xl">
       <div className="text-center mb-12 space-y-3 opacity-0 animate-fade-up" style={{ animationFillMode: "forwards" }}>
         <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-foreground">

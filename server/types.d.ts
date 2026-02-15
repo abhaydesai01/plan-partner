@@ -1,6 +1,18 @@
 /**
  * Type declarations for packages that lack or have incomplete type definitions.
  */
+declare module "helmet" {
+  import { RequestHandler } from "express";
+  function helmet(options?: Record<string, unknown>): RequestHandler;
+  export default helmet;
+}
+
+declare module "compression" {
+  import { RequestHandler } from "express";
+  function compression(options?: Record<string, unknown>): RequestHandler;
+  export default compression;
+}
+
 declare module "express-rate-limit" {
   import { RequestHandler } from "express";
   interface Options {

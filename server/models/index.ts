@@ -561,6 +561,7 @@ const VoiceConversationSchema = new mongoose.Schema(
   {
     patient_id: { type: String, required: true },
     doctor_persona: { type: String, required: true }, // "dr_priya" | "dr_abhay"
+    lang: { type: String, default: "en-IN" }, // language code used for conversation
     messages: [
       {
         role: { type: String, required: true }, // "user" | "assistant"
@@ -583,6 +584,47 @@ const VoiceConversationSchema = new mongoose.Schema(
   { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
 );
 VoiceConversationSchema.index({ patient_id: 1, session_date: -1 });
+
+/** Chat conversations — persists AI assistant chat messages so they survive page refreshes */
+const ChatConversationSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    messages: [
+      {
+        role: { type: String, required: true }, // "user" | "assistant"
+        content: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
+    last_activity: { type: Date, default: Date.now },
+    source: { type: String, default: "chat" }, // "chat" | "voice_chat"
+    extracted_logs: [
+      {
+        type: String,
+        value: String,
+        details: mongoose.Schema.Types.Mixed,
+        logged_at: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+ChatConversationSchema.index({ patient_id: 1, last_activity: -1 });
+
+/** Health notes — stores symptoms, observations, and other free-text health data */
+const HealthNoteSchema = new mongoose.Schema(
+  {
+    patient_id: { type: String, required: true },
+    doctor_id: String,
+    note_type: { type: String, required: true }, // "symptom" | "observation" | "lifestyle"
+    description: { type: String, required: true },
+    source: { type: String, default: "voice" }, // "voice" | "chat" | "manual"
+    severity: String, // "mild" | "moderate" | "severe"
+    logged_at: { type: Date, default: Date.now },
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+HealthNoteSchema.index({ patient_id: 1, logged_at: -1 });
 
 /** Persisted gamification state: streak, points, level, etc. Updated on every log action. */
 const PatientGamificationSchema = new mongoose.Schema(
@@ -652,3 +694,5 @@ export const MilestoneReward = mongoose.model("MilestoneReward", MilestoneReward
 export const Medication = mongoose.model("Medication", MedicationSchema);
 export const PatientGamification = mongoose.model("PatientGamification", PatientGamificationSchema);
 export const VoiceConversation = mongoose.model("VoiceConversation", VoiceConversationSchema);
+export const ChatConversation = mongoose.model("ChatConversation", ChatConversationSchema);
+export const HealthNote = mongoose.model("HealthNote", HealthNoteSchema);

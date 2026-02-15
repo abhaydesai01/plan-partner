@@ -4,12 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { api, getStoredToken } from "@/lib/api";
 import { usePushSubscribe } from "@/hooks/usePushSubscribe";
-import { Send, Heart, Shield, Menu, Plus, Activity, Droplets, UtensilsCrossed, Pill, Bell, ImagePlus, ChevronLeft, Trophy, Mic, MicOff, Volume2 } from "lucide-react";
+import { Send, Heart, Shield, Menu, Plus, Activity, Droplets, UtensilsCrossed, Pill, Bell, ImagePlus, ChevronLeft, Trophy, Mic, MicOff, Volume2, Gift, X, Target, Award, Flame, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import { QuickLogCards, getGreeting, BP_PRESETS, SUGAR_PRESETS, MEAL_OPTIONS, type QuickLogLast } from "@/components/QuickLogSection";
 import { useRewards, TodayProgress } from "@/components/RewardsSection";
-import { useGamification, StreakBadge, LevelBadge } from "@/components/GamificationSection";
+import { useGamification, StreakBadge, LevelBadge, MilestoneRewardsList, WeeklyChallengesList, BadgesList, type GamificationData } from "@/components/GamificationSection";
 import { showPointsEarned } from "@/lib/rewards";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useVoiceOutput } from "@/hooks/useVoiceOutput";
@@ -72,6 +72,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   const [quickSugarShowPresets, setQuickSugarShowPresets] = useState(false);
   const [savingQuick, setSavingQuick] = useState(false);
   const [showQuickLogFab, setShowQuickLogFab] = useState(false);
+  const [showRewardsPanel, setShowRewardsPanel] = useState(false);
 
   const [quickFoodStep, setQuickFoodStep] = useState<1 | 2>(1);
   const [quickFoodMealType, setQuickFoodMealType] = useState("");
@@ -95,20 +96,50 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
     enabled: !!user && !!(session?.patient),
   });
 
-  const { data: mePatient } = useQuery({
-    queryKey: ["me", "patient"],
-    queryFn: () => api.get<{ medications?: string[] }>("me/patient"),
-    enabled: !!user && showQuickMed,
+  const { data: medicationsList } = useQuery({
+    queryKey: ["me", "medications"],
+    queryFn: () => api.get<{ medicine: string; dosage?: string; frequency?: string; timing_display?: string; active?: boolean }[]>("me/medications"),
+    enabled: !!user && !!(session?.patient),
   });
   const { data: rewards } = useRewards(!!user && !!(session?.patient));
   const { data: gamification } = useGamification(!!user && !!(session?.patient));
-  const medications = mePatient?.medications ?? [];
+  const medications = (medicationsList || []).map((m) => m.medicine);
   const TIME_SLOTS = [
     { id: "morning", label: "Morning" },
     { id: "afternoon", label: "Afternoon" },
     { id: "evening", label: "Evening" },
     { id: "night", label: "Night" },
   ] as const;
+
+  // Chat conversation persistence
+  const conversationIdRef = useRef<string | null>(null);
+  const [chatLoaded, setChatLoaded] = useState(false);
+  useEffect(() => {
+    if (!user || !(session?.patient)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<{ conversation: { id: string; messages: { role: string; content: string }[] } | null }>("me/chat-conversation");
+        if (cancelled) return;
+        if (res.conversation && res.conversation.messages?.length > 0) {
+          conversationIdRef.current = res.conversation.id;
+          setMessages(res.conversation.messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })));
+        }
+      } catch { /* first load, no conversation yet */ }
+      if (!cancelled) setChatLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [user, session?.patient]);
+
+  const saveChatMessages = async (newMsgs: { role: string; content: string }[]) => {
+    try {
+      const res = await api.post("me/chat-conversation/save", {
+        messages: newMsgs,
+        conversation_id: conversationIdRef.current || undefined,
+      }) as { conversation_id: string };
+      if (res.conversation_id) conversationIdRef.current = res.conversation_id;
+    } catch { /* best-effort persistence */ }
+  };
 
   const [voiceMode, setVoiceMode] = useState(false);
   const voiceInput = useVoiceInput({
@@ -272,6 +303,13 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
       if (voiceMode && assistantSoFar.trim()) {
         voiceOutput.speak(assistantSoFar.trim());
       }
+      // Save the user + assistant message pair to DB for persistence
+      if (assistantSoFar.trim()) {
+        saveChatMessages([
+          { role: "user", content: text },
+          { role: "assistant", content: assistantSoFar.trim() },
+        ]);
+      }
       // Auto-extract and log health data from the user's message
       try {
         const logResult = await api.post("me/chat-extract-and-log", { message: text }) as { logged?: any[] };
@@ -280,7 +318,8 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
             l.type === "blood_pressure" ? `BP ${l.value}` :
             l.type === "blood_sugar" ? `Sugar ${l.value}` :
             l.type === "food" ? `Meal logged` :
-            l.type === "medication" ? `Medication logged` : l.type
+            l.type === "medication" ? `Medication logged` :
+            l.type === "symptom" ? `Symptom logged` : l.type
           ).join(", ");
           toast({ title: "Auto-logged from your message", description: items });
           queryClient.invalidateQueries({ queryKey: ["me", "vitals"] });
@@ -528,18 +567,20 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
             <span className="font-heading font-bold text-foreground truncate text-sm sm:text-base">Mediimate AI</span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-0">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 min-w-0 overflow-hidden">
           {gamification != null && gamification.streak_days > 0 && (
             <StreakBadge data={gamification} compact />
           )}
           {gamification != null && gamification.level_label && (
-            <LevelBadge data={gamification} compact />
+            <div className="hidden sm:block">
+              <LevelBadge data={gamification} compact />
+            </div>
           )}
           {rewards != null && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/20 flex-shrink-0 min-w-0">
+            <div className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-primary/10 border border-primary/20 flex-shrink-0">
               <Trophy className="w-3.5 h-3.5 text-primary flex-shrink-0" />
               <span className="font-heading font-semibold text-foreground tabular-nums text-sm">{rewards.health_score}</span>
-              <span className="text-muted-foreground text-xs">/100</span>
+              <span className="text-muted-foreground text-xs hidden sm:inline">/100</span>
             </div>
           )}
         </div>
@@ -1143,7 +1184,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                   </Button>
                   <Button variant="outline" className="flex-1 min-h-[44px] touch-manipulation" onClick={() => setShowQuickMed(false)}>Cancel</Button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">Add your medications in Overview → Health profile so you can mark them by time.</p>
+                <p className="text-xs text-muted-foreground mt-3">Add your medications via the Medications section in the menu to track them by name and time.</p>
               </>
             ) : (
               <>
@@ -1181,38 +1222,185 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Quick Log FAB */}
+      {/* Floating Rewards Panel */}
+      {showRewardsPanel && (
+        <button type="button" className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" aria-label="Close rewards" onClick={() => setShowRewardsPanel(false)} />
+      )}
+      <div
+        className={`fixed z-50 inset-x-0 bottom-0 sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[400px] sm:max-w-[calc(100vw-2rem)] panel-slide ${
+          showRewardsPanel ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[85vh] sm:max-h-[80vh] flex flex-col overflow-hidden bottom-sheet-safe">
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-gradient-to-r from-amber-50 to-primary/5 dark:from-amber-950/20 dark:to-primary/10 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                <Trophy className="w-4.5 h-4.5 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-heading font-semibold text-foreground">Rewards & Progress</h3>
+                <p className="text-xs text-muted-foreground">
+                  {gamification?.total_points ?? 0} points earned
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRewardsPanel(false)}
+              className="p-2 rounded-lg hover:bg-muted transition-colors touch-manipulation"
+              aria-label="Close rewards"
+            >
+              <X className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
+
+          {/* Panel body */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Streak & Level summary */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Flame className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-xs font-medium text-muted-foreground">Streak</span>
+                </div>
+                <p className="text-lg font-heading font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                  {gamification?.streak_days ?? 0} <span className="text-xs font-normal text-muted-foreground">days</span>
+                </p>
+              </div>
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Star className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-medium text-muted-foreground">Level</span>
+                </div>
+                <p className="text-sm font-heading font-semibold text-primary">{gamification?.level_label ?? "Beginner"}</p>
+                <p className="text-xs text-muted-foreground">Level {gamification?.level ?? 1}</p>
+              </div>
+            </div>
+
+            {/* Health Score */}
+            {rewards && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-medium text-muted-foreground">Today's Health Score</span>
+                  </div>
+                  <span className="text-lg font-heading font-bold text-primary tabular-nums">{rewards.health_score}<span className="text-xs font-normal text-muted-foreground">/100</span></span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${rewards.health_score}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Today's Progress */}
+            {rewards && (
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Today's logging</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { key: "bp", label: "BP", done: rewards.today_progress.bp, icon: Activity, color: "text-primary" },
+                    { key: "food", label: "Food", done: rewards.today_progress.food, icon: UtensilsCrossed, color: "text-green-600" },
+                    { key: "sugar", label: "Sugar", done: rewards.today_progress.sugar, icon: Droplets, color: "text-orange-500" },
+                    { key: "medication", label: "Meds", done: rewards.today_progress.medication, icon: Pill, color: "text-violet-500" },
+                  ].map(({ key, label, done, icon: Icon, color }) => (
+                    <div
+                      key={key}
+                      className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-center ${
+                        done ? "bg-primary/10" : "bg-muted/50"
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 ${done ? color : "text-muted-foreground"}`} />
+                      <span className={`text-[10px] font-medium ${done ? "text-foreground" : "text-muted-foreground"}`}>
+                        {label}
+                      </span>
+                      <span className={`text-[10px] ${done ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
+                        {done ? "Done" : "Pending"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Points breakdown */}
+            {rewards && (
+              <div className="rounded-xl border border-border bg-card p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Points breakdown</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Blood Pressure", pts: rewards.points_breakdown.blood_pressure, icon: Activity, color: "bg-primary/60" },
+                    { label: "Food", pts: rewards.points_breakdown.food, icon: UtensilsCrossed, color: "bg-green-500/60" },
+                    { label: "Blood Sugar", pts: rewards.points_breakdown.blood_sugar, icon: Droplets, color: "bg-orange-500/60" },
+                    { label: "Medication", pts: rewards.points_breakdown.medication, icon: Pill, color: "bg-violet-500/60" },
+                  ].map(({ label, pts, icon: Icon, color }) => (
+                    <div key={label} className="flex items-center gap-2 text-xs">
+                      <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-1 text-foreground">{label}</span>
+                      <span className="font-semibold tabular-nums text-foreground">{pts} pts</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Milestone Rewards */}
+            <MilestoneRewardsList data={gamification} />
+
+            {/* Weekly Challenges */}
+            <WeeklyChallengesList data={gamification} />
+
+            {/* Badges */}
+            <BadgesList data={gamification} />
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Quick Log FAB + Rewards FAB */}
       {showQuickLogFab && (
         <button type="button" className="fixed inset-0 z-10" aria-label="Close menu" onClick={() => setShowQuickLogFab(false)} />
       )}
-      <div className="fixed z-20 fab-position">
-        <div className="relative">
-          {showQuickLogFab && (
-            <div className="absolute bottom-full right-0 mb-2 w-52 min-w-[12rem] rounded-xl border border-border bg-card shadow-lg py-2">
-              <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Quick Log</p>
-              <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickBp(true); setQuickBpShowPresets(false); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
-                <Activity className="w-4 h-4 text-primary flex-shrink-0" /> BP
-              </button>
-              <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickSugar(true); setQuickSugarShowPresets(false); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
-                <Droplets className="w-4 h-4 text-accent flex-shrink-0" /> Sugar
-              </button>
-              <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickFood(true); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
-                <UtensilsCrossed className="w-4 h-4 text-whatsapp flex-shrink-0" /> Food
-              </button>
-              <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickMed(true); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
-                <Pill className="w-4 h-4 text-violet-500 flex-shrink-0" /> Medication
-              </button>
-            </div>
+      <div className="fixed z-20 fab-position flex flex-col items-end gap-3">
+        {/* Quick Log Popup */}
+        {showQuickLogFab && (
+          <div className="w-52 min-w-[12rem] rounded-xl border border-border bg-card shadow-lg py-2 mb-1">
+            <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Quick Log</p>
+            <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickBp(true); setQuickBpShowPresets(false); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
+              <Activity className="w-4 h-4 text-primary flex-shrink-0" /> BP
+            </button>
+            <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickSugar(true); setQuickSugarShowPresets(false); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
+              <Droplets className="w-4 h-4 text-accent flex-shrink-0" /> Sugar
+            </button>
+            <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickFood(true); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
+              <UtensilsCrossed className="w-4 h-4 text-whatsapp flex-shrink-0" /> Food
+            </button>
+            <button type="button" onClick={() => { setShowQuickLogFab(false); setShowQuickMed(true); }} className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm hover:bg-muted touch-manipulation min-h-[44px]">
+              <Pill className="w-4 h-4 text-violet-500 flex-shrink-0" /> Medication
+            </button>
+          </div>
+        )}
+        {/* Rewards FAB */}
+        <button
+          type="button"
+          onClick={() => { setShowRewardsPanel(true); setShowQuickLogFab(false); }}
+          className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg flex items-center justify-center hover:from-amber-500 hover:to-amber-700 active:scale-95 transition-all touch-manipulation relative"
+          aria-label="View rewards"
+        >
+          <Gift className="w-5 h-5" />
+          {gamification && gamification.milestones?.some((m) => m.unlocked && !m.claimed) && (
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-white animate-pulse" />
           )}
-          <button
-            type="button"
-            onClick={() => setShowQuickLogFab((v) => !v)}
-            className="w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all touch-manipulation"
-            aria-label="Quick log"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
-        </div>
+        </button>
+        {/* Quick Log FAB */}
+        <button
+          type="button"
+          onClick={() => setShowQuickLogFab((v) => !v)}
+          className="w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all touch-manipulation"
+          aria-label="Quick log"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
       </div>
     </div>
   );

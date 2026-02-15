@@ -35,7 +35,7 @@ const automations = [
 ];
 
 const AIAgentsFlowSection = () => (
-  <section className="py-24 px-4 bg-card border-y border-border overflow-hidden">
+  <section className="py-12 sm:py-24 px-4 bg-card border-y border-border overflow-hidden">
     <div className="container mx-auto">
       <div className="text-center mb-16 space-y-3 animate-fade-up">
         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-sm font-medium text-accent border border-accent/20">

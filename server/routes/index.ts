@@ -46,6 +46,8 @@ import {
   Medication,
   PatientGamification,
   VoiceConversation,
+  ChatConversation,
+  HealthNote,
 } from "../models/index.js";
 
 const router = Router();
@@ -1077,7 +1079,6 @@ router.get("/me/gamification", requireAuth, async (req, res) => {
   // Persist gamification snapshot to DB
   const gamUpdate = {
     current_streak: streak_days,
-    longest_streak: streak_days,
     last_log_date: dates.length > 0 ? dates[0] : undefined,
     total_points: rewards.total_points,
     points_bp: rewards.points_breakdown.blood_pressure,
@@ -3723,12 +3724,15 @@ function formatMedicationsForContext(medications: unknown): string {
 }
 
 async function buildPatientContext(patientId: string, patient?: any) {
-  const [vitals, labs, appointments, enrollments, docs] = await Promise.all([
+  const [vitals, labs, appointments, enrollments, docs, healthNotes, foodLogs, medLogs] = await Promise.all([
     Vital.find({ patient_id: patientId }).sort({ recorded_at: -1 }).limit(20).lean(),
     LabResult.find({ patient_id: patientId }).sort({ tested_at: -1 }).limit(20).lean(),
     Appointment.find({ patient_id: patientId }).sort({ scheduled_at: -1 }).limit(10).lean(),
     Enrollment.find({ patient_id: patientId }).sort({ enrolled_at: -1 }).limit(10).lean(),
     PatientDocument.find({ patient_id: patientId }).sort({ created_at: -1 }).limit(10).lean(),
+    HealthNote.find({ patient_id: patientId }).sort({ logged_at: -1 }).limit(10).lean(),
+    FoodLog.find({ patient_id: patientId }).sort({ logged_at: -1 }).limit(10).lean(),
+    MedicationLog.find({ patient_id: patientId }).sort({ logged_at: -1 }).limit(10).lean(),
   ]);
   const parts: string[] = [];
   if (patient) {
@@ -3739,6 +3743,9 @@ async function buildPatientContext(patientId: string, patient?: any) {
   }
   if (vitals.length) parts.push("RECENT VITALS:\n" + vitals.map((v: any) => `- ${v.vital_type}: ${v.value_text}${v.unit ? ` ${v.unit}` : ""} (${new Date(v.recorded_at).toLocaleDateString()})`).join("\n"));
   if (labs.length) parts.push("LAB RESULTS:\n" + labs.map((l: any) => `- ${l.test_name}: ${l.result_value} (${new Date(l.tested_at).toLocaleDateString()})`).join("\n"));
+  if (foodLogs.length) parts.push("RECENT FOOD LOGS:\n" + foodLogs.map((f: any) => `- ${f.meal_type}: ${f.notes || "no notes"} (${new Date(f.logged_at).toLocaleDateString()})`).join("\n"));
+  if (medLogs.length) parts.push("RECENT MEDICATION LOGS:\n" + medLogs.map((m: any) => `- ${m.medication_name || "medication"}: ${m.taken ? "taken" : "skipped"} (${new Date(m.logged_at).toLocaleDateString()})`).join("\n"));
+  if (healthNotes.length) parts.push("RECENT SYMPTOMS/NOTES:\n" + healthNotes.map((n: any) => `- ${n.note_type}: ${n.description} (${new Date(n.logged_at).toLocaleDateString()})`).join("\n"));
   if (appointments.length) parts.push("APPOINTMENTS:\n" + appointments.map((a: any) => `- ${a.title}: ${new Date(a.scheduled_at).toLocaleString()} (${a.status})`).join("\n"));
   if (enrollments.length) parts.push("PROGRAMS:\n" + enrollments.map((e: any) => `- Program ${e.program_id}: ${e.status}`).join("\n"));
   if (docs.length) parts.push("DOCUMENTS:\n" + docs.map((d: any) => `- ${d.file_name}`).join("\n"));
@@ -3858,16 +3865,19 @@ Return this exact format:
     { "type": "blood_pressure", "value": "120/80" },
     { "type": "blood_sugar", "value": "110" },
     { "type": "food", "meal_type": "breakfast", "notes": "description of food eaten" },
-    { "type": "medication", "taken": true, "medication_name": "medicine name" }
+    { "type": "medication", "taken": true, "medication_name": "medicine name" },
+    { "type": "symptom", "description": "headache and nausea" }
   ]
 }
 
 Rules:
-- Only include data explicitly mentioned by the user (numbers, food items, medication names)
+- The message may be in any Indian language (Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi) or English or a mix. Extract data regardless of language.
+- Only include data explicitly mentioned by the user (numbers, food items, medication names, symptoms)
 - blood_pressure: must have systolic/diastolic (e.g. "120/80", "my bp is 130 over 85")
 - blood_sugar: must be a number (e.g. "sugar was 110", "glucose 95")
-- food: include meal_type (breakfast/lunch/dinner/snack) and notes about what they ate
+- food: include meal_type (breakfast/lunch/dinner/snack) and notes about what they ate (translate food items to English)
 - medication: set taken=true if they said they took it, false if skipped; include medication_name if mentioned
+- symptom: any health complaint, pain, discomfort, or abnormality (e.g. "headache", "chest pain", "feeling dizzy"). Translate to English.
 - If the message is just a question or greeting with no health data, return empty actions: { "actions": [] }
 - Return ONLY the JSON, no explanation`;
 
@@ -3952,6 +3962,16 @@ Rules:
         await resolveReminderEscalation(link.patient_id, "medication");
         await updateGamificationState(link.patient_id, "medication", filter as any);
         logged.push({ type: "medication", taken: action.taken, medication_name: action.medication_name });
+      } else if (action.type === "symptom" && action.description) {
+        await HealthNote.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          note_type: "symptom",
+          description: action.description,
+          source: "chat",
+          severity: action.severity || undefined,
+        });
+        logged.push({ type: "symptom", description: action.description });
       }
     } catch (err) {
       console.error("Chat auto-log error:", err);
@@ -3961,23 +3981,118 @@ Rules:
   res.json({ logged, extracted: extractedActions });
 });
 
+// ---------- Chat Conversation Persistence ----------
+// Save / append messages to the current chat conversation
+router.post("/me/chat-conversation/save", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const { messages, conversation_id } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "messages required" });
+  }
+  const newMsgs = messages.map((m: { role: string; content: string }) => ({
+    role: m.role,
+    content: m.content,
+    timestamp: new Date(),
+  }));
+  try {
+    if (conversation_id) {
+      // Append to existing conversation
+      await ChatConversation.findOneAndUpdate(
+        { _id: conversation_id, patient_id: link.patient_id },
+        { $push: { messages: { $each: newMsgs } }, $set: { last_activity: new Date() } }
+      );
+      res.json({ conversation_id });
+    } else {
+      // Create new conversation
+      const conv = await ChatConversation.create({
+        patient_id: link.patient_id,
+        messages: newMsgs,
+        last_activity: new Date(),
+        source: "chat",
+      });
+      res.json({ conversation_id: conv._id?.toString() });
+    }
+  } catch (err) {
+    console.error("Chat save error:", err);
+    res.status(500).json({ error: "Failed to save chat" });
+  }
+});
+
+// Load the most recent chat conversation (or by ID)
+router.get("/me/chat-conversation", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const convId = req.query.id as string | undefined;
+  try {
+    let conv;
+    if (convId) {
+      conv = await ChatConversation.findOne({ _id: convId, patient_id: link.patient_id }).lean();
+    } else {
+      // Get the most recent conversation from today (or last 24h)
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      conv = await ChatConversation.findOne({
+        patient_id: link.patient_id,
+        last_activity: { $gte: dayAgo },
+      }).sort({ last_activity: -1 }).lean();
+    }
+    if (!conv) return res.json({ conversation: null });
+    res.json({
+      conversation: {
+        id: (conv as any)._id?.toString(),
+        messages: (conv as any).messages || [],
+        last_activity: (conv as any).last_activity,
+      },
+    });
+  } catch (err) {
+    console.error("Chat load error:", err);
+    res.status(500).json({ error: "Failed to load chat" });
+  }
+});
+
+// List chat conversations (history)
+router.get("/me/chat-conversations", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const list = await ChatConversation.find({ patient_id: link.patient_id })
+    .sort({ last_activity: -1 })
+    .limit(20)
+    .select("last_activity source messages")
+    .lean();
+  res.json(list.map((c: any) => ({
+    id: c._id?.toString(),
+    last_activity: c.last_activity,
+    source: c.source,
+    message_count: c.messages?.length || 0,
+    preview: c.messages?.length > 0 ? c.messages[0].content?.slice(0, 100) : "",
+  })));
+});
+
 // ---------- Voice Doctor: AI doctor persona chat (streaming) ----------
 const DOCTOR_PERSONAS: Record<string, { name: string; style: string; gender: "female" | "male" }> = {
   dr_priya: {
     name: "Dr. Priya",
     gender: "female",
-    style: "You are Dr. Priya, a warm, empathetic, and caring female doctor. You speak gently and encouragingly. You use simple language the patient can understand. You occasionally use Hindi phrases naturally (like 'theek hai', 'bahut accha') when appropriate.",
+    style: `You are Dr. Priya, a warm, empathetic, and caring female Indian doctor with 12 years of clinical experience in general medicine and preventive health. You speak gently, encouragingly, and with genuine concern. You use simple language the patient can understand.
+You are fluent in English, Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, and Punjabi. IMPORTANT: Always reply in the SAME language the patient is speaking. If they speak Hindi, reply in Hindi. If they mix languages, match their style naturally.`,
   },
   dr_abhay: {
     name: "Dr. Abhay",
     gender: "male",
-    style: "You are Dr. Abhay, a calm, thorough, and reassuring male doctor. You are methodical in your questioning and give clear, confident advice. You use simple language and occasionally use Hindi phrases naturally when appropriate.",
+    style: `You are Dr. Abhay, a calm, thorough, and reassuring male Indian doctor with 15 years of clinical experience in internal medicine. You are methodical, give clear confident advice, and speak with authority tempered by empathy.
+You are fluent in English, Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, and Punjabi. IMPORTANT: Always reply in the SAME language the patient is speaking. If they speak Hindi, reply in Hindi. If they mix languages, match their style naturally.`,
   },
+};
+
+const LANG_LABELS: Record<string, string> = {
+  "en-IN": "English", "hi-IN": "Hindi", "ta-IN": "Tamil", "te-IN": "Telugu",
+  "kn-IN": "Kannada", "ml-IN": "Malayalam", "mr-IN": "Marathi",
+  "bn-IN": "Bengali", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
 };
 
 router.post("/chat/voice-doctor", requireAuth, async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: "GEMINI_API_KEY not configured" });
-  const { messages, persona } = req.body;
+  const { messages, persona, lang } = req.body;
   const personaKey = persona && DOCTOR_PERSONAS[persona] ? persona : "dr_priya";
   const doc = DOCTOR_PERSONAS[personaKey];
   const userId = (req as AuthRequest).user.id;
@@ -3988,27 +4103,119 @@ router.post("/chat/voice-doctor", requireAuth, async (req, res) => {
     contextParts = await buildPatientContext(pid, patient);
   }
   const patientName = (patient as any)?.full_name || "the patient";
-  const systemPrompt = `${doc.style}
+  const patientConditions = (patient as any)?.conditions || [];
+  const hasBP = patientConditions.some((c: string) => /hypertension|blood.?pressure|bp|heart|cardiac/i.test(c));
+  const hasDiabetes = patientConditions.some((c: string) => /diabetes|diabetic|sugar|glucose|hba1c/i.test(c));
 
-You are conducting a daily health check-in call with your patient ${patientName}. This is a voice conversation, so keep your responses conversational and concise (2-4 sentences max per turn). Do NOT use markdown, bullet points, or formatting -- speak naturally as you would on a phone call.
+  // Fetch today's logs to know what's already been recorded
+  let todayContext = "";
+  if (patient) {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const pid = (patient as any)._id.toString();
+    const [todayVitals, todayFood, todayMeds] = await Promise.all([
+      Vital.find({ patient_id: pid, recorded_at: { $gte: todayStart } }).lean(),
+      FoodLog.find({ patient_id: pid, created_at: { $gte: todayStart } }).lean(),
+      MedicationLog.find({ patient_id: pid, created_at: { $gte: todayStart } }).lean(),
+    ]);
+    const parts: string[] = [];
+    if (todayVitals.length) parts.push("Already logged today: " + todayVitals.map((v: any) => `${v.vital_type}: ${v.value_text}`).join(", "));
+    if (todayFood.length) parts.push("Meals logged today: " + todayFood.map((f: any) => `${(f as any).meal_type}${(f as any).notes ? ": " + (f as any).notes : ""}`).join(", "));
+    if (todayMeds.length) parts.push("Medications taken today: " + todayMeds.map((m: any) => (m as any).medication_name || "medication").join(", "));
+    if (parts.length === 0) parts.push("Nothing logged yet today.");
+    todayContext = parts.join("\n");
+  }
 
-Your goal each session:
-1. Ask how they are feeling today
-2. Ask about their blood pressure reading (if they monitor BP)
-3. Ask about their blood sugar level (if diabetic)
-4. Ask what they ate today (meals)
-5. Ask if they took their medications
-6. Ask about any symptoms, pain, or concerns
-7. Ask about sleep and exercise
+  const chosenLang = lang && LANG_LABELS[lang] ? LANG_LABELS[lang] : null;
+  const langInstruction = chosenLang && chosenLang !== "English"
+    ? `\n\n=== LANGUAGE (CRITICAL - HIGHEST PRIORITY) ===\nThe patient has selected ${chosenLang} as their language. You MUST respond ENTIRELY in ${chosenLang}. Every single word of your response must be in ${chosenLang} script and language. Do NOT mix English words unless there is no ${chosenLang} equivalent (like medical device names). Even greetings, numbers, and medical terms should be in ${chosenLang}. This is non-negotiable.`
+    : "";
 
-Do NOT ask all questions at once. Ask one topic at a time, listen to the answer, acknowledge it, then move to the next. Be natural and conversational. If the patient provides a health value, acknowledge whether it sounds normal or concerning.
+  const systemPrompt = `${doc.style}${langInstruction}
 
-You are NOT making diagnoses. If something sounds concerning, advise them to visit their doctor in person.
+=== ROLE ===
+You are a licensed, experienced doctor conducting a daily health check-in VOICE CALL with your patient ${patientName}. You have full medical knowledge and can discuss ANY health topic. This is a voice conversation, so keep responses conversational and concise (2-4 sentences per turn). Do NOT use markdown, bullet points, asterisks, or formatting. Speak naturally as on a phone call.
 
-Patient health context:
-${contextParts || "No records available yet."}
+=== CONVERSATION FLOW ===
+Follow this flow ONE topic at a time. Ask, listen, acknowledge, then move on:
 
-Start the conversation by greeting the patient warmly and asking how they are feeling today.`;
+1. GREETING: Warmly greet the patient and ask how they're feeling today. If they mention any concern, address it before moving on.
+
+2. VITALS (OPTIONAL - don't force):
+   ${hasBP ? "- Ask if they checked their blood pressure today. If yes, ask for the reading. If they say no or they haven't, say something like 'No worries, try to check it when you get a chance, it helps us track your health better' and move on." : "- Skip BP unless the patient brings it up."}
+   ${hasDiabetes ? "- Ask about blood sugar. Same approach - if they haven't checked, gently encourage but don't insist and move on." : "- Skip blood sugar unless the patient brings it up."}
+   - For ANY vital they share, comment on whether it's in a healthy range based on their profile. If concerning, explain WHY and suggest monitoring or seeing a doctor.
+
+3. FOOD (IMPORTANT - be persistent but not annoying):
+   - Ask what they've eaten so far today (breakfast, lunch, dinner depending on time of day).
+   - If they're vague ("I ate normal food"), probe gently: "Can you tell me what exactly you had? It really helps me understand your nutrition."
+   - If they say they skipped a meal, express mild concern and ask why.
+   - Briefly comment on their diet quality. Suggest improvements naturally ("That sounds good! Maybe add some greens or a fruit next time.").
+   - Explain the importance: "Logging what you eat helps me spot patterns that affect your health."
+
+4. MEDICATIONS:
+   - Ask if they took their prescribed medications today.
+   - If yes, acknowledge positively.
+   - If they missed a dose, ask why (forgot, side effects, ran out) and give appropriate advice.
+   - If they mention side effects, take it seriously and suggest discussing with their prescribing doctor.
+
+5. SYMPTOMS & CONCERNS:
+   - Ask "Is there anything bothering you? Any pain, discomfort, or something you'd like to discuss?"
+   - Give them space to talk about ANYTHING health-related.
+
+6. WELLNESS:
+   - Briefly ask about sleep quality and any physical activity.
+   - Keep this light.
+
+7. WRAP UP:
+   - Summarize what they've shared ("So today your BP was 130/85, you had roti and dal for lunch, and you've been taking your medicines - that's great!").
+   - Give one specific, actionable health tip relevant to THEIR profile.
+   - End warmly ("Take care, and I'll check in with you again tomorrow!").
+
+=== HANDLING MEDICAL QUESTIONS (CRITICAL) ===
+Patients WILL ask questions outside the check-in flow. You MUST handle them like a real doctor:
+
+- GENERAL HEALTH QUESTIONS (diet advice, exercise, supplements, home remedies): Answer with evidence-based information. Be helpful and specific.
+- SYMPTOM QUESTIONS ("I've been having headaches", "my knee hurts"): Ask follow-up questions (duration, severity, triggers). Give possible common causes. Recommend when to see a doctor in person.
+- MEDICATION QUESTIONS ("can I take paracetamol?", "what are the side effects of metformin?"): Provide accurate pharmaceutical information. Always mention checking with their prescribing doctor for changes.
+- MENTAL HEALTH ("I'm feeling stressed", "I can't sleep"): Be empathetic. Offer practical coping strategies. Suggest professional help if it sounds serious.
+- EMERGENCY SIGNS (chest pain, difficulty breathing, sudden weakness, severe bleeding): IMMEDIATELY tell them to call emergency services or go to the nearest hospital. Don't try to diagnose.
+- NUTRITION QUESTIONS: Give specific dietary advice based on their conditions (e.g., low-sodium diet for hypertension, glycemic index for diabetes).
+- LIFESTYLE QUESTIONS: Discuss exercise recommendations, stress management, sleep hygiene with practical tips.
+- QUESTIONS ABOUT REPORTS/LAB RESULTS: Help interpret them in simple language, note if anything needs attention.
+- COMPLETELY OFF-TOPIC (politics, entertainment, etc.): Gently steer back: "That's interesting! But let's focus on your health today. How are you feeling?"
+
+=== PATIENT PERSONALITY HANDLING ===
+- ANXIOUS PATIENT: Be extra reassuring. Don't dismiss their concerns. Validate feelings before giving information.
+- NON-COMPLIANT PATIENT: Don't lecture. Use motivational interviewing. Ask "What makes it hard to take your medicine?" rather than "You need to take your medicine."
+- CHATTY PATIENT: Be friendly but gently guide back to health topics after a reasonable exchange.
+- QUIET/SHY PATIENT: Ask specific yes/no questions first, then open-ended ones. Don't overwhelm.
+- PATIENT IN DENIAL: Use facts gently. "I understand you feel fine, but your sugar levels suggest we should be careful."
+- CONFUSED PATIENT: Repeat information simply. Use analogies. Be patient.
+- PATIENT WANTING DIAGNOSIS: "Based on what you're describing, it could be several things. The most common would be... But I'd really recommend getting this checked with a physical exam."
+
+=== LOGGING IMPORTANCE ===
+Weave in the importance of health logging naturally throughout the conversation:
+- "The reason I ask about your meals is that food directly affects your ${hasDiabetes ? "blood sugar" : hasBP ? "blood pressure" : "overall health"}."
+- "When you log regularly, we can spot trends early and prevent problems before they get serious."
+- "Even on days when everything feels normal, that data point is valuable."
+Don't preach. Make it conversational and genuine.
+
+=== WHAT THE PATIENT HAS LOGGED TODAY ===
+${todayContext}
+
+=== PATIENT HEALTH RECORDS ===
+${contextParts || "No historical records available yet. This might be a new patient."}
+
+=== RULES ===
+- Be concise on voice: 2-4 sentences per turn, no more unless explaining something important.
+- NEVER say "I'm just an AI" or "I'm not a real doctor." Stay in character as ${doc.name} at all times.
+- Use the patient's name naturally (not every turn).
+- If the patient has already logged something today, acknowledge it and skip that topic.
+- Numbers and medical terms: state them clearly for voice.
+- If the conversation has covered all topics and the patient seems ready to go, wrap up gracefully.
+${chosenLang && chosenLang !== "English" ? `- LANGUAGE REMINDER: Your ENTIRE response must be in ${chosenLang}. Not a single English word unless absolutely necessary for a medical term with no translation. This is the most important rule.` : "- If the patient speaks in a regional Indian language, reply in that same language."}
+
+Start by greeting ${patientName} warmly IN ${chosenLang || "the patient's language"} and asking how they are feeling today.`;
 
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -4059,7 +4266,7 @@ Start the conversation by greeting the patient warmly and asking how they are fe
 router.post("/me/voice-conversation/save", requireAuth, async (req, res) => {
   const link = await getPatientForCurrentUser(req);
   if (!link) return res.status(404).json({ error: "Patient record not linked" });
-  const { messages, persona, duration_seconds } = req.body;
+  const { messages, persona, duration_seconds, lang } = req.body;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "messages array required" });
   }
@@ -4069,6 +4276,7 @@ router.post("/me/voice-conversation/save", requireAuth, async (req, res) => {
   const conv = await VoiceConversation.create({
     patient_id: link.patient_id,
     doctor_persona: personaKey,
+    lang: lang || "en-IN",
     messages: messages.map((m: { role: string; content: string }) => ({
       role: m.role,
       content: m.content,
@@ -4102,11 +4310,12 @@ Return this exact format:
 
 Rules:
 - Only include data the PATIENT explicitly mentioned
+- The conversation may be in any Indian language (Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi) or English or a mix. Extract data regardless of language.
 - blood_pressure value must be in format "systolic/diastolic" (e.g. "120/80")
 - blood_sugar value must be a number string (e.g. "110")
-- For food, include meal_type (breakfast/lunch/dinner/snack) and notes
+- For food, include meal_type (breakfast/lunch/dinner/snack) and notes (translate food items to English)
 - For medication, include taken (true/false) and medication_name
-- For symptoms, include description
+- For symptoms, include description (translate to English)
 - If the patient did not mention a type, do not include it
 - Return empty actions array if no health data was mentioned
 - Return ONLY the JSON, no other text`;
@@ -4193,7 +4402,15 @@ Rules:
         await resolveReminderEscalation(link.patient_id, "medication");
         await updateGamificationState(link.patient_id, "medication", filter as any);
         logged.push({ type: "medication", taken: action.taken, medication_name: action.medication_name });
-      } else if (action.type === "symptom") {
+      } else if (action.type === "symptom" && action.description) {
+        await HealthNote.create({
+          patient_id: link.patient_id,
+          doctor_id: link.doctor_id,
+          note_type: "symptom",
+          description: action.description,
+          source: "voice",
+          severity: action.severity || undefined,
+        });
         logged.push({ type: "symptom", description: action.description });
       }
     } catch (err) {
@@ -4260,6 +4477,19 @@ router.post("/contact", async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: "Message required" });
   res.json({ ok: true });
+});
+
+// ---------- Health Notes (symptoms etc.) ----------
+router.get("/me/health-notes", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const limit = parseLimit(req.query.limit as string | undefined, LIMITS.DEFAULT_PAGE_SIZE, LIMITS.MAX_PAGE_SIZE);
+  const skip = parseSkip(req.query.skip as string | undefined);
+  const filter = link.patient_ids.length > 1
+    ? { patient_id: { $in: link.patient_ids } }
+    : { patient_id: link.patient_id };
+  const list = await HealthNote.find(filter).sort({ logged_at: -1 }).skip(skip).limit(limit).lean();
+  res.json(list);
 });
 
 export default router;
