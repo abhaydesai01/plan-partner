@@ -1279,7 +1279,8 @@ router.get("/family/dashboard", requireAuth, async (req, res) => {
   for (const p of patients as { _id: unknown; patient_user_id: string }[]) {
     const uid = p.patient_user_id;
     if (!patientIdsByUser[uid]) patientIdsByUser[uid] = [];
-    patientIdsByUser[uid].push(p._id?.toString());
+    const id = p._id?.toString();
+    if (id) patientIdsByUser[uid].push(id);
   }
   const relByPatient: Record<string, string> = {};
   for (const c of connections as any[]) {
