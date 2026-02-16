@@ -60,6 +60,11 @@ const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
     fetch();
   }, [patientId, doctorId]);
 
+  const vitalsAnalysis = useMemo(() => {
+    const sorted = [...vitals].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+    return getVitalsAnalysis(sorted);
+  }, [vitals]);
+
   if (loading) return <div className="flex items-center justify-center h-32"><div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" /></div>;
   if (error) return (
     <div className="glass-card rounded-xl p-8 text-center">
@@ -99,11 +104,6 @@ const PatientVitalsTab = ({ patientId, doctorId }: Props) => {
     }
     return { type, latest, trend };
   });
-
-  const vitalsAnalysis = useMemo(() => {
-    const sorted = [...vitals].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
-    return getVitalsAnalysis(sorted);
-  }, [vitals]);
 
   if (vitals.length === 0) {
     return (

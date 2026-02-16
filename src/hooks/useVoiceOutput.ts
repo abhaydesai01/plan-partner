@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 // ---- Multi-language sentence splitter ----
-// Handles English (.!?), Hindi/Marathi/Kannada etc. purna viram, comma breaks
-const SENTENCE_END = /[.!?\u0964\u0965\u0950;:]\s*/g; // . ! ? | (devanagari danda) || (double danda)
+const SENTENCE_END = /[.!?\u0964\u0965\u0950;:]\s*/g;
 
-function splitIntoChunks(text: string, maxLen = 100): string[] {
+function splitIntoChunks(text: string, maxLen = 120): string[] {
   if (text.length <= maxLen) return [text.trim()].filter(Boolean);
 
   const chunks: string[] = [];
@@ -16,7 +15,6 @@ function splitIntoChunks(text: string, maxLen = 100): string[] {
       break;
     }
 
-    // Find the last sentence-end within maxLen
     let splitAt = -1;
     SENTENCE_END.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -26,7 +24,6 @@ function splitIntoChunks(text: string, maxLen = 100): string[] {
       else break;
     }
 
-    // If no sentence-end, try splitting at comma or space
     if (splitAt <= 0) {
       const commaIdx = remaining.lastIndexOf(",", maxLen);
       if (commaIdx > 20) {
@@ -60,8 +57,6 @@ function findVoiceByGender(pool: SpeechSynthesisVoice[], gender: "male" | "femal
 }
 
 // ---- Chrome keepalive workaround ----
-// Chrome kills speechSynthesis utterances after ~15 seconds of continuous speech.
-// Pausing and immediately resuming resets the timer without audible interruption.
 let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 function startKeepAlive() {
   stopKeepAlive();
@@ -76,6 +71,36 @@ function stopKeepAlive() {
   if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; }
 }
 
+// ---- iOS/PWA audio unlock ----
+let audioUnlocked = false;
+export function unlockTTSAudio() {
+  if (audioUnlocked) return;
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(" ");
+    utter.volume = 0.01;
+    utter.rate = 10;
+    utter.onend = () => { audioUnlocked = true; };
+    utter.onerror = () => { audioUnlocked = true; };
+    window.speechSynthesis.speak(utter);
+    audioUnlocked = true;
+  } catch { /* ignore */ }
+}
+
+// Auto-unlock on first user interaction (covers all PWA/iOS scenarios)
+if (typeof window !== "undefined") {
+  const autoUnlock = () => {
+    unlockTTSAudio();
+    document.removeEventListener("click", autoUnlock, true);
+    document.removeEventListener("touchstart", autoUnlock, true);
+    document.removeEventListener("touchend", autoUnlock, true);
+  };
+  document.addEventListener("click", autoUnlock, true);
+  document.addEventListener("touchstart", autoUnlock, true);
+  document.addEventListener("touchend", autoUnlock, true);
+}
+
 export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: string }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -83,6 +108,7 @@ export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: 
   const queueRef = useRef<string[]>([]);
   const speakingRef = useRef(false);
   const voicesLoadedRef = useRef(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pickVoice = useCallback((): SpeechSynthesisVoice | null => {
     if (!supported) return null;
@@ -92,29 +118,22 @@ export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: 
     const gender = opts?.voiceGender || "female";
     const baseLang = lang.split("-")[0];
 
-    // Build pools from narrow (exact locale) to broad (any voice)
     const exactLocale = voices.filter((v) => v.lang.replace("_", "-").startsWith(lang));
     const broadLang = voices.filter((v) => v.lang.replace("_", "-").startsWith(baseLang));
     const englishVoices = voices.filter((v) => v.lang.replace("_", "-").startsWith("en"));
     const allVoices = voices;
 
-    // For non-English: prefer locale voice of ANY gender over wrong-locale voice
-    // (a Kannada male voice is better than an English female for Kannada text)
     if (baseLang !== "en") {
-      // 1. Try exact locale with correct gender
       for (const pool of [exactLocale, broadLang]) {
         if (pool.length === 0) continue;
         const match = findVoiceByGender(pool, gender);
         if (match) return match;
       }
-      // 2. Try exact locale with ANY gender (still better than English)
       if (exactLocale.length > 0) return exactLocale[0];
       if (broadLang.length > 0) return broadLang[0];
-      // 3. Fall back to English with correct gender
       const engMatch = findVoiceByGender(englishVoices.length > 0 ? englishVoices : allVoices, gender);
       if (engMatch) return engMatch;
     } else {
-      // English: prioritize gender
       for (const pool of [exactLocale, broadLang, allVoices]) {
         if (pool.length === 0) continue;
         const match = findVoiceByGender(pool, gender);
@@ -125,15 +144,7 @@ export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: 
     return voices[0] || null;
   }, [opts?.voiceGender, opts?.lang, supported]);
 
-  const processQueue = useCallback(() => {
-    if (!supported || speakingRef.current || queueRef.current.length === 0) {
-      if (queueRef.current.length === 0) stopKeepAlive();
-      return;
-    }
-    const text = queueRef.current.shift()!;
-    speakingRef.current = true;
-    setIsSpeaking(true);
-
+  const speakOneChunk = useCallback((text: string, onFinished: () => void) => {
     const utter = new SpeechSynthesisUtterance(text);
     const voice = pickVoice();
     if (voice) {
@@ -143,42 +154,90 @@ export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: 
       utter.lang = opts.lang;
     }
 
-    // Slower rate for non-English for clarity; slight pitch shift for gender
     const isEnglish = (opts?.lang || "en").startsWith("en");
     utter.rate = isEnglish ? 0.95 : 0.88;
     utter.pitch = opts?.voiceGender === "male" ? 0.85 : 1.12;
     utter.volume = 1.0;
 
-    const onDone = () => {
-      speakingRef.current = false;
-      if (queueRef.current.length > 0) {
-        // Small gap between chunks for natural breathing rhythm
-        setTimeout(() => processQueue(), 80);
-      } else {
-        stopKeepAlive();
-        setIsSpeaking(false);
-      }
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+      onFinished();
     };
 
-    utter.onend = onDone;
-    utter.onerror = (e) => {
+    utter.onend = done;
+    utter.onerror = (e: SpeechSynthesisErrorEvent) => {
       if (e.error !== "interrupted") console.warn("TTS error:", e.error);
-      onDone();
+      done();
     };
 
     utteranceRef.current = utter;
     window.speechSynthesis.speak(utter);
-  }, [supported, pickVoice, opts?.voiceGender, opts?.lang]);
+
+    // Watchdog: force-advance if onend never fires (iOS bug)
+    const estimatedMs = Math.max(6000, text.length * 120);
+    watchdogRef.current = setTimeout(() => {
+      if (!finished) done();
+    }, estimatedMs);
+  }, [pickVoice, opts?.voiceGender, opts?.lang]);
+
+  const processQueue = useCallback(() => {
+    if (!supported || queueRef.current.length === 0) {
+      stopKeepAlive();
+      speakingRef.current = false;
+      setIsSpeaking(false);
+      return;
+    }
+
+    const text = queueRef.current.shift()!;
+    speakingRef.current = true;
+    setIsSpeaking(true);
+
+    speakOneChunk(text, () => {
+      if (queueRef.current.length > 0) {
+        setTimeout(() => processQueue(), 100);
+      } else {
+        stopKeepAlive();
+        speakingRef.current = false;
+        setIsSpeaking(false);
+      }
+    });
+  }, [supported, speakOneChunk]);
 
   const speak = useCallback(
     (text: string) => {
       if (!supported || !text.trim()) return;
+
+      // Clear any previous playback
       window.speechSynthesis.cancel();
       speakingRef.current = false;
-      const chunks = splitIntoChunks(text, 100);
-      queueRef.current.push(...chunks);
+      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+
+      const chunks = splitIntoChunks(text, 120);
+      queueRef.current = [...chunks];
       startKeepAlive();
-      processQueue();
+
+      // On iOS, voices may not be loaded yet. Wait briefly if needed.
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length === 0 && !voicesLoadedRef.current) {
+        let attempts = 0;
+        const waitForVoices = () => {
+          attempts++;
+          const v = window.speechSynthesis.getVoices();
+          if (v.length > 0 || attempts > 10) {
+            if (v.length > 0) voicesLoadedRef.current = true;
+            processQueue();
+            return;
+          }
+          setTimeout(waitForVoices, 150);
+        };
+        setTimeout(waitForVoices, 150);
+      } else {
+        // Small delay after cancel to let iOS audio session settle
+        setTimeout(() => processQueue(), 60);
+      }
     },
     [supported, processQueue]
   );
@@ -187,6 +246,7 @@ export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: 
     if (!supported) return;
     queueRef.current = [];
     stopKeepAlive();
+    if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
     window.speechSynthesis.cancel();
     speakingRef.current = false;
     setIsSpeaking(false);
@@ -195,6 +255,7 @@ export function useVoiceOutput(opts?: { voiceGender?: "male" | "female"; lang?: 
   useEffect(() => {
     return () => {
       stopKeepAlive();
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
       if (supported) window.speechSynthesis.cancel();
     };
   }, [supported]);

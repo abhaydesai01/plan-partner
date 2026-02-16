@@ -3723,20 +3723,37 @@ function formatMedicationsForContext(medications: unknown): string {
     .join("\n");
 }
 
-async function buildPatientContext(patientId: string, patient?: any) {
-  const [vitals, labs, appointments, enrollments, docs, healthNotes, foodLogs, medLogs] = await Promise.all([
-    Vital.find({ patient_id: patientId }).sort({ recorded_at: -1 }).limit(20).lean(),
-    LabResult.find({ patient_id: patientId }).sort({ tested_at: -1 }).limit(20).lean(),
-    Appointment.find({ patient_id: patientId }).sort({ scheduled_at: -1 }).limit(10).lean(),
-    Enrollment.find({ patient_id: patientId }).sort({ enrolled_at: -1 }).limit(10).lean(),
-    PatientDocument.find({ patient_id: patientId }).sort({ created_at: -1 }).limit(10).lean(),
-    HealthNote.find({ patient_id: patientId }).sort({ logged_at: -1 }).limit(10).lean(),
-    FoodLog.find({ patient_id: patientId }).sort({ logged_at: -1 }).limit(10).lean(),
-    MedicationLog.find({ patient_id: patientId }).sort({ logged_at: -1 }).limit(10).lean(),
+async function buildPatientContext(patientIdOrIds: string | string[], patient?: any) {
+  const ids = Array.isArray(patientIdOrIds) ? patientIdOrIds : [patientIdOrIds];
+  const pidFilter = ids.length === 1 ? { patient_id: ids[0] } : { patient_id: { $in: ids } };
+  const [vitals, labs, appointments, enrollments, docs, healthNotes, foodLogs, medLogs, activeMeds] = await Promise.all([
+    Vital.find(pidFilter).sort({ recorded_at: -1 }).limit(20).lean(),
+    LabResult.find(pidFilter).sort({ tested_at: -1 }).limit(20).lean(),
+    Appointment.find(pidFilter).sort({ scheduled_at: -1 }).limit(10).lean(),
+    Enrollment.find(pidFilter).sort({ enrolled_at: -1 }).limit(10).lean(),
+    PatientDocument.find(pidFilter).sort({ created_at: -1 }).limit(10).lean(),
+    HealthNote.find(pidFilter).sort({ logged_at: -1 }).limit(10).lean(),
+    FoodLog.find(pidFilter).sort({ logged_at: -1 }).limit(10).lean(),
+    MedicationLog.find(pidFilter).sort({ logged_at: -1 }).limit(10).lean(),
+    Medication.find({ ...pidFilter, active: true }).sort({ added_at: -1 }).lean(),
   ]);
   const parts: string[] = [];
   if (patient) {
-    const medsText = formatMedicationsForContext(patient.medications);
+    // Build medications from BOTH the old patient.medications array AND the new Medication collection
+    let medsText = formatMedicationsForContext(patient.medications);
+    if (activeMeds.length) {
+      const detailedMeds = activeMeds.map((m: any) => {
+        const p = [m.medicine];
+        if (m.dosage) p.push(m.dosage);
+        if (m.frequency) p.push(m.frequency);
+        if (m.timing_display) p.push(`(${m.timing_display})`);
+        if (m.food_relation) p.push(`— ${m.food_relation}`);
+        if (m.instructions) p.push(`— ${m.instructions}`);
+        if (m.duration) p.push(`for ${m.duration}`);
+        return p.join(" ");
+      });
+      medsText = detailedMeds.join("\n");
+    }
     parts.push(
       `PATIENT PROFILE:\n- Name: ${patient.full_name || "Unknown"}\n- Age: ${patient.age ?? "Unknown"}\n- Gender: ${patient.gender ?? "Unknown"}\n- Conditions: ${(patient.conditions?.length && patient.conditions.join(", ")) || "None"}\n- Medications:\n${medsText === "None recorded" ? "  None recorded" : medsText.split("\n").map((line) => "  " + line).join("\n")}\n- Status: ${patient.status || "active"}`
     );
@@ -4090,6 +4107,117 @@ const LANG_LABELS: Record<string, string> = {
   "bn-IN": "Bengali", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
 };
 
+// ---------- Vapi: return system prompt with full patient context ----------
+router.get("/me/voice-doctor-config", requireAuth, async (req, res) => {
+  const { persona, lang } = req.query as { persona?: string; lang?: string };
+  const personaKey = persona && DOCTOR_PERSONAS[persona] ? persona : "dr_priya";
+  const doc = DOCTOR_PERSONAS[personaKey];
+  const userId = (req as AuthRequest).user.id;
+  // Use same patient lookup as medication routes to ensure consistent patient_id
+  const link = await getPatientForCurrentUser(req);
+  const patient = link ? await Patient.findById(link.patient_id).lean() : await Patient.findOne({ patient_user_id: userId }).lean();
+  const allPatientIds = link ? link.patient_ids : (patient ? [(patient as any)._id.toString()] : []);
+  let contextParts = "";
+  if (patient && allPatientIds.length) {
+    // Build context using ALL patient IDs so we don't miss any data
+    contextParts = await buildPatientContext(allPatientIds, patient);
+  }
+  const patientName = (patient as any)?.full_name || "the patient";
+  const patientConditions = (patient as any)?.conditions || [];
+  const hasBP = patientConditions.some((c: string) => /hypertension|blood.?pressure|bp|heart|cardiac/i.test(c));
+  const hasDiabetes = patientConditions.some((c: string) => /diabetes|diabetic|sugar|glucose|hba1c/i.test(c));
+  let todayContext = "";
+  if (patient && allPatientIds.length) {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayPidFilter = allPatientIds.length === 1 ? { patient_id: allPatientIds[0] } : { patient_id: { $in: allPatientIds } };
+    const [todayVitals, todayFood, todayMeds] = await Promise.all([
+      Vital.find({ ...todayPidFilter, recorded_at: { $gte: todayStart } }).lean(),
+      FoodLog.find({ ...todayPidFilter, created_at: { $gte: todayStart } }).lean(),
+      MedicationLog.find({ ...todayPidFilter, created_at: { $gte: todayStart } }).lean(),
+    ]);
+    const parts: string[] = [];
+    if (todayVitals.length) parts.push("Already logged today: " + todayVitals.map((v: any) => `${v.vital_type}: ${v.value_text}`).join(", "));
+    if (todayFood.length) parts.push("Meals logged today: " + todayFood.map((f: any) => `${(f as any).meal_type}${(f as any).notes ? ": " + (f as any).notes : ""}`).join(", "));
+    if (todayMeds.length) parts.push("Medications taken today: " + todayMeds.map((m: any) => (m as any).medication_name || "medication").join(", "));
+    if (parts.length === 0) parts.push("Nothing logged yet today.");
+    todayContext = parts.join("\n");
+  }
+  const chosenLang = lang && LANG_LABELS[lang] ? LANG_LABELS[lang] : null;
+  const langInstruction = chosenLang && chosenLang !== "English"
+    ? `\n\n=== LANGUAGE (CRITICAL - HIGHEST PRIORITY) ===\nThe patient has selected ${chosenLang} as their language. You MUST respond ENTIRELY in ${chosenLang}. Every single word of your response must be in ${chosenLang} script and language. Do NOT mix English words unless there is no ${chosenLang} equivalent (like medical device names). Even greetings, numbers, and medical terms should be in ${chosenLang}. This is non-negotiable.`
+    : "";
+  const systemPrompt = `${doc.style}${langInstruction}
+
+=== ROLE ===
+You are a licensed, experienced doctor conducting a daily health check-in VOICE CALL with your patient ${patientName}. You have full medical knowledge and can discuss ANY health topic. This is a voice conversation, so keep responses conversational and concise (2-4 sentences per turn). Do NOT use markdown, bullet points, asterisks, or formatting. Speak naturally as on a phone call.
+
+=== CONVERSATION FLOW ===
+Follow this flow ONE topic at a time. Ask, listen, acknowledge, then move on:
+
+1. GREETING: Warmly greet the patient and ask how they're feeling today. If they mention any concern, address it before moving on.
+
+2. VITALS (OPTIONAL - don't force):
+   ${hasBP ? "- Ask if they checked their blood pressure today. If yes, ask for the reading." : "- Skip BP unless the patient brings it up."}
+   ${hasDiabetes ? "- Ask about blood sugar. Same approach." : "- Skip blood sugar unless the patient brings it up."}
+   - For ANY vital they share, comment on whether it's in a healthy range.
+
+3. FOOD: Ask what they've eaten so far today. If vague, probe gently. Comment on diet quality.
+
+4. MEDICATIONS: Check the patient's medication list in PATIENT HEALTH RECORDS below. If they have prescribed medications, ask about EACH one BY NAME — for example "Did you take your Metformin today?" Do NOT say "no medications prescribed" if the list is non-empty.
+
+5. SYMPTOMS & CONCERNS: Ask if anything is bothering them.
+
+6. WELLNESS: Briefly ask about sleep quality and physical activity.
+
+7. WRAP UP: Summarize what they shared. Give one actionable health tip. End warmly.
+
+=== HANDLING MEDICAL QUESTIONS ===
+Answer general health, symptom, medication, mental health, and nutrition questions like a real doctor. For emergency signs, immediately tell them to call emergency services.
+
+=== WHAT THE PATIENT HAS LOGGED TODAY ===
+${todayContext}
+
+=== PATIENT HEALTH RECORDS ===
+${contextParts || "No historical records available yet."}
+
+=== RULES ===
+- Be concise: 2-4 sentences per turn.
+- NEVER say "I'm just an AI." Stay in character as ${doc.name}.
+- Use the patient's name naturally.
+- If the patient has already logged something today, acknowledge it and skip that topic.
+${chosenLang && chosenLang !== "English" ? `- LANGUAGE: Your ENTIRE response must be in ${chosenLang}.` : "- If the patient speaks in a regional Indian language, reply in that same language."}`;
+
+  const firstMessage = chosenLang && chosenLang !== "English"
+    ? `Hello ${patientName}! I'm ${doc.name}. How are you feeling today?`
+    : `Hello ${patientName}! I'm ${doc.name}, your health companion. How are you feeling today?`;
+
+  // Collect medication names for transcriber keyword boosting
+  const medKeywords: string[] = [];
+  if (patient) {
+    const medPidFilter = allPatientIds.length === 1 ? { patient_id: allPatientIds[0] } : { patient_id: { $in: allPatientIds } };
+    const meds = await Medication.find({ ...medPidFilter, active: true }).lean();
+    meds.forEach((m: any) => {
+      if (m.medicine) medKeywords.push(m.medicine.split(" ")[0]); // first word (drug name)
+    });
+    if (Array.isArray((patient as any).medications)) {
+      (patient as any).medications.forEach((m: any) => {
+        const name = typeof m === "string" ? m : m?.medicine;
+        if (name) medKeywords.push(name.split(" ")[0]);
+      });
+    }
+  }
+
+  res.json({
+    systemPrompt,
+    firstMessage,
+    personaName: doc.name,
+    personaGender: doc.gender,
+    patientName,
+    lang: chosenLang || "English",
+    medKeywords: [...new Set(medKeywords)],
+  });
+});
+
 router.post("/chat/voice-doctor", requireAuth, async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: "GEMINI_API_KEY not configured" });
   const { messages, persona, lang } = req.body;
@@ -4420,18 +4548,22 @@ Rules:
 
   // Update conversation with extracted actions
   if (extractedActions.length > 0) {
-    await VoiceConversation.updateOne(
-      { _id: conv._id },
-      {
-        extracted_actions: extractedActions.map((a: any, i: number) => ({
-          type: a.type,
-          value: a.value || a.description || a.notes || "",
-          details: a,
-          logged: logged.some((l) => l.type === a.type),
-          logged_at: logged.some((l) => l.type === a.type) ? new Date() : undefined,
-        })),
-      }
-    );
+    try {
+      await VoiceConversation.updateOne(
+        { _id: conv._id },
+        {
+          extracted_actions: extractedActions.map((a: any) => ({
+            type: a.type || "",
+            value: a.value || a.description || a.notes || "",
+            details: a,
+            logged: logged.some((l) => l.type === a.type),
+            logged_at: logged.some((l) => l.type === a.type) ? new Date() : undefined,
+          })),
+        }
+      );
+    } catch (updateErr) {
+      console.error("Failed to save extracted_actions:", updateErr);
+    }
   }
 
   res.status(201).json({

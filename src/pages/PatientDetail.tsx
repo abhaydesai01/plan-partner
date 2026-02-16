@@ -163,27 +163,27 @@ const PatientDetail = () => {
   const pastAppts = appointments.filter((a) => new Date(a.scheduled_at) < new Date() || a.status !== "scheduled");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Back link */}
-      <Link to="/dashboard/patients" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+      <Link to="/dashboard/patients" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors touch-manipulation min-h-[44px]">
         <ArrowLeft className="w-4 h-4" /> Back to Patients
       </Link>
 
       {/* Patient Header */}
-      <div className="glass-card rounded-xl p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <User className="w-7 h-7 text-primary" />
+      <div className="glass-card rounded-xl p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+            <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <User className="w-5 h-5 sm:w-7 sm:h-7 text-primary" />
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-heading font-bold text-foreground">{patient.full_name}</h1>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[patient.status] || ""}`}>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">{patient.full_name}</h1>
+                <span className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium capitalize whitespace-nowrap ${statusColors[patient.status] || ""}`}>
                   {patient.status.replace("_", " ")}
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted-foreground">
                 {patient.age && <span>{patient.age} years</span>}
                 {patient.gender && <span className="capitalize">{patient.gender}</span>}
                 {patient.phone && (
@@ -194,14 +194,14 @@ const PatientDetail = () => {
               </div>
             </div>
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-xs sm:text-sm text-muted-foreground ml-14 sm:ml-0 shrink-0">
             <p>Added {formatDate(patient.created_at, "MMM d, yyyy")}</p>
             {patient.last_check_in && <p>Last check-in: {formatDate(patient.last_check_in, "MMM d, yyyy")}</p>}
           </div>
         </div>
 
         {/* Conditions & Medications */}
-        <div className="grid sm:grid-cols-2 gap-4 mt-5 pt-5 border-t border-border/50">
+        <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-border/50">
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Conditions</p>
             <div className="flex flex-wrap gap-1.5">
@@ -227,8 +227,8 @@ const PatientDetail = () => {
         </div>
       </div>
 
-      {/* Doctor message to patient (Layer 4 Accountability) */}
-      <div className="glass-card rounded-xl p-4 sm:p-5">
+      {/* Doctor message to patient */}
+      <div className="glass-card rounded-xl p-3 sm:p-5">
         <h3 className="font-heading font-semibold text-foreground flex items-center gap-2 mb-2">
           <MessageSquare className="w-4 h-4 text-primary" />
           Message patient
@@ -262,78 +262,58 @@ const PatientDetail = () => {
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-        <div className="glass-card rounded-xl p-3 text-center">
-          <Activity className="w-4 h-4 text-primary mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{enrollments.length}</p>
-          <p className="text-[10px] text-muted-foreground">Programs</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <TrendingUp className="w-4 h-4 text-whatsapp mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{avgAdherence !== null ? `${avgAdherence}%` : "—"}</p>
-          <p className="text-[10px] text-muted-foreground">Adherence</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <Heart className="w-4 h-4 text-destructive mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{counts.vitals}</p>
-          <p className="text-[10px] text-muted-foreground">Vitals</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <FlaskConical className="w-4 h-4 text-accent mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{counts.labs}</p>
-          <p className="text-[10px] text-muted-foreground">Lab Results</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <FileText className="w-4 h-4 text-primary mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{counts.docs}</p>
-          <p className="text-[10px] text-muted-foreground">Documents</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <AlertTriangle className="w-4 h-4 text-destructive mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{counts.alerts}</p>
-          <p className="text-[10px] text-muted-foreground">Open Alerts</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <UtensilsCrossed className="w-4 h-4 text-primary mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{counts.food}</p>
-          <p className="text-[10px] text-muted-foreground">Food Logs</p>
-        </div>
-        <div className="glass-card rounded-xl p-3 text-center">
-          <Pill className="w-4 h-4 text-violet-500 mx-auto mb-1" />
-          <p className="text-lg font-heading font-bold text-foreground">{counts.medicationLogs}</p>
-          <p className="text-[10px] text-muted-foreground">Med logs</p>
+      {/* Quick Stats — horizontal scroll on mobile, grid on larger screens */}
+      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 sm:pb-0">
+        <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3 min-w-max sm:min-w-0">
+          {[
+            { icon: Activity, color: "text-primary", value: enrollments.length, label: "Programs" },
+            { icon: TrendingUp, color: "text-whatsapp", value: avgAdherence !== null ? `${avgAdherence}%` : "—", label: "Adherence" },
+            { icon: Heart, color: "text-destructive", value: counts.vitals, label: "Vitals" },
+            { icon: FlaskConical, color: "text-accent", value: counts.labs, label: "Lab Results" },
+            { icon: FileText, color: "text-primary", value: counts.docs, label: "Documents" },
+            { icon: AlertTriangle, color: "text-destructive", value: counts.alerts, label: "Open Alerts" },
+            { icon: UtensilsCrossed, color: "text-primary", value: counts.food, label: "Food Logs" },
+            { icon: Pill, color: "text-violet-500", value: counts.medicationLogs, label: "Med logs" },
+          ].map(({ icon: Icon, color, value, label }) => (
+            <div key={label} className="glass-card rounded-xl p-3 text-center min-w-[5.5rem] flex-shrink-0 sm:flex-shrink sm:min-w-0">
+              <Icon className={`w-4 h-4 ${color} mx-auto mb-1`} />
+              <p className="text-lg font-heading font-bold text-foreground">{value}</p>
+              <p className="text-[10px] text-muted-foreground whitespace-nowrap">{label}</p>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Tabbed Content */}
       <Tabs defaultValue="overview" className="space-y-4 w-full min-w-0">
-        <TabsList className="w-full flex overflow-x-auto overflow-y-hidden bg-muted/50 p-1 rounded-xl min-h-[44px] flex-nowrap gap-0.5 sm:gap-1 [&>button]:min-h-[40px] [&>button]:touch-manipulation [&>button]:flex-shrink-0">
-          <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <Stethoscope className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Overview
-          </TabsTrigger>
-          <TabsTrigger value="vitals" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <Heart className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Vitals
-          </TabsTrigger>
-          <TabsTrigger value="labs" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <FlaskConical className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Labs
-          </TabsTrigger>
-          <TabsTrigger value="documents" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <FileText className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Docs
-          </TabsTrigger>
-          <TabsTrigger value="appointments" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <Calendar className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Appts
-          </TabsTrigger>
-          <TabsTrigger value="alerts" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <AlertTriangle className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Alerts
-          </TabsTrigger>
-          <TabsTrigger value="food" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <UtensilsCrossed className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Food
-          </TabsTrigger>
-          <TabsTrigger value="medication" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
-            <Pill className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" /> Medication
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 sm:pb-0">
+          <TabsList className="inline-flex sm:flex sm:w-full bg-muted/50 p-1 rounded-xl min-h-[44px] flex-nowrap gap-0.5 sm:gap-1 [&>button]:min-h-[40px] [&>button]:touch-manipulation [&>button]:flex-shrink-0">
+            <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <Stethoscope className="w-3.5 h-3.5 flex-shrink-0" /> Overview
+            </TabsTrigger>
+            <TabsTrigger value="vitals" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <Heart className="w-3.5 h-3.5 flex-shrink-0" /> Vitals
+            </TabsTrigger>
+            <TabsTrigger value="labs" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <FlaskConical className="w-3.5 h-3.5 flex-shrink-0" /> Labs
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <FileText className="w-3.5 h-3.5 flex-shrink-0" /> Docs
+            </TabsTrigger>
+            <TabsTrigger value="appointments" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> Appts
+            </TabsTrigger>
+            <TabsTrigger value="alerts" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Alerts
+            </TabsTrigger>
+            <TabsTrigger value="food" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <UtensilsCrossed className="w-3.5 h-3.5 flex-shrink-0" /> Food
+            </TabsTrigger>
+            <TabsTrigger value="medication" className="gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+              <Pill className="w-3.5 h-3.5 flex-shrink-0" /> Medication
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6 mt-4 min-w-0 overflow-x-hidden">

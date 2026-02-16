@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { usePatientRecord } from "@/hooks/usePatientRecord";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { format } from "date-fns";
 import { Activity, Plus, X, Upload } from "lucide-react";
@@ -24,14 +24,14 @@ const emptyBulkRow = (): BulkRow => ({ vital_type: "blood_pressure", value_text:
 const PatientVitals = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { patientId, loading: patientLoading } = usePatientRecord();
-  const { data: vitals = [], isLoading } = useQuery({
-    queryKey: ["me", "vitals", patientId],
+  const { user, loading: authLoading } = useAuth();
+  const { data: vitals = [], isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["me", "vitals"],
     queryFn: async () => {
       const data = await api.get<any[]>("me/vitals");
       return Array.isArray(data) ? data : [];
     },
-    enabled: !!patientId && !patientLoading,
+    enabled: !!user && !authLoading,
   });
   const [selectedType, setSelectedType] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -45,7 +45,7 @@ const PatientVitals = () => {
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   const [savingBulk, setSavingBulk] = useState(false);
 
-  const loading = patientLoading || isLoading;
+  const loading = authLoading || isLoading;
 
   const vitalsAnalysis = useMemo(() => {
     const sorted = [...vitals].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
@@ -55,7 +55,7 @@ const PatientVitals = () => {
   const handleAddVital = async () => {
     const isBp = addType === "blood_pressure";
     const valueText = isBp ? `${addBpUpper.trim()}/${addBpLower.trim()}` : addValue.trim();
-    if (!patientId || !valueText) return;
+    if (!user || !valueText) return;
     if (isBp && (!addBpUpper.trim() || !addBpLower.trim())) return;
     setSaving(true);
     const vitalInfo = VITAL_TYPES.find(t => t.value === addType);
@@ -83,7 +83,7 @@ const PatientVitals = () => {
   };
 
   const handleBulkAdd = async () => {
-    if (!patientId) return;
+    if (!user) return;
     const vitalsList = bulkRows
       .map((r) => {
         const value_text = r.value_text.trim();
@@ -127,6 +127,13 @@ const PatientVitals = () => {
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
 
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <p className="text-sm text-destructive">{(error as Error)?.message || "Failed to load vitals"}</p>
+      <button onClick={() => refetch()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">Try Again</button>
+    </div>
+  );
+
   // Chart data for selected type (if not "all")
   const chartData = selectedType !== "all"
     ? [...filtered].reverse().map(v => ({
@@ -142,7 +149,7 @@ const PatientVitals = () => {
           <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Vitals</h1>
           <p className="text-muted-foreground text-sm">Your recorded vital signs</p>
         </div>
-        {patientId && (
+        {user && (
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
               <Plus className="w-4 h-4 shrink-0" /> Add Vital

@@ -571,11 +571,11 @@ const VoiceConversationSchema = new mongoose.Schema(
     ],
     extracted_actions: [
       {
-        type: String, // "blood_pressure" | "blood_sugar" | "food" | "medication" | "symptom"
-        value: String,
+        type: { type: String }, // "blood_pressure" | "blood_sugar" | "food" | "medication" | "symptom"
+        value: { type: String },
         details: mongoose.Schema.Types.Mixed,
         logged: { type: Boolean, default: false },
-        logged_at: Date,
+        logged_at: { type: Date },
       },
     ],
     session_date: { type: Date, default: Date.now },

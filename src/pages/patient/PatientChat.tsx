@@ -12,7 +12,7 @@ import { useRewards, TodayProgress } from "@/components/RewardsSection";
 import { useGamification, StreakBadge, LevelBadge, MilestoneRewardsList, WeeklyChallengesList, BadgesList, type GamificationData } from "@/components/GamificationSection";
 import { showPointsEarned } from "@/lib/rewards";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { useVoiceOutput } from "@/hooks/useVoiceOutput";
+import { useVoiceOutput, unlockTTSAudio } from "@/hooks/useVoiceOutput";
 import {
   Dialog,
   DialogContent,
@@ -551,7 +551,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
   return (
     <div className="h-screen w-full flex-1 flex flex-col bg-background overflow-hidden min-h-[100dvh]">
       {/* Header: safe-area so logo/link/hamburger aren't cut in PWA */}
-      <header className="safe-area-header flex items-center justify-between gap-1 sm:gap-2 flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 min-h-[3.5rem] px-4">
+      <header className="safe-area-header flex items-center justify-between gap-1 sm:gap-2 flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-30 min-h-[3.5rem] px-4 py-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <button
             onClick={onOpenMenu}
@@ -708,6 +708,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                       <button
                         type="button"
                         onClick={() => {
+                          unlockTTSAudio();
                           if (voiceInput.isListening) {
                             voiceInput.stopListening();
                           } else {
@@ -784,6 +785,17 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
           <>
             <div className="flex-1 overflow-y-auto px-4 py-6 pwa-safe-x pb-[max(1.5rem,var(--sab))]">
               <div className="max-w-3xl mx-auto space-y-6">
+                {/* Back to main view button */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setMessages([]); conversationIdRef.current = null; }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors touch-manipulation"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to Home
+                  </button>
+                </div>
                 {messages.map((msg, i) => (
                   <div
                     key={i}
@@ -870,6 +882,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
                     <button
                       type="button"
                       onClick={() => {
+                        unlockTTSAudio();
                         if (voiceInput.isListening) {
                           voiceInput.stopListening();
                         } else {

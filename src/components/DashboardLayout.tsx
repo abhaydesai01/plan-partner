@@ -83,11 +83,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       )}
 
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 w-64 max-w-[85vw] lg:max-w-none h-full max-h-[100dvh] lg:h-screen bg-card border-r border-border flex flex-col transition-transform lg:translate-x-0 ${
+        className={`fixed lg:sticky top-0 left-0 z-50 w-64 max-w-[85vw] lg:max-w-none h-[100dvh] lg:h-screen bg-card border-r border-border flex flex-col transition-transform lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="safe-area-header h-16 min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
+        <div className="safe-area-header min-h-[4rem] flex items-center justify-between px-5 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
               <MessageSquare className="w-4 h-4 text-primary-foreground" />
@@ -172,7 +172,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-[100dvh] w-full max-w-full overflow-x-hidden">
-        <header className="safe-area-header h-14 min-h-[3.5rem] sm:h-16 sm:min-h-[4rem] border-b border-border bg-card flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 flex-shrink-0">
+        <header className="safe-area-header min-h-[3.5rem] sm:min-h-[4rem] border-b border-border bg-card flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 flex-shrink-0">
           <div className="flex items-center min-w-0 flex-1">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden touch-target mr-3 text-muted-foreground hover:bg-muted rounded-xl p-2 flex-shrink-0" aria-label="Open menu">
               <Menu className="w-5 h-5" />

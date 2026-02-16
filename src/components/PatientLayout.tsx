@@ -54,7 +54,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="safe-area-header h-16 min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
+        <div className="safe-area-header min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
               <Heart className="w-4 h-4 text-primary-foreground" />
@@ -102,7 +102,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-hidden min-h-[100dvh]">
-        <header className="safe-area-header h-14 min-h-[3.5rem] sm:h-16 sm:min-h-[4rem] border-b border-border bg-card flex items-center gap-1 sm:gap-2 sticky top-0 z-30 flex-shrink-0 px-4">
+        <header className="safe-area-header min-h-[3.5rem] sm:min-h-[4rem] border-b border-border bg-card flex items-center gap-1 sm:gap-2 sticky top-0 z-30 flex-shrink-0 px-4 py-2">
           <button
             onClick={() => setSidebarOpen(true)}
             className="touch-target p-2 rounded-xl hover:bg-muted active:bg-muted text-muted-foreground flex-shrink-0 touch-manipulation -ml-0.5"
@@ -147,7 +147,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="safe-area-header h-16 min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
+        <div className="safe-area-header min-h-[4rem] flex items-center justify-between px-5 border-b border-border">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
               <Heart className="w-4 h-4 text-primary-foreground" />
