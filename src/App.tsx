@@ -10,6 +10,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { PatientLayout, PatientLayoutWithChat } from "@/components/PatientLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import AuthDoctor from "./pages/AuthDoctor";
+import AuthPatient from "./pages/AuthPatient";
 import PublicEnroll from "./pages/PublicEnroll";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
@@ -85,6 +87,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/doctor" element={<AuthDoctor />} />
+            <Route path="/auth/patient" element={<AuthPatient />} />
             <Route path="/enroll/:doctorCode" element={<PublicEnroll />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />

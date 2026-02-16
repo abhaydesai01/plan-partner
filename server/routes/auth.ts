@@ -24,10 +24,18 @@ router.post("/auth/register", async (req, res) => {
   if (!phoneTrimmed) {
     return res.status(400).json({ error: "Phone number is required" });
   }
+  const roleChoice = role === "patient" ? "patient" : role === "clinic" ? "clinic" : role === "family" ? "family" : "doctor";
+  // All fields are mandatory
+  if (roleChoice !== "clinic" && (!full_name || !String(full_name).trim())) {
+    return res.status(400).json({ error: "Full name is required" });
+  }
+  if (roleChoice === "clinic") {
+    if (!clinic_name || !String(clinic_name).trim()) return res.status(400).json({ error: "Clinic name is required" });
+    if (!address || !String(address).trim()) return res.status(400).json({ error: "Clinic address is required" });
+  }
   const existing = await AuthUser.findOne({ email: (email as string).toLowerCase() }).lean();
   if (existing) return res.status(400).json({ error: "Email already registered" });
 
-  const roleChoice = role === "patient" ? "patient" : role === "clinic" ? "clinic" : role === "family" ? "family" : "doctor";
   const user_id = crypto.randomUUID();
   const password_hash = await bcrypt.hash(password, 10);
 
