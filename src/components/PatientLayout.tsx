@@ -44,7 +44,7 @@ export function PatientLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen pwa-screen flex bg-background w-full max-w-full overflow-x-hidden">
+    <div className="min-h-[100dvh] pwa-screen flex bg-background w-full max-w-full overflow-x-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} aria-hidden />
       )}
@@ -137,7 +137,7 @@ export function PatientLayoutWithChat({ children }: { children: (onOpenMenu: () 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen pwa-screen flex bg-background w-full max-w-full overflow-x-hidden">
+    <div className="min-h-[100dvh] pwa-screen flex bg-background w-full max-w-full overflow-x-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setSidebarOpen(false)} aria-hidden />
       )}

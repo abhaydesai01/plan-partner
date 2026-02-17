@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="none">
+  <circle cx="40" cy="40" r="28" fill="#003B73"/>
+  <path d="M28 52 L40 20 L52 52 Z" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+  <line x1="32" y1="44" x2="48" y2="44" stroke="#FFFFFF" stroke-width="2"/>
+  <text x="125" y="34" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="18" fill="#003B73" letter-spacing="1">APOLLO</text>
+  <text x="125" y="52" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="10" fill="#666666" letter-spacing="2">HOSPITALS</text>
+</svg>

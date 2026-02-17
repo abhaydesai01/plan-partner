@@ -54,7 +54,7 @@ const Enrollments = () => {
       const [enrollRes, patientResRaw, programRes] = await Promise.all([
         api.get<Enrollment[]>("enrollments"),
         api.get<{ items: Patient[] }>("patients", { limit: "200", skip: "0" }),
-        api.get<Program[]>("programs", { is_active: "true" }),
+        api.get<Program[]>("doctor/programs"),
       ]);
       const patientRes = patientResRaw?.items ?? [];
       const patientMap: Record<string, string> = {};

@@ -191,7 +191,7 @@ const PatientOverview = () => {
     // Show link request form or pending status
     if (linkRequest?.status === "pending") {
       return (
-        <div className="glass-card rounded-xl p-12 text-center">
+        <div className="glass-card rounded-xl p-6 sm:p-12 text-center">
           <Clock className="w-12 h-12 text-accent mx-auto mb-4" />
           <h2 className="text-xl font-heading font-bold text-foreground mb-2">Request Pending</h2>
           <p className="text-muted-foreground mb-1">Your link request has been sent to your doctor.</p>
@@ -202,7 +202,7 @@ const PatientOverview = () => {
 
     if (linkRequest?.status === "denied") {
       return (
-        <div className="glass-card rounded-xl p-12 text-center space-y-4">
+        <div className="glass-card rounded-xl p-6 sm:p-12 text-center space-y-4">
           <Heart className="w-12 h-12 text-destructive mx-auto" />
           <h2 className="text-xl font-heading font-bold text-foreground">Request Denied</h2>
           <p className="text-muted-foreground">Your previous request was denied. You can try again with the correct doctor code.</p>
@@ -214,7 +214,7 @@ const PatientOverview = () => {
     }
 
     return (
-      <div className="max-w-md mx-auto space-y-6">
+      <div className="w-full sm:max-w-md sm:mx-auto space-y-6">
         <div className="glass-card rounded-xl p-8 text-center space-y-4">
           <Search className="w-12 h-12 text-primary mx-auto" />
           <h2 className="text-xl font-heading font-bold text-foreground">Connect to Your Doctor</h2>

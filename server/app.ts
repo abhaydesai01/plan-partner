@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import apiRoutes from "./routes/index.js";
 import publicRoutes from "./routes/public.js";
 import authRoutes from "./routes/auth.js";
+import adminRoutes from "./routes/admin.js";
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use("/api", (_req, res, next) => {
 // Auth (register/login) mounted first so they are always available
 app.use("/api", authRoutes);
 app.use("/api", publicRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api", apiRoutes);
 
 export default app;

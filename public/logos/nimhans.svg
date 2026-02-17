@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 80" fill="none">
+  <circle cx="40" cy="40" r="26" fill="#1B4332" stroke="#2D6A4F" stroke-width="2"/>
+  <path d="M32 50 C32 50 36 30 40 24 C44 30 48 50 48 50" fill="none" stroke="#95D5B2" stroke-width="2"/>
+  <circle cx="40" cy="22" r="4" fill="#95D5B2"/>
+  <text x="135" y="30" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="18" fill="#1B4332" letter-spacing="2">NIMHANS</text>
+  <text x="135" y="48" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="6.5" fill="#666666" letter-spacing="0.5">NATIONAL INSTITUTE OF MENTAL</text>
+  <text x="135" y="58" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="6.5" fill="#666666" letter-spacing="0.5">HEALTH &amp; NEUROSCIENCES</text>
+</svg>

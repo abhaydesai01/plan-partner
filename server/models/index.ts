@@ -12,7 +12,7 @@ const toJsonOptions = {
 
 // Enums
 const clinicRoleEnum = ["owner", "admin", "doctor", "nurse", "staff"];
-const appRoleEnum = ["doctor", "patient", "clinic", "family"];
+const appRoleEnum = ["admin", "doctor", "patient", "clinic", "family"];
 
 const AuthUserSchema = new mongoose.Schema(
   {
@@ -20,6 +20,12 @@ const AuthUserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     password_hash: { type: String, required: true },
     user_id: { type: String, required: true, unique: true },
+    email_verified: { type: Boolean, default: false },
+    approval_status: {
+      type: String,
+      enum: ["active", "pending_approval", "approved", "rejected", "suspended"],
+      default: "active",
+    },
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
@@ -139,6 +145,7 @@ const DoctorAvailabilitySchema = new mongoose.Schema(
 const EnrollmentSchema = new mongoose.Schema(
   {
     adherence_pct: Number,
+    clinic_id: String,
     completed_at: Date,
     doctor_id: { type: String, required: true },
     enrolled_at: { type: Date, default: Date.now },
@@ -366,11 +373,21 @@ const ProfileSchema = new mongoose.Schema(
 const ProgramSchema = new mongoose.Schema(
   {
     description: String,
-    doctor_id: { type: String, required: true },
+    doctor_id: String, // legacy — kept for backward compatibility
+    category: String, // e.g. "Diabetes", "Dental", "Cardiac"
     duration_days: { type: Number, default: 90 },
+    duration_unit: { type: String, enum: ["days", "weeks", "months"], default: "days" },
+    outcome_goal: String,
+    phases: [{
+      name: String,
+      phase_type: { type: String, enum: ["onboarding", "engagement", "monitoring", "completion"] },
+      duration_days: Number,
+      tasks: [{ title: String, frequency: String, description: String }],
+    }],
     is_active: { type: Boolean, default: true },
     name: { type: String, required: true },
-    type: { type: String, required: true },
+    type: String,
+    created_by: String, // admin user_id
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
@@ -657,6 +674,39 @@ const PatientGamificationSchema = new mongoose.Schema(
 );
 PatientGamificationSchema.index({ patient_id: 1 }, { unique: true });
 
+// ─── Program Assignment (admin assigns programs to clinics) ─────
+const ProgramAssignmentSchema = new mongoose.Schema(
+  {
+    program_id: { type: String, required: true },
+    clinic_id: { type: String, required: true },
+    assigned_by: String, // admin user_id
+    assigned_at: { type: Date, default: Date.now },
+    status: { type: String, enum: ["active", "revoked"], default: "active" },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+ProgramAssignmentSchema.index({ clinic_id: 1, status: 1 });
+ProgramAssignmentSchema.index({ program_id: 1, status: 1 });
+
+// ─── Revenue Entry (manual revenue tracking) ───────────────────
+const RevenueEntrySchema = new mongoose.Schema(
+  {
+    enrollment_id: String,
+    clinic_id: { type: String, required: true },
+    doctor_id: String,
+    program_id: String,
+    patient_id: String,
+    amount: { type: Number, required: true },
+    currency: { type: String, default: "INR" },
+    description: String,
+    entered_by: String, // user_id
+    entry_date: { type: Date, default: Date.now },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+RevenueEntrySchema.index({ clinic_id: 1, entry_date: -1 });
+RevenueEntrySchema.index({ program_id: 1, entry_date: -1 });
+
 export const AuthUser = mongoose.model("AuthUser", AuthUserSchema);
 export const Alert = mongoose.model("Alert", AlertSchema);
 export const AppointmentCheckin = mongoose.model("AppointmentCheckin", AppointmentCheckinSchema);
@@ -696,3 +746,56 @@ export const PatientGamification = mongoose.model("PatientGamification", Patient
 export const VoiceConversation = mongoose.model("VoiceConversation", VoiceConversationSchema);
 export const ChatConversation = mongoose.model("ChatConversation", ChatConversationSchema);
 export const HealthNote = mongoose.model("HealthNote", HealthNoteSchema);
+
+/** Email verification codes */
+const EmailVerificationSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, index: true },
+    user_id: { type: String, required: true },
+    code: { type: String, required: true },
+    expires_at: { type: Date, required: true },
+    used: { type: Boolean, default: false },
+    purpose: { type: String, default: "signup" }, // signup | password_reset
+  },
+  { timestamps: { createdAt: "created_at" } }
+);
+EmailVerificationSchema.index({ email: 1, code: 1 });
+EmailVerificationSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+
+/** Email notification log — tracks every email sent */
+const EmailNotificationLogSchema = new mongoose.Schema(
+  {
+    to_email: { type: String, required: true },
+    to_user_id: String,
+    subject: { type: String, required: true },
+    template: { type: String, required: true }, // e.g. "verification", "welcome", "vitals_logged"
+    status: { type: String, default: "sent" }, // sent | failed
+    error: String,
+    metadata: mongoose.Schema.Types.Mixed,
+  },
+  { timestamps: { createdAt: "sent_at" } }
+);
+EmailNotificationLogSchema.index({ to_user_id: 1, sent_at: -1 });
+EmailNotificationLogSchema.index({ template: 1, sent_at: -1 });
+
+export const EmailVerification = mongoose.model("EmailVerification", EmailVerificationSchema);
+export const EmailNotificationLog = mongoose.model("EmailNotificationLog", EmailNotificationLogSchema);
+export const ProgramAssignment = mongoose.model("ProgramAssignment", ProgramAssignmentSchema);
+export const RevenueEntry = mongoose.model("RevenueEntry", RevenueEntrySchema);
+
+// ─── Doctor Program Assignment (clinic assigns doctors to programs) ──
+const DoctorProgramAssignmentSchema = new mongoose.Schema(
+  {
+    program_id: { type: String, required: true },
+    doctor_user_id: { type: String, required: true },
+    clinic_id: { type: String, required: true },
+    assigned_by: String,
+    assigned_at: { type: Date, default: Date.now },
+    status: { type: String, enum: ["active", "revoked"], default: "active" },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+DoctorProgramAssignmentSchema.index({ clinic_id: 1, status: 1 });
+DoctorProgramAssignmentSchema.index({ doctor_user_id: 1, status: 1 });
+DoctorProgramAssignmentSchema.index({ program_id: 1, doctor_user_id: 1, status: 1 });
+export const DoctorProgramAssignment = mongoose.model("DoctorProgramAssignment", DoctorProgramAssignmentSchema);

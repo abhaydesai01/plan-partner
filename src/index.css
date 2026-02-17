@@ -125,6 +125,9 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-lg border border-border/50 shadow-lg;
   }
+  /* Hide scrollbar but keep scroll functionality */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   /* PWA: keep header content below notch / status bar; extra horizontal padding so icons aren’t cut on mobile */
   .safe-area-header {
     padding-top: var(--sat);
@@ -209,5 +212,13 @@
   /* Smooth scroll for panel animations */
   .panel-slide {
     transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
+  }
+  /* Hide scrollbar but keep scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

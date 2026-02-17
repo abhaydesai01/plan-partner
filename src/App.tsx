@@ -12,13 +12,28 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AuthDoctor from "./pages/AuthDoctor";
 import AuthPatient from "./pages/AuthPatient";
+import VerifyEmail from "./pages/VerifyEmail";
+import ForgotPassword from "./pages/ForgotPassword";
 import PublicEnroll from "./pages/PublicEnroll";
+import ConnectDoctor from "./pages/ConnectDoctor";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Contact from "./pages/Contact";
 import { ClinicLayout } from "./components/ClinicLayout";
 import { FamilyLayout } from "./components/FamilyLayout";
+import { AdminLayout } from "./components/AdminLayout";
+import AuthAdmin from "./pages/AuthAdmin";
+
+const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const AccountSuspended = lazy(() => import("./pages/AccountSuspended"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminClinics = lazy(() => import("./pages/admin/AdminClinics"));
+const AdminDoctors = lazy(() => import("./pages/admin/AdminDoctors"));
+const AdminPrograms = lazy(() => import("./pages/admin/AdminPrograms"));
+const AdminProgramDetail = lazy(() => import("./pages/admin/AdminProgramDetail"));
+const AdminRevenue = lazy(() => import("./pages/admin/AdminRevenue"));
+const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Patients = lazy(() => import("./pages/Patients"));
@@ -56,6 +71,8 @@ const ClinicPatients = lazy(() => import("./pages/clinic/ClinicPatients"));
 const ClinicAppointments = lazy(() => import("./pages/clinic/ClinicAppointments"));
 const ClinicSettingsPage = lazy(() => import("./pages/clinic/ClinicSettingsPage"));
 const ClinicFeedback = lazy(() => import("./pages/clinic/ClinicFeedback"));
+const ClinicProgramsPage = lazy(() => import("./pages/clinic/ClinicPrograms"));
+const ClinicRevenue = lazy(() => import("./pages/clinic/ClinicRevenue"));
 const FamilyDashboard = lazy(() => import("./pages/family/FamilyDashboard"));
 const PatientAccountability = lazy(() => import("./pages/patient/PatientAccountability"));
 
@@ -89,10 +106,25 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/doctor" element={<AuthDoctor />} />
             <Route path="/auth/patient" element={<AuthPatient />} />
+            <Route path="/auth/verify" element={<VerifyEmail />} />
+            <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+            <Route path="/auth/admin" element={<AuthAdmin />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
+            <Route path="/account-suspended" element={<AccountSuspended />} />
             <Route path="/enroll/:doctorCode" element={<PublicEnroll />} />
+            <Route path="/connect/:doctorCode" element={<ConnectDoctor />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/contact" element={<Contact />} />
+            
+            {/* Admin Portal */}
+            <Route path="/admin" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminDashboard /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/clinics" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminClinics /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/doctors" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminDoctors /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/programs" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminPrograms /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/programs/:id" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminProgramDetail /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/revenue" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminRevenue /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/analytics" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminAnalytics /></AdminLayout></ProtectedRoute>} />
             
             {/* Clinic Setup */}
             <Route path="/clinic-setup" element={<ProtectedRoute allowedRole="doctor"><ClinicSetup /></ProtectedRoute>} />
@@ -121,6 +153,8 @@ const App = () => (
             <Route path="/clinic/team" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicTeam /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/patients" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicPatients /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/appointments" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicAppointments /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/programs" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicProgramsPage /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/revenue" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicRevenue /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/feedback" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicFeedback /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/settings" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicSettingsPage /></ClinicLayout></ProtectedRoute>} />
 

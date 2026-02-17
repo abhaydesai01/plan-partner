@@ -77,7 +77,7 @@ export default function PatientFoodAnalysis() {
         {logs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No meals logged yet. Log meals from the Overview page to see them here.</p>
         ) : (
-          <div className="space-y-2 max-h-[320px] overflow-y-auto">
+          <div className="space-y-2 max-h-[40vh] sm:max-h-[320px] overflow-y-auto">
             {logs.map((log) => {
               const items = Array.isArray(log.food_items) ? log.food_items : [];
               const names = items.map((i) => i?.name).filter(Boolean).join(", ");

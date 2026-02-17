@@ -121,31 +121,35 @@ const ProgramPlanSection = () => (
         </p>
       </div>
 
-      {/* Timeline */}
-      <div className="max-w-4xl mx-auto relative">
-        {/* Vertical line */}
-        <div className="absolute left-6 sm:left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/40 via-primary/20 to-primary/40 hidden sm:block" />
-
-        <div className="space-y-6 sm:space-y-8">
+      {/* Horizontal Timeline */}
+      <div className="relative w-full max-w-7xl mx-auto">
+        {/* Scrollable on mobile, wrapped grid on desktop */}
+        <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 md:overflow-visible snap-x snap-mandatory scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
           {timeline.map((item, i) => (
-            <div key={item.step} className="relative flex gap-4 sm:gap-6 group">
-              {/* Step circle */}
-              <div className={`relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform`}>
-                <item.icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
-              </div>
-              {/* Content */}
-              <div className="flex-1 pb-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-primary/60 uppercase tracking-wider">Step {item.step}</span>
-                  {i === timeline.length - 1 && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-semibold">Finish</span>}
+            <div key={item.step} className="relative flex-shrink-0 w-[260px] sm:w-[280px] md:w-auto snap-center group">
+              {/* Card content */}
+              <div className="rounded-xl border border-border bg-background p-4 sm:p-5 h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden">
+                {/* Top gradient accent */}
+                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${item.color}`} />
+
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-110 transition-transform`}>
+                    <item.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-primary/60 uppercase tracking-wider">Step {item.step}</span>
+                      {i === timeline.length - 1 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-semibold">Finish</span>}
+                    </div>
+                    <h3 className="text-sm font-heading font-bold text-foreground truncate">{item.title}</h3>
+                  </div>
                 </div>
-                <h3 className="text-lg sm:text-xl font-heading font-bold text-foreground mb-0.5">{item.title}</h3>
-                <p className="text-sm text-muted-foreground mb-3">{item.subtitle}</p>
-                <ul className="space-y-1.5">
+                <p className="text-xs text-muted-foreground mb-2.5">{item.subtitle}</p>
+                <ul className="space-y-1">
                   {item.points.map((pt, j) => (
-                    <li key={j} className="flex items-start gap-2 text-sm text-foreground/80">
-                      <ArrowRight className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
-                      <span>{pt}</span>
+                    <li key={j} className="flex items-start gap-1.5 text-xs text-foreground/80">
+                      <ArrowRight className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
+                      <span className="leading-relaxed">{pt}</span>
                     </li>
                   ))}
                 </ul>

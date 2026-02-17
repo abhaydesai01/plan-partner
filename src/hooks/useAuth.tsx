@@ -2,11 +2,17 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { api } from "@/lib/api";
 import { getStoredToken, setStoredToken, setStoredDoctorToken, getStoredDoctorToken } from "@/lib/api";
 
-type AppRole = "doctor" | "patient" | "clinic" | "family";
+type AppRole = "admin" | "doctor" | "patient" | "clinic" | "family";
 
 export interface AuthUser {
   id: string;
   email?: string;
+}
+
+export interface ConnectedClinic {
+  id: string;
+  name: string;
+  member_role: string;
 }
 
 export interface AuthSession {
@@ -15,6 +21,9 @@ export interface AuthSession {
   role: AppRole | null;
   patient: Record<string, unknown> | null;
   clinic: Record<string, unknown> | null;
+  email_verified?: boolean;
+  approval_status?: string;
+  connected_clinics?: ConnectedClinic[];
 }
 
 interface AuthContextType {
@@ -22,6 +31,9 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   role: AppRole | null;
+  emailVerified: boolean;
+  approvalStatus: string;
+  connectedClinics: ConnectedClinic[];
   signUp: (email: string, password: string, fullName: string, role?: AppRole, extra?: { clinic_name?: string; address?: string; phone?: string }) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -33,11 +45,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_CACHE_KEY = "mediimate_session_cache";
+
+function getCachedSession(): AuthSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setCachedSession(session: AuthSession | null) {
+  try {
+    if (session) localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_CACHE_KEY);
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Restore from cache instantly to avoid login-screen flash in PWA
+  const cached = getStoredToken() ? getCachedSession() : null;
+  const [session, setSession] = useState<AuthSession | null>(cached);
+  const [user, setUser] = useState<AuthUser | null>(cached?.user ?? null);
+  const [role, setRole] = useState<AppRole | null>(cached?.role ?? null);
+  const [emailVerified, setEmailVerified] = useState(!!cached?.email_verified);
+  const [approvalStatus, setApprovalStatus] = useState(cached?.approval_status || "active");
+  const [connectedClinics, setConnectedClinics] = useState<ConnectedClinic[]>(cached?.connected_clinics || []);
+  const [loading, setLoading] = useState(!cached);
 
   const refreshSession = async () => {
     const token = getStoredToken();
@@ -45,6 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setRole(null);
+      setEmailVerified(false);
+      setApprovalStatus("active");
+      setCachedSession(null);
       setLoading(false);
       return;
     }
@@ -53,11 +92,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data);
       setUser(data.user);
       setRole(data.role);
+      setEmailVerified(!!data.email_verified);
+      setApprovalStatus(data.approval_status || "active");
+      setConnectedClinics(data.connected_clinics || []);
+      setCachedSession(data);
     } catch {
       setStoredToken(null);
       setSession(null);
       setUser(null);
       setRole(null);
+      setEmailVerified(false);
+      setApprovalStatus("active");
+      setConnectedClinics([]);
+      setCachedSession(null);
     } finally {
       setLoading(false);
     }
@@ -106,9 +153,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setStoredToken(null);
     setStoredDoctorToken(null);
+    setCachedSession(null);
     setSession(null);
     setUser(null);
     setRole(null);
+    setEmailVerified(false);
+    setApprovalStatus("active");
+    setConnectedClinics([]);
   };
 
   const switchableClinics = async () => {
@@ -143,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, role, signUp, signIn, signOut, refreshSession, switchableClinics, switchToClinic, switchBackToDoctor }}>
+    <AuthContext.Provider value={{ session, user, loading, role, emailVerified, approvalStatus, connectedClinics, signUp, signIn, signOut, refreshSession, switchableClinics, switchToClinic, switchBackToDoctor }}>
       {children}
     </AuthContext.Provider>
   );

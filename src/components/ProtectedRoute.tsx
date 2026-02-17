@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
-export function ProtectedRoute({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "doctor" | "patient" | "clinic" | "family" }) {
-  const { user, loading, role } = useAuth();
+export function ProtectedRoute({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "admin" | "doctor" | "patient" | "clinic" | "family" }) {
+  const { user, loading, role, emailVerified, approvalStatus } = useAuth();
 
   if (loading) {
     return (
@@ -23,9 +23,28 @@ export function ProtectedRoute({ children, allowedRole }: { children: React.Reac
     );
   }
 
+  // Check approval status for doctors and clinics BEFORE email verification
+  // Pending-approval accounts should see the approval page, not the verify page
+  if (role === "doctor" || role === "clinic") {
+    if (approvalStatus === "pending_approval") {
+      return <Navigate to="/pending-approval" replace />;
+    }
+    if (approvalStatus === "rejected" || approvalStatus === "suspended") {
+      return <Navigate to="/account-suspended" replace />;
+    }
+  }
+
+  // Admin doesn't need email verification check
+  if (role !== "admin") {
+    // Redirect unverified users to verification page
+    if (user && role && !emailVerified) {
+      return <Navigate to="/auth/verify" replace />;
+    }
+  }
+
   // Redirect to correct portal if wrong role
   if (allowedRole && role !== allowedRole) {
-    const to = role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : role === "family" ? "/family" : "/dashboard";
+    const to = role === "admin" ? "/admin" : role === "patient" ? "/patient" : role === "clinic" ? "/clinic" : role === "family" ? "/family" : "/dashboard";
     return <Navigate to={to} replace />;
   }
 

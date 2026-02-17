@@ -1,17 +1,25 @@
-import { Building2, GraduationCap, Landmark, Heart, CheckCircle2, Quote } from "lucide-react";
+import { Building2, CheckCircle2, Quote } from "lucide-react";
+
+const logoBar = [
+  { src: "/logos/manipal.svg", alt: "Manipal Academy of Higher Education" },
+  { src: "/logos/karnataka.svg", alt: "Government of Karnataka" },
+  { src: "/logos/apollo.svg", alt: "Apollo Hospitals" },
+  { src: "/logos/nimhans.svg", alt: "NIMHANS" },
+  { src: "/logos/kshema.svg", alt: "KSHEMA" },
+];
 
 const partners = [
   {
     category: "Incubation",
-    icon: GraduationCap,
-    color: "from-blue-500 to-indigo-600",
+    logo: "/logos/manipal.svg",
     name: "Manipal Incubation Centre (MIC)",
     items: ["Incubated: Mediimate", "Mentors: Manipal Hospital CMOs"],
+    accent: "border-blue-500/30 bg-blue-500/5",
+    hospitals: null as null,
   },
   {
     category: "Government",
-    icon: Landmark,
-    color: "from-amber-500 to-orange-600",
+    logo: "/logos/karnataka.svg",
     name: "Government of Karnataka",
     items: [
       "Startup Karnataka portfolio",
@@ -19,17 +27,20 @@ const partners = [
       "SUAS Bengaluru certified",
       "PHC rollout pilot approved (50 centers)",
     ],
+    accent: "border-amber-500/30 bg-amber-500/5",
+    hospitals: null as null,
   },
   {
     category: "Clinical Partners",
-    icon: Heart,
-    color: "from-red-500 to-rose-600",
+    logo: null as string | null,
     name: "Hospital Network",
-    items: [
-      "Apollo Hospitals (Labs + ER linkage)",
-      "NIMHANS (Mental health validation)",
-      "KSHEMA (Kannada content certified)",
+    hospitals: [
+      { name: "Apollo Hospitals", logo: "/logos/apollo.svg", note: "Labs + ER linkage" },
+      { name: "NIMHANS", logo: "/logos/nimhans.svg", note: "Mental health validation" },
+      { name: "KSHEMA", logo: "/logos/kshema.svg", note: "Kannada content certified" },
     ],
+    items: [] as string[],
+    accent: "border-red-500/30 bg-red-500/5",
   },
 ];
 
@@ -49,32 +60,68 @@ const BackedBySection = () => (
         </p>
       </div>
 
+      {/* Logo bar */}
+      <div className="max-w-4xl mx-auto mb-10 sm:mb-14">
+        <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
+          {logoBar.map((logo) => (
+            <img
+              key={logo.alt}
+              src={logo.src}
+              alt={logo.alt}
+              className="h-10 sm:h-12 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity grayscale hover:grayscale-0"
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Partner detail cards */}
       <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-6">
         {partners.map((p) => (
           <div
             key={p.category}
-            className="group rounded-2xl border border-border bg-background p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            className={`group rounded-2xl border ${p.accent} bg-background p-5 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
           >
-            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${p.color} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-lg`}>
-              <p.icon className="w-7 h-7 text-white" />
-            </div>
+            {p.logo ? (
+              <img src={p.logo} alt={p.name} className="h-10 sm:h-12 w-auto object-contain mb-4" />
+            ) : p.hospitals ? (
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                {p.hospitals.map((h) => (
+                  <img key={h.name} src={h.logo} alt={h.name} className="h-8 sm:h-10 w-auto object-contain" />
+                ))}
+              </div>
+            ) : null}
+
             <p className="text-xs font-bold text-primary/60 uppercase tracking-wider mb-1">{p.category}</p>
             <h3 className="text-lg font-heading font-bold text-foreground mb-3">{p.name}</h3>
-            <ul className="space-y-2">
-              {p.items.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
+
+            {p.items.length > 0 && (
+              <ul className="space-y-2">
+                {p.items.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {p.hospitals && (
+              <ul className="space-y-2">
+                {p.hospitals.map((h) => (
+                  <li key={h.name} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                    <span><span className="font-medium text-foreground">{h.name}</span> — {h.note}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         ))}
       </div>
 
       {/* Trust quote */}
       <div className="mt-12 max-w-2xl mx-auto text-center">
-        <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-amber-500/5 p-8">
+        <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-amber-500/5 p-6 sm:p-8">
           <Quote className="w-8 h-8 text-primary/30 mx-auto mb-3" />
           <p className="text-lg font-heading font-semibold text-foreground leading-relaxed">
             Govt-backed. Hospital-trusted. 127 clinics live.

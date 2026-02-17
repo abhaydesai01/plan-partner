@@ -88,13 +88,13 @@ const DoctorVaultAccess = () => {
             <p className="text-xs text-muted-foreground">Ask your patient for their vault code or scan their QR</p>
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             value={code}
             onChange={e => setCode(e.target.value.toUpperCase())}
             placeholder="e.g. A3F82K1B"
             maxLength={10}
-            className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-foreground font-mono text-lg tracking-wider uppercase focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-foreground font-mono text-base sm:text-lg tracking-wider uppercase focus:outline-none focus:ring-2 focus:ring-primary/50"
             onKeyDown={e => e.key === "Enter" && requestAccess()}
           />
           <button

@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
-import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight, Copy, Check } from "lucide-react";
+import { Users, Layers, Activity, AlertTriangle, TrendingUp, CalendarDays, Building2, Plus, ArrowRight, Copy, Check, Download, Share2, QrCode } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface Stats {
@@ -40,24 +41,21 @@ const CHART_COLORS = [
 ];
 
 const Dashboard = () => {
-  const { user, session } = useAuth();
+  const { user, session, connectedClinics } = useAuth();
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", user?.id],
     queryFn: async () => {
-      const [clinics, patientsCount, progs, enrolls, atRiskCount, appts] = await Promise.all([
-        api.get<{ id: string; name: string }[]>("clinics"),
+      const [patientsCount, progs, enrolls, atRiskCount, appts] = await Promise.all([
         api.get<{ count: number }>("patients", { count: "true" }),
-        api.get<Program[]>("programs"),
+        api.get<Program[]>("doctor/programs"),
         api.get<Enrollment[]>("enrollments"),
         api.get<{ count: number }>("patients", { status: "at_risk", count: "true" }),
         api.get<Appointment[]>("appointments"),
       ]);
       const activeEnrolls = (enrolls || []).filter((e) => e.status === "active");
       return {
-        hasClinic: Array.isArray(clinics) && clinics.length > 0,
-        clinicName: clinics?.[0]?.name || "",
         stats: {
           totalPatients: (patientsCount as { count?: number })?.count ?? 0,
           activePrograms: (progs || []).length,
@@ -72,8 +70,8 @@ const Dashboard = () => {
     enabled: !!user,
   });
 
-  const hasClinic = data?.hasClinic ?? null;
-  const clinicName = data?.clinicName ?? "";
+  const hasClinic = connectedClinics.length > 0;
+  const clinicNames = connectedClinics.map((c) => c.name).join(", ");
   const stats = data?.stats ?? { totalPatients: 0, activePrograms: 0, activeEnrollments: 0, atRiskPatients: 0 };
   const enrollments = data?.enrollments ?? [];
   const programs = data?.programs ?? [];
@@ -155,13 +153,32 @@ const Dashboard = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold text-foreground">
-          {clinicName ? `${clinicName}` : "Welcome back, Doctor"}
+          {clinicNames ? `Welcome back, Doctor` : "Welcome back, Doctor"}
         </h1>
         <p className="text-muted-foreground text-sm mt-1">Here's your practice overview</p>
       </div>
 
+      {/* Connected Clinics */}
+      {connectedClinics.length > 0 && (
+        <div className="glass-card rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Building2 className="w-4 h-4 text-primary" />
+            <h3 className="font-heading font-semibold text-foreground text-sm">Connected Clinics</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {connectedClinics.map((c) => (
+              <span key={c.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                <Building2 className="w-3 h-3" />
+                {c.name}
+                <span className="text-primary/60 capitalize">({c.member_role})</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Clinic Setup Prompt */}
-      {hasClinic === false && (
+      {!hasClinic && (
         <div className="glass-card rounded-xl p-5 border-2 border-dashed border-primary/30 bg-primary/5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -187,14 +204,14 @@ const Dashboard = () => {
       {user?.id && <DoctorCodeCard userId={user.id} sessionCode={session?.profile?.doctor_code} />}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         {cards.map((card) => (
-          <div key={card.label} className="glass-card rounded-xl p-4 space-y-2">
+          <div key={card.label} className="glass-card rounded-xl p-3 sm:p-4 space-y-1.5 sm:space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{card.label}</span>
-              <card.icon className={`w-4 h-4 ${card.color}`} />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">{card.label}</span>
+              <card.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${card.color}`} />
             </div>
-            <div className="text-2xl font-heading font-bold text-foreground">{card.value}</div>
+            <div className="text-xl sm:text-2xl font-heading font-bold text-foreground">{card.value}</div>
           </div>
         ))}
       </div>
@@ -211,11 +228,11 @@ const Dashboard = () => {
       ) : (
         <>
           {/* Row 1: Enrollment Growth + Adherence Distribution */}
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
             {/* Enrollment Growth */}
-            <div className="glass-card rounded-xl p-5">
-              <h3 className="font-heading font-semibold text-foreground mb-4">Enrollment Growth</h3>
-              <div className="h-52">
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <h3 className="font-heading font-semibold text-foreground mb-3 sm:mb-4 text-sm sm:text-base">Enrollment Growth</h3>
+              <div className="h-48 sm:h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={enrollmentGrowth}>
                     <defs>
@@ -235,9 +252,9 @@ const Dashboard = () => {
             </div>
 
             {/* Adherence Distribution */}
-            <div className="glass-card rounded-xl p-5">
-              <h3 className="font-heading font-semibold text-foreground mb-4">Adherence Distribution</h3>
-              <div className="h-52">
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <h3 className="font-heading font-semibold text-foreground mb-3 sm:mb-4 text-sm sm:text-base">Adherence Distribution</h3>
+              <div className="h-48 sm:h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={adherenceDistribution}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(160, 15%, 88%)" />
@@ -256,14 +273,14 @@ const Dashboard = () => {
           </div>
 
           {/* Row 2: Program Performance + Status Breakdown */}
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
             {/* Program Performance */}
-            <div className="lg:col-span-2 glass-card rounded-xl p-5">
-              <h3 className="font-heading font-semibold text-foreground mb-4">Program Performance</h3>
+            <div className="md:col-span-2 glass-card rounded-xl p-4 sm:p-5">
+              <h3 className="font-heading font-semibold text-foreground mb-3 sm:mb-4 text-sm sm:text-base">Program Performance</h3>
               {programPerformance.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No programs yet.</p>
               ) : (
-                <div className="h-52">
+                <div className="h-48 sm:h-52">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={programPerformance} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(160, 15%, 88%)" />
@@ -308,6 +325,7 @@ const Dashboard = () => {
 function DoctorCodeCard({ userId, sessionCode }: { userId?: string; sessionCode?: string | null }) {
   const [code, setCode] = useState<string | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     if (typeof sessionCode === "string" && sessionCode !== "") {
@@ -323,41 +341,122 @@ function DoctorCodeCard({ userId, sessionCode }: { userId?: string; sessionCode?
 
   if (code === undefined) {
     return (
-      <div className="glass-card rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 animate-pulse">
-        <div className="w-10 h-10 rounded-xl bg-muted shrink-0" />
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="h-4 w-32 bg-muted rounded" />
-          <div className="h-3 w-48 bg-muted rounded" />
+      <div className="glass-card rounded-xl p-5 animate-pulse">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-muted shrink-0" />
+          <div className="flex-1 space-y-2"><div className="h-4 w-32 bg-muted rounded" /><div className="h-3 w-48 bg-muted rounded" /></div>
         </div>
-        <div className="h-10 w-28 bg-muted rounded-lg" />
       </div>
     );
   }
   if (!code) return null;
 
-  const handleCopy = () => {
+  const connectUrl = `${window.location.origin}/connect/${code}`;
+
+  const handleCopyCode = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const enrollUrl = `${window.location.origin}/enroll/${code}`;
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(connectUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadQR = () => {
+    const svg = document.getElementById("doctor-qr-svg");
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = 512;
+      canvas.height = 512;
+      if (ctx) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, 512, 512);
+        ctx.drawImage(img, 0, 0, 512, 512);
+      }
+      const pngUrl = canvas.toDataURL("image/png");
+      const dl = document.createElement("a");
+      dl.href = pngUrl;
+      dl.download = `doctor-qr-${code}.png`;
+      dl.click();
+    };
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Connect with your Doctor", text: `Scan or visit this link to connect: ${connectUrl}`, url: connectUrl });
+      } catch { /* user cancelled */ }
+    } else {
+      handleCopyLink();
+    }
+  };
 
   return (
-    <div className="glass-card rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-        <Users className="w-5 h-5 text-primary" />
+    <div className="glass-card rounded-xl p-5 space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <QrCode className="w-5 h-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-heading font-semibold text-foreground text-sm">Your Doctor QR Code</h3>
+          <p className="text-xs text-muted-foreground">Patients scan this QR code to instantly connect with you</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <code className="text-lg sm:text-xl font-heading font-bold tracking-widest text-primary bg-primary/10 px-3 sm:px-4 py-2 rounded-lg">{code}</code>
+          <button onClick={handleCopyCode} className="p-2 rounded-lg border border-border hover:bg-muted transition-colors" title="Copy code">
+            {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+          </button>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="font-heading font-semibold text-foreground text-sm">Your Doctor Code</h3>
-        <p className="text-xs text-muted-foreground">Share this with patients so they can link their account or self-enroll</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <code className="text-xl font-heading font-bold tracking-widest text-primary bg-primary/10 px-4 py-2 rounded-lg">{code}</code>
-        <button onClick={handleCopy} className="p-2 rounded-lg border border-border hover:bg-muted transition-colors" title="Copy code">
-          {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+
+      <div className="flex flex-col sm:flex-row items-center gap-4">
+        <button
+          onClick={() => setShowQR(!showQR)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors w-full sm:w-auto justify-center"
+        >
+          <QrCode className="w-4 h-4" />
+          {showQR ? "Hide QR Code" : "Show QR Code"}
+        </button>
+        <button onClick={handleShare} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors w-full sm:w-auto justify-center">
+          <Share2 className="w-4 h-4" />
+          Share Link
+        </button>
+        <button onClick={handleCopyLink} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors w-full sm:w-auto justify-center">
+          <Copy className="w-4 h-4" />
+          Copy Link
         </button>
       </div>
+
+      {showQR && (
+        <div className="flex flex-col items-center gap-4 pt-2">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-border">
+            <QRCodeSVG
+              id="doctor-qr-svg"
+              value={connectUrl}
+              size={200}
+              level="H"
+              includeMargin
+              bgColor="#ffffff"
+              fgColor="#1a1a1a"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground text-center max-w-xs">
+            Patients can scan this QR code with their phone camera to instantly connect with you
+          </p>
+          <button onClick={handleDownloadQR} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
+            <Download className="w-4 h-4" />
+            Download QR Code
+          </button>
+        </div>
+      )}
     </div>
   );
 }

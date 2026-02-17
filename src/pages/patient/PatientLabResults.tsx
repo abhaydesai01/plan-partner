@@ -231,7 +231,7 @@ const PatientLabResults = () => {
                 return (
                   <div key={idx} className="p-4 rounded-xl border border-border/50">
                     <h4 className="font-medium text-foreground mb-3">{chart.title}</h4>
-                    <div className="h-56">
+                    <div className="h-48 sm:h-56">
                       <ResponsiveContainer width="100%" height="100%">
                         {chart.type === "line" ? (
                           <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
@@ -361,7 +361,7 @@ const PatientLabResults = () => {
       {/* Add Lab Result Modal */}
       {showAdd && (
         <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
-          <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="glass-card rounded-2xl p-4 sm:p-6 w-full max-w-[calc(100vw-2rem)] sm:max-w-md space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">Add Lab Result</h2>
               <button onClick={() => setShowAdd(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
@@ -386,7 +386,7 @@ const PatientLabResults = () => {
       <div>
         <h2 className="text-lg font-heading font-semibold text-foreground mb-3">All lab results</h2>
         {results.length === 0 ? (
-          <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
+          <div className="glass-card rounded-xl p-6 sm:p-12 text-center text-muted-foreground">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
             No lab results recorded yet. Upload a report or add one manually.
           </div>

@@ -45,20 +45,17 @@ const navItems = [
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
-  const { role, signOut, switchableClinics, switchToClinic } = useAuth();
+  const { role, signOut, connectedClinics, switchToClinic } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [clinics, setClinics] = useState<{ id: string; name: string }[]>([]);
   const [clinicDropdownOpen, setClinicDropdownOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
 
-  useEffect(() => {
-    if (role === "doctor") {
-      switchableClinics().then(setClinics);
-    }
-  }, [role, switchableClinics]);
+  const manageableClinics = connectedClinics.filter(
+    (c) => c.member_role === "owner" || c.member_role === "admin"
+  );
 
   const onSwitchToClinic = async (clinicId: string) => {
     setSwitching(true);
@@ -121,7 +118,19 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="p-3 border-t border-border space-y-1 safe-area-bottom flex-shrink-0">
-          {role === "doctor" && (
+          {role === "doctor" && connectedClinics.length > 0 && (
+            <div className="px-3 py-2 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">My Clinics</p>
+              {connectedClinics.map((c) => (
+                <div key={c.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Building2 className="w-3.5 h-3.5 text-primary/60 shrink-0" />
+                  <span className="truncate flex-1">{c.name}</span>
+                  <span className="text-[10px] capitalize text-muted-foreground/60">{c.member_role}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {role === "doctor" && manageableClinics.length > 0 && (
             <div className="relative">
               <button
                 type="button"
@@ -131,32 +140,22 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               >
                 <span className="flex items-center gap-3">
                   <Building2 className="w-5 h-5" />
-                  Switch to clinic
+                  Manage Clinic
                 </span>
                 <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${clinicDropdownOpen ? "rotate-180" : ""}`} />
               </button>
               {clinicDropdownOpen && (
                 <div className="mt-1 py-1 rounded-lg bg-muted/50 border border-border shadow-lg">
-                  {clinics.length > 0 ? (
-                    clinics.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => onSwitchToClinic(c.id)}
-                        className="w-full text-left px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                      >
-                        {c.name}
-                      </button>
-                    ))
-                  ) : (
-                    <NavLink
-                      to="/dashboard/clinic"
-                      onClick={() => { setClinicDropdownOpen(false); setSidebarOpen(false); }}
-                      className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  {manageableClinics.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onSwitchToClinic(c.id)}
+                      className="w-full text-left px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                     >
-                      Create clinic login in Clinic settings
-                    </NavLink>
-                  )}
+                      {c.name}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

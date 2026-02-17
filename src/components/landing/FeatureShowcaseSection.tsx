@@ -146,7 +146,7 @@ const FeatureShowcaseSection = () => (
       {/* Bottom stats */}
       <div className="mt-16 max-w-3xl mx-auto">
         <div className="rounded-2xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border border-primary/20 p-6 sm:p-8">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+          <div className="grid grid-cols-3 gap-6 text-center">
             <div>
               <p className="text-2xl sm:text-3xl font-heading font-extrabold text-primary">12+</p>
               <p className="text-xs text-muted-foreground mt-1">Core Features</p>
@@ -158,10 +158,6 @@ const FeatureShowcaseSection = () => (
             <div>
               <p className="text-2xl sm:text-3xl font-heading font-extrabold text-primary">24/7</p>
               <p className="text-xs text-muted-foreground mt-1">AI Available</p>
-            </div>
-            <div>
-              <p className="text-2xl sm:text-3xl font-heading font-extrabold text-primary">0</p>
-              <p className="text-xs text-muted-foreground mt-1">App Downloads</p>
             </div>
           </div>
         </div>

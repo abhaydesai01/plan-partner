@@ -49,6 +49,27 @@ import {
   ChatConversation,
   HealthNote,
 } from "../models/index.js";
+import {
+  sendVitalsLoggedEmail,
+  sendMedicationReminderEmail,
+  sendMedicationLoggedEmail,
+  sendFoodLoggedEmail,
+  sendConsultationSummaryEmail,
+  sendNewPatientLinkedEmail,
+  sendCriticalVitalsAlertEmail,
+  sendFamilyInvitationEmail,
+  sendDoctorMessageEmail,
+  sendAppointmentBookedEmail,
+  sendAppointmentCompletedEmail,
+  sendBadgeEarnedEmail,
+  sendStreakMilestoneEmail,
+  sendEscalationReminderEmail,
+  sendDoctorPatientMissedAlertEmail,
+  sendMedicationMissedEmail,
+  sendAppointmentReminderEmail,
+  sendDailyHealthSummaryEmail,
+  sendWeeklyComplianceEmail,
+} from "../services/email.js";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
@@ -136,7 +157,7 @@ router.get("/auth/me", requireAuth, async (req, res) => {
     Profile.findOne({ user_id: userId }).lean(),
     UserRole.findOne({ user_id: userId }).lean(),
     Patient.findOne({ patient_user_id: userId }).lean(),
-    AuthUser.findOne({ user_id: userId }).select("clinic_id").lean(),
+    AuthUser.findOne({ user_id: userId }).select("clinic_id email_verified email approval_status").lean(),
   ]);
   const role = (roleDoc as { role?: string; clinic_id?: string })?.role ?? null;
   const clinicId = (roleDoc as { clinic_id?: string })?.clinic_id ?? (authUser as { clinic_id?: string })?.clinic_id;
@@ -175,28 +196,66 @@ router.get("/auth/me", requireAuth, async (req, res) => {
 
   const profileOut = profileForOut ? { ...profileForOut, id: (profileForOut as any)._id?.toString(), _id: undefined, __v: undefined } : null;
   const patientOut = patient ? { ...patient, id: (patient as any)._id?.toString(), _id: undefined, __v: undefined } : null;
+  // Auto-verify users who signed up before the email verification feature (no email_verified field)
+  let isVerified = !!(authUser as any)?.email_verified;
+  if (!isVerified && authUser) {
+    const createdAt = (authUser as any).createdAt || (authUser as any).created_at;
+    // Users created before 2026-02-17 are grandfathered in as verified
+    if (createdAt && new Date(createdAt) < new Date("2026-02-17T00:00:00Z")) {
+      isVerified = true;
+      AuthUser.updateOne({ user_id: userId }, { $set: { email_verified: true } }).catch(() => {});
+    }
+  }
+
+  const approvalStatus = (authUser as any)?.approval_status || "active";
+
+  // For doctors, include list of connected clinics (via ClinicMember)
+  let connectedClinics: { id: string; name: string; member_role: string }[] = [];
+  if (role === "doctor") {
+    const memberships = await ClinicMember.find({ user_id: userId }).select("clinic_id role").lean();
+    if (memberships.length) {
+      const cIds = [...new Set((memberships as any[]).map((m) => m.clinic_id))];
+      const objIds = cIds.filter((id) => id && mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+      const cDocs = objIds.length ? await Clinic.find({ _id: { $in: objIds } }).select("name").lean() : [];
+      const nameMap = new Map(cDocs.map((c: any) => [c._id.toString(), c.name || "Clinic"]));
+      connectedClinics = (memberships as any[])
+        .filter((m) => nameMap.has(m.clinic_id))
+        .map((m) => ({ id: m.clinic_id, name: nameMap.get(m.clinic_id)!, member_role: m.role }));
+    }
+  }
+
   return res.json({
-    user: { id: userId },
+    user: { id: userId, email: (authUser as any)?.email },
     profile: profileOut,
     role,
     patient: role === "clinic" ? null : patientOut,
     clinic: clinicOut,
+    email_verified: isVerified,
+    approval_status: approvalStatus,
+    connected_clinics: connectedClinics,
   });
 });
 
 // ---------- Doctor: switch to clinic portal (when clinic has its own login) ----------
+/** Returns ALL clinics the doctor is a member of (any role: owner, admin, doctor, nurse, staff). */
 router.get("/auth/switchable-clinics", requireAuth, async (req, res) => {
   const userId = (req as AuthRequest).user.id;
   const roleDoc = await UserRole.findOne({ user_id: userId }).lean();
   const role = (roleDoc as { role?: string })?.role;
   if (role !== "doctor") return res.json([]);
-  const memberships = await ClinicMember.find({ user_id: userId, role: { $in: ["owner", "admin"] } }).select("clinic_id").lean();
+  const memberships = await ClinicMember.find({ user_id: userId }).select("clinic_id role").lean();
   const clinicIds = [...new Set((memberships as { clinic_id: string }[]).map((m) => m.clinic_id))];
-  const withLogin = await AuthUser.find({ clinic_id: { $in: clinicIds } }).select("clinic_id").lean();
-  const idsWithLogin = [...new Set((withLogin as { clinic_id: string }[]).map((a) => a.clinic_id))];
-  const objectIds = idsWithLogin.filter((id) => id && mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+  if (!clinicIds.length) return res.json([]);
+  const objectIds = clinicIds.filter((id) => id && mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
   const clinics = objectIds.length > 0 ? await Clinic.find({ _id: { $in: objectIds } }).select("name").lean() : [];
-  return res.json(clinics.map((c: any) => ({ id: c._id.toString(), name: c.name || "Clinic" })));
+  const clinicMap = new Map(clinics.map((c: any) => [c._id.toString(), c.name || "Clinic"]));
+  const memberRoleMap = new Map((memberships as any[]).map((m) => [m.clinic_id, m.role]));
+  return res.json(clinicIds.filter((id) => clinicMap.has(id)).map((id) => ({
+    id,
+    name: clinicMap.get(id),
+    member_role: memberRoleMap.get(id) || "doctor",
+    can_manage: memberRoleMap.get(id) === "owner" || memberRoleMap.get(id) === "admin",
+  })));
 });
 
 router.post("/auth/switch-to-clinic", requireAuth, async (req, res) => {
@@ -262,6 +321,22 @@ router.post("/me/appointments", requireAuth, async (req, res) => {
     appointment_type: appointment_type || "consultation",
     ...(clinic_id ? { clinic_id: String(clinic_id) } : {}),
   });
+  // Email: appointment booked
+  try {
+    const authU = await AuthUser.findById(userId).select("email full_name").lean();
+    if (authU && (authU as any).email) {
+      const dateStr = scheduledAt.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      sendAppointmentBookedEmail((authU as any).email, (authU as any).full_name || "there", String(title).trim(), dateStr, userId).catch(() => {});
+    }
+    // Also notify the doctor
+    const doctorAuth = await AuthUser.findById(doctor_id).select("email full_name").lean();
+    if (doctorAuth && (doctorAuth as any).email) {
+      const patAuth = await AuthUser.findById(userId).select("full_name").lean();
+      const pName = (patAuth as any)?.full_name || "A patient";
+      const dateStr2 = scheduledAt.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      sendAppointmentBookedEmail((doctorAuth as any).email, (doctorAuth as any).full_name || "Doctor", `${pName} — ${String(title).trim()}`, dateStr2, doctor_id).catch(() => {});
+    }
+  } catch {}
   res.status(201).json({ ...doc.toJSON(), id: (doc as any)._id?.toString() });
 });
 
@@ -611,6 +686,59 @@ router.post("/me/link_requests", requireAuth, async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+/** Quick-connect: patient scans QR, confirms, gets linked to doctor instantly */
+router.post("/me/connect-doctor", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const { doctor_code } = req.body;
+  if (!doctor_code) return res.status(400).json({ error: "doctor_code is required" });
+
+  const doctorProfile = await Profile.findOne({ doctor_code: (doctor_code as string).toUpperCase() }).select("user_id full_name").lean();
+  if (!doctorProfile) return res.status(404).json({ error: "Doctor not found" });
+  const doctorUserId = (doctorProfile as any).user_id;
+
+  // Prevent self-link
+  if (doctorUserId === userId) return res.status(400).json({ error: "Cannot connect to yourself" });
+
+  // Check existing active link
+  const existingLink = await PatientDoctorLink.findOne({
+    patient_user_id: userId, doctor_user_id: doctorUserId, status: "active",
+  }).lean();
+  if (existingLink) return res.json({ already_connected: true, message: "You are already connected to this doctor" });
+
+  // Create active link immediately (QR scan is pre-approved)
+  await PatientDoctorLink.create({
+    patient_user_id: userId,
+    doctor_user_id: doctorUserId,
+    doctor_name: (doctorProfile as any).full_name || "Doctor",
+    status: "active",
+    responded_at: new Date(),
+  });
+
+  // Ensure patient record exists under this doctor
+  const myProfile = await Profile.findOne({ user_id: userId }).select("full_name phone").lean();
+  const existingPatient = await Patient.findOne({ patient_user_id: userId, doctor_id: doctorUserId }).lean();
+  if (!existingPatient) {
+    await Patient.create({
+      patient_user_id: userId,
+      doctor_id: doctorUserId,
+      full_name: (myProfile as any)?.full_name || "Patient",
+      phone: (myProfile as any)?.phone || " ",
+      status: "active",
+    });
+  }
+
+  // Notify doctor
+  await Notification.create({
+    user_id: doctorUserId,
+    title: `New patient connected: ${(myProfile as any)?.full_name || "A patient"}`,
+    message: `${(myProfile as any)?.full_name || "A patient"} connected via QR code scan.`,
+    type: "success",
+    category: "link",
+  });
+
+  res.status(201).json({ connected: true, doctor_name: (doctorProfile as any).full_name });
+});
+
 router.get("/me/patient", requireAuth, async (req, res) => {
   const userId = (req as AuthRequest).user.id;
   const patient = await Patient.findOne({ patient_user_id: userId }).lean();
@@ -728,6 +856,44 @@ router.post("/me/vitals", requireAuth, async (req, res) => {
   const rewardsVital = await getRewardsForFilter(filterVital);
   if (vitalType) await updateGamificationState(link.patient_id, vitalType, filterVital);
   res.status(201).json({ ...doc.toJSON(), points_earned, ...rewardsVital });
+
+  // Email notifications (fire-and-forget)
+  try {
+    const userId = (req as AuthRequest).user.id;
+    const authU = await AuthUser.findOne({ user_id: userId }).select("email").lean();
+    const prof = await Profile.findOne({ user_id: userId }).select("full_name").lean();
+    if (authU && (authU as any).email) {
+      const vLabel = body.vital_type === "blood_pressure" ? "Blood Pressure" : body.vital_type === "blood_sugar" ? "Blood Sugar" : String(body.vital_type);
+      sendVitalsLoggedEmail((authU as any).email, (prof as any)?.full_name || "there", vLabel, body.value_text || "", userId).catch(() => {});
+      // Alert doctor if critical values
+      if (body.vital_type === "blood_pressure") {
+        const sys = parseInt(body.value_text);
+        if (sys > 180 || sys < 90) {
+          const patient = await Patient.findById(link.patient_id).select("full_name doctor_id").lean();
+          if (patient) {
+            const docProf = await Profile.findOne({ user_id: (patient as any).doctor_id }).select("full_name").lean();
+            const docAuth = await AuthUser.findOne({ user_id: (patient as any).doctor_id }).select("email").lean();
+            if (docAuth && (docAuth as any).email) {
+              sendCriticalVitalsAlertEmail((docAuth as any).email, (docProf as any)?.full_name || "Doctor", (patient as any).full_name || "Patient", "Blood Pressure", body.value_text, (patient as any).doctor_id).catch(() => {});
+            }
+          }
+        }
+      }
+      if (body.vital_type === "blood_sugar") {
+        const val = parseInt(body.value_text);
+        if (val > 300 || val < 60) {
+          const patient = await Patient.findById(link.patient_id).select("full_name doctor_id").lean();
+          if (patient) {
+            const docProf = await Profile.findOne({ user_id: (patient as any).doctor_id }).select("full_name").lean();
+            const docAuth = await AuthUser.findOne({ user_id: (patient as any).doctor_id }).select("email").lean();
+            if (docAuth && (docAuth as any).email) {
+              sendCriticalVitalsAlertEmail((docAuth as any).email, (docProf as any)?.full_name || "Doctor", (patient as any).full_name || "Patient", "Blood Sugar", body.value_text, (patient as any).doctor_id).catch(() => {});
+            }
+          }
+        }
+      }
+    }
+  } catch {}
 });
 
 // ---------- Instant rewards (points, health score, today progress) ----------
@@ -920,7 +1086,23 @@ async function updateGamificationState(
     g.longest_streak = g.current_streak;
   }
 
+  // Email: streak milestone (7, 14, 21, 30, 60, 90, 180, 365)
+  const streakMilestones = [7, 14, 21, 30, 60, 90, 180, 365];
+  if (streakMilestones.includes(g.current_streak)) {
+    try {
+      const patient = await Patient.findById(patientId).select("patient_user_id full_name").lean();
+      const uid = (patient as any)?.patient_user_id;
+      if (uid) {
+        const authU = await AuthUser.findById(uid).select("email full_name").lean();
+        if (authU && (authU as any).email) {
+          sendStreakMilestoneEmail((authU as any).email, (authU as any).full_name || (patient as any)?.full_name || "there", g.current_streak, uid).catch(() => {});
+        }
+      }
+    } catch {}
+  }
+
   // Update level
+  const prevLevel = g.level || 1;
   let lv = 1; let ll = LEVELS[0].label;
   for (let i = LEVELS.length - 1; i >= 0; i--) {
     if (g.total_points >= LEVELS[i].min_points) { lv = i + 1; ll = LEVELS[i].label; break; }
@@ -989,12 +1171,30 @@ router.get("/me/gamification", requireAuth, async (req, res) => {
     const def = BADGE_DEFINITIONS.find((d) => d.key === (b as any).badge_key);
     badges.push({ key: (b as any).badge_key, title: def?.title ?? (b as any).badge_key, earned_at: (b as any).earned_at?.toISOString?.() ?? undefined });
   }
+  const newlyEarnedBadges: { key: string; title: string }[] = [];
   for (const def of BADGE_DEFINITIONS) {
     const count = daysByType[def.type];
     if (count >= def.requirement && !earnedBadgesList.some((e: any) => e.badge_key === def.key)) {
       await UserBadge.create({ patient_id: patientId, badge_key: def.key });
       badges.push({ key: def.key, title: def.title, earned_at: new Date().toISOString() });
+      newlyEarnedBadges.push({ key: def.key, title: def.title });
     }
+  }
+  // Email: badge earned notifications
+  if (newlyEarnedBadges.length > 0) {
+    try {
+      const patientRec = await Patient.findById(patientId).select("patient_user_id full_name").lean();
+      const uid = (patientRec as any)?.patient_user_id;
+      if (uid) {
+        const authU = await AuthUser.findById(uid).select("email full_name").lean();
+        if (authU && (authU as any).email) {
+          for (const b of newlyEarnedBadges) {
+            const bDef = BADGE_DEFINITIONS.find((d) => d.key === b.key);
+            sendBadgeEarnedEmail((authU as any).email, (authU as any).full_name || "there", b.title, bDef ? `Log ${bDef.requirement}+ days of ${bDef.type.replace("_", " ")}` : "Keep it up!", uid).catch(() => {});
+          }
+        }
+      }
+    } catch {}
   }
   badges.sort((a, b) => (b.earned_at ?? "").localeCompare(a.earned_at ?? ""));
 
@@ -1175,6 +1375,13 @@ router.post("/me/food_logs", requireAuth, async (req, res) => {
   const filterFood: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterFood);
   await updateGamificationState(link.patient_id, "food", filterFood);
+  // Email: food logged
+  try {
+    const authU = await AuthUser.findById((req as AuthRequest).user.id).select("email full_name").lean();
+    if (authU && (authU as any).email) {
+      sendFoodLoggedEmail((authU as any).email, (authU as any).full_name || "there", req.body?.meal_type || "Meal", req.body?.notes || "", (req as AuthRequest).user.id).catch(() => {});
+    }
+  } catch {}
   res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
 });
 
@@ -1204,6 +1411,13 @@ router.post("/me/medication-log", requireAuth, async (req, res) => {
   const filterMed: RewardsFilter = link.patient_ids.length > 1 ? { patient_id: { $in: link.patient_ids } } : { patient_id: link.patient_id };
   const rewards = await getRewardsForFilter(filterMed);
   await updateGamificationState(link.patient_id, "medication", filterMed);
+  // Email: medication logged
+  try {
+    const authU = await AuthUser.findById((req as AuthRequest).user.id).select("email full_name").lean();
+    if (authU && (authU as any).email) {
+      sendMedicationLoggedEmail((authU as any).email, (authU as any).full_name || "there", req.body?.medication_name || "Medication", taken, (req as AuthRequest).user.id).catch(() => {});
+    }
+  } catch {}
   res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
 });
 
@@ -1588,6 +1802,13 @@ router.post("/me/family-connections", requireAuth, async (req, res) => {
     status: "pending",
     family_user_id: null,
   });
+
+  // Send family invitation email (fire-and-forget)
+  try {
+    const prof = await Profile.findOne({ user_id: userId }).select("full_name").lean();
+    const patient = await Patient.findOne({ patient_user_id: userId }).select("full_name").lean();
+    sendFamilyInvitationEmail(email, (patient as any)?.full_name || "a patient", (prof as any)?.full_name || "Someone").catch(() => {});
+  } catch {}
 });
 
 router.delete("/me/family-connections/:id", requireAuth, async (req, res) => {
@@ -1645,6 +1866,26 @@ router.post("/patients/:id/message", requireAuth, async (req, res) => {
   const text = message != null ? String(message).trim() : "";
   if (!text) return res.status(400).json({ error: "message required" });
   const doc = await DoctorMessage.create({ doctor_id: doctorId, patient_id: patientId, message: text });
+  // Email: notify patient about doctor message
+  try {
+    const patientRec = await Patient.findById(patientId).select("patient_user_id full_name").lean();
+    const patientUserId = (patientRec as any)?.patient_user_id;
+    if (patientUserId) {
+      const [patientAuth, doctorAuth] = await Promise.all([
+        AuthUser.findById(patientUserId).select("email full_name").lean(),
+        AuthUser.findById(doctorId).select("full_name").lean(),
+      ]);
+      if (patientAuth && (patientAuth as any).email) {
+        sendDoctorMessageEmail(
+          (patientAuth as any).email,
+          (patientAuth as any).full_name || (patientRec as any)?.full_name || "there",
+          (doctorAuth as any)?.full_name || "Your Doctor",
+          text,
+          patientUserId
+        ).catch(() => {});
+      }
+    }
+  } catch {}
   res.status(201).json({
     id: doc._id?.toString(),
     message: text,
@@ -1743,6 +1984,12 @@ router.post("/internal/send-routine-pushes", async (req, res) => {
       const routine = await getRoutineForUserId(sub.user_id);
       const defaultBp = "120/80";
       const defaultSugar = "100";
+      // Helper to get email for routine email reminders
+      const getUserEmail = async (uid: string) => {
+        const u = await AuthUser.findById(uid).select("email full_name").lean();
+        return u ? { email: (u as any).email, name: (u as any).full_name || "there" } : null;
+      };
+
       if (routine.blood_pressure && routine.blood_pressure.hour_utc === hourUtc) {
         const token = crypto.randomBytes(24).toString("hex");
         await QuickLogToken.create({
@@ -1762,6 +2009,9 @@ router.post("/internal/send-routine-pushes", async (req, res) => {
           }),
           { TTL: 60 * 15 }
         );
+        // Email: BP reminder
+        const eu = await getUserEmail(sub.user_id);
+        if (eu?.email) sendMedicationReminderEmail(eu.email, eu.name, "Blood Pressure", "It's time to log your blood pressure reading.", sub.user_id).catch(() => {});
         sent++;
       }
       if (routine.blood_sugar && routine.blood_sugar.hour_utc === hourUtc) {
@@ -1783,6 +2033,9 @@ router.post("/internal/send-routine-pushes", async (req, res) => {
           }),
           { TTL: 60 * 15 }
         );
+        // Email: blood sugar reminder
+        const eu2 = await getUserEmail(sub.user_id);
+        if (eu2?.email) sendMedicationReminderEmail(eu2.email, eu2.name, "Blood Sugar", "It's time to log your blood sugar reading.", sub.user_id).catch(() => {});
         sent++;
       }
       // Medication reminders based on patient's active medications
@@ -1810,6 +2063,9 @@ router.post("/internal/send-routine-pushes", async (req, res) => {
             }),
             { TTL: 60 * 30 }
           );
+          // Email: medication reminder
+          const eu3 = await getUserEmail(sub.user_id);
+          if (eu3?.email) sendMedicationReminderEmail(eu3.email, eu3.name, names + more, "It's time to take your medication.", sub.user_id).catch(() => {});
           sent++;
         }
       }
@@ -1952,6 +2208,12 @@ router.post("/internal/process-reminder-escalations", async (req, res) => {
       const sub = await PushSubscription.findOne({ user_id: userId }).lean();
       const pushPayload = sub as { endpoint: string; keys: { p256dh: string; auth: string } } | null;
       const triggerLabel = triggerType === "blood_pressure" ? "BP" : triggerType === "blood_sugar" ? "blood sugar" : "medication";
+      // Helper: get email for escalation emails
+      const escUserEmail = async () => {
+        const u = await AuthUser.findById(userId).select("email full_name").lean();
+        return u ? { email: (u as any).email, name: (u as any).full_name || p.full_name || "there" } : null;
+      };
+
       if (day >= 1 && !e.day1_sent_at) {
         const msg = ESCALATION_MESSAGES[triggerType].day1;
         if (pushPayload && VAPID_PUBLIC && VAPID_PRIVATE) {
@@ -1972,6 +2234,9 @@ router.post("/internal/process-reminder-escalations", async (req, res) => {
           category: "reminder",
           related_type: "reminder_escalation",
         });
+        // Email: Day 1 escalation
+        const eu1 = await escUserEmail();
+        if (eu1?.email) sendEscalationReminderEmail(eu1.email, eu1.name, triggerType, 1, userId).catch(() => {});
         await ReminderEscalation.updateOne({ _id: (esc as any)._id }, { day1_sent_at: now });
         results.day1++;
       }
@@ -1995,6 +2260,9 @@ router.post("/internal/process-reminder-escalations", async (req, res) => {
           category: "reminder",
           related_type: "reminder_escalation",
         });
+        // Email: Day 2 escalation
+        const eu2 = await escUserEmail();
+        if (eu2?.email) sendEscalationReminderEmail(eu2.email, eu2.name, triggerType, 2, userId).catch(() => {});
         await ReminderEscalation.updateOne({ _id: (esc as any)._id }, { day2_sent_at: now });
         results.day2++;
       }
@@ -2023,6 +2291,9 @@ router.post("/internal/process-reminder-escalations", async (req, res) => {
           category: "reminder",
           related_type: "reminder_escalation",
         });
+        // Email: Day 3 escalation (urgent)
+        const eu3 = await escUserEmail();
+        if (eu3?.email) sendEscalationReminderEmail(eu3.email, eu3.name, triggerType, 3, userId).catch(() => {});
         await ReminderEscalation.updateOne({ _id: (esc as any)._id }, { day3_sent_at: now });
         results.day3++;
       }
@@ -2038,6 +2309,23 @@ router.post("/internal/process-reminder-escalations", async (req, res) => {
           related_type: "reminder_escalation",
           alert_type: "reminder_escalation",
         });
+        // Email: Day 5 escalation to patient + doctor alert
+        const eu5 = await escUserEmail();
+        if (eu5?.email) sendEscalationReminderEmail(eu5.email, eu5.name, triggerType, 5, userId).catch(() => {});
+        // Email: alert doctor about missed patient
+        try {
+          const doctorAuth = await AuthUser.findById(doctor_id).select("email full_name").lean();
+          if (doctorAuth && (doctorAuth as any).email) {
+            sendDoctorPatientMissedAlertEmail(
+              (doctorAuth as any).email,
+              (doctorAuth as any).full_name || "Doctor",
+              p.full_name || "Patient",
+              triggerType,
+              5,
+              doctor_id
+            ).catch(() => {});
+          }
+        } catch {}
         await ReminderEscalation.updateOne(
           { _id: (esc as any)._id },
           { day5_sent_at: now, day5_alert_id: alert._id?.toString() }
@@ -2047,6 +2335,139 @@ router.post("/internal/process-reminder-escalations", async (req, res) => {
     }
   }
   res.json({ ok: true, results });
+});
+
+// ──────────── CRON: Daily Health Summary Emails ────────────
+router.post("/internal/send-daily-summary-emails", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  let sent = 0;
+  try {
+    const allPatients = await Patient.find({}).select("_id patient_user_id full_name").lean();
+    for (const pat of allPatients as any[]) {
+      if (!pat.patient_user_id) continue;
+      const authU = await AuthUser.findById(pat.patient_user_id).select("email full_name").lean();
+      if (!authU || !(authU as any).email) continue;
+      const today = new Date();
+      const startOfDay = new Date(today);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(today);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      const pid = pat._id.toString();
+      const pidFilter = { patient_id: pid };
+      const [bpToday, sugarToday, foodToday, medToday] = await Promise.all([
+        Vital.countDocuments({ ...pidFilter, vital_type: "blood_pressure", recorded_at: { $gte: startOfDay, $lte: endOfDay } }),
+        Vital.countDocuments({ ...pidFilter, vital_type: "blood_sugar", recorded_at: { $gte: startOfDay, $lte: endOfDay } }),
+        FoodLog.countDocuments({ ...pidFilter, logged_at: { $gte: startOfDay, $lte: endOfDay } }),
+        MedicationLog.countDocuments({ ...pidFilter, logged_at: { $gte: startOfDay, $lte: endOfDay } }),
+      ]);
+      const gam = await PatientGamification.findOne({ patient_id: pid }).select("current_streak total_points level_label").lean();
+      const streakDays = (gam as any)?.current_streak || 0;
+      const totalPoints = (gam as any)?.total_points || 0;
+      const levelLabel = (gam as any)?.level_label || "Beginner";
+      sendDailyHealthSummaryEmail(
+        (authU as any).email,
+        (authU as any).full_name || pat.full_name || "there",
+        { bp: bpToday, sugar: sugarToday, food: foodToday, medication: medToday, streak: streakDays, points: totalPoints, level: levelLabel },
+        pat.patient_user_id
+      ).catch(() => {});
+      sent++;
+    }
+  } catch (err) {
+    console.error("Daily summary email error:", err);
+  }
+  res.json({ ok: true, sent });
+});
+
+// ──────────── CRON: Weekly Doctor Compliance Emails ────────────
+router.post("/internal/send-weekly-compliance-emails", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  let sent = 0;
+  try {
+    const weekStart = new Date();
+    weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const now = new Date();
+    const doctorLinks = await PatientDoctorLink.find({ status: "active" }).lean();
+    const doctorMap: Record<string, { doctorUserId: string; patients: { name: string; bp: number; sugar: number; food: number; med: number; streak: number }[] }> = {};
+    for (const link of doctorLinks as any[]) {
+      const doctorUserId = link.doctor_user_id;
+      if (!doctorMap[doctorUserId]) doctorMap[doctorUserId] = { doctorUserId, patients: [] };
+      const patient = await Patient.findOne({ patient_user_id: link.patient_user_id }).select("_id full_name").lean();
+      if (!patient) continue;
+      const pid = (patient as any)._id.toString();
+      const pidFilter = { patient_id: pid };
+      const [bp, sugar, food, med] = await Promise.all([
+        Vital.countDocuments({ ...pidFilter, vital_type: "blood_pressure", recorded_at: { $gte: weekStart, $lte: now } }),
+        Vital.countDocuments({ ...pidFilter, vital_type: "blood_sugar", recorded_at: { $gte: weekStart, $lte: now } }),
+        FoodLog.countDocuments({ ...pidFilter, logged_at: { $gte: weekStart, $lte: now } }),
+        MedicationLog.countDocuments({ ...pidFilter, logged_at: { $gte: weekStart, $lte: now } }),
+      ]);
+      const gam = await PatientGamification.findOne({ patient_id: pid }).select("current_streak").lean();
+      doctorMap[doctorUserId].patients.push({
+        name: (patient as any).full_name || "Unknown",
+        bp, sugar, food, med,
+        streak: (gam as any)?.current_streak || 0,
+      });
+    }
+    for (const docId of Object.keys(doctorMap)) {
+      const info = doctorMap[docId];
+      if (info.patients.length === 0) continue;
+      const doctorAuth = await AuthUser.findById(info.doctorUserId).select("email full_name").lean();
+      if (!doctorAuth || !(doctorAuth as any).email) continue;
+      sendWeeklyComplianceEmail(
+        (doctorAuth as any).email,
+        (doctorAuth as any).full_name || "Doctor",
+        info.patients,
+        info.doctorUserId
+      ).catch(() => {});
+      sent++;
+    }
+  } catch (err) {
+    console.error("Weekly compliance email error:", err);
+  }
+  res.json({ ok: true, sent });
+});
+
+// ──────────── CRON: Appointment Reminder Emails (24h before) ────────────
+router.post("/internal/send-appointment-reminders", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  let sent = 0;
+  try {
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() + 23 * 60 * 60 * 1000);
+    const appointments = await Appointment.find({
+      status: { $in: ["scheduled", "confirmed"] },
+      scheduled_at: { $gte: windowStart, $lte: tomorrow },
+    }).lean();
+    for (const apt of appointments as any[]) {
+      const patient = await Patient.findById(apt.patient_id).select("patient_user_id full_name").lean();
+      if (!patient) continue;
+      const patientUserId = (patient as any).patient_user_id;
+      if (!patientUserId) continue;
+      const [patientAuth, doctorAuth] = await Promise.all([
+        AuthUser.findById(patientUserId).select("email full_name").lean(),
+        AuthUser.findById(apt.doctor_id).select("full_name").lean(),
+      ]);
+      if (patientAuth && (patientAuth as any).email) {
+        const dateStr = new Date(apt.scheduled_at).toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        sendAppointmentReminderEmail(
+          (patientAuth as any).email,
+          (patientAuth as any).full_name || (patient as any).full_name || "there",
+          (doctorAuth as any)?.full_name || "Your Doctor",
+          dateStr,
+          patientUserId
+        ).catch(() => {});
+        sent++;
+      }
+    }
+  } catch (err) {
+    console.error("Appointment reminder email error:", err);
+  }
+  res.json({ ok: true, sent });
 });
 
 const mealUploadDir = path.join(UPLOAD_DIR, "meals");
@@ -2175,6 +2596,22 @@ router.patch("/appointments/:id", requireAuth, async (req, res) => {
         related_type: "appointment",
         category: "feedback",
       });
+      // Email: appointment completed
+      try {
+        const [patientAuth, doctorAuth] = await Promise.all([
+          AuthUser.findById(patientUserId).select("email full_name").lean(),
+          AuthUser.findById((req as AuthRequest).user.id).select("full_name").lean(),
+        ]);
+        if (patientAuth && (patientAuth as any).email) {
+          sendAppointmentCompletedEmail(
+            (patientAuth as any).email,
+            (patientAuth as any).full_name || (patientDoc as any)?.full_name || "there",
+            (updated as any).title || "Appointment",
+            (doctorAuth as any)?.full_name || "Your Doctor",
+            patientUserId
+          ).catch(() => {});
+        }
+      } catch {}
     }
   }
   res.json({ ...updated, id: updated._id?.toString(), _id: undefined, __v: undefined });
@@ -2289,6 +2726,257 @@ router.post("/clinics/:id/create-login", requireAuth, async (req, res) => {
   await Profile.create({ user_id, full_name: (clinic as any).name || "Clinic" });
   await UserRole.create({ user_id, role: "clinic", clinic_id: req.params.id });
   return res.status(201).json({ message: "Clinic login created. You can now sign in with this email.", email: (email as string).toLowerCase() });
+});
+
+// ---------- Clinic: assigned programs ----------
+router.get("/clinic/programs", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const roleDoc = await UserRole.findOne({ user_id: userId }).lean();
+  const clinicId = (roleDoc as any)?.clinic_id;
+  if (!clinicId) return res.json([]);
+
+  const { ProgramAssignment, DoctorProgramAssignment } = await import("../models/index.js");
+  const assignments = await ProgramAssignment.find({ clinic_id: clinicId, status: "active" }).lean();
+  const programIds = assignments.map((a: any) => a.program_id);
+  if (!programIds.length) return res.json([]);
+
+  // Auto-enroll the actual clinic owner (ClinicMember with role "owner") in all programs.
+  // The ClinicMember owner may be a separate doctor account from the clinic login account.
+  const ownerMember = await ClinicMember.findOne({ clinic_id: clinicId, role: "owner" }).lean();
+  const ownerDoctorId = (ownerMember as any)?.user_id || userId;
+
+  for (const pid of programIds) {
+    // If owner is a separate account, clean up stale assignments for the clinic account
+    if (ownerDoctorId !== userId) {
+      await DoctorProgramAssignment.updateMany(
+        { program_id: pid, doctor_user_id: userId, clinic_id: clinicId, status: "active" },
+        { $set: { status: "revoked" } }
+      ).catch(() => {});
+    }
+    const exists = await DoctorProgramAssignment.findOne({
+      program_id: pid, doctor_user_id: ownerDoctorId, clinic_id: clinicId, status: "active",
+    }).lean();
+    if (!exists) {
+      await DoctorProgramAssignment.create({
+        program_id: pid, doctor_user_id: ownerDoctorId, clinic_id: clinicId, assigned_by: "system",
+      }).catch(() => {});
+    }
+  }
+
+  const programs = await Program.find({ _id: { $in: programIds }, is_active: true }).lean();
+  const result = programs.map((p: any) => ({
+    ...p,
+    id: p._id?.toString(),
+    _id: undefined,
+    __v: undefined,
+  }));
+  res.json(result);
+});
+
+// ---------- Clinic: revenue ----------
+router.get("/clinic/revenue", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const roleDoc = await UserRole.findOne({ user_id: userId }).lean();
+  const clinicId = (roleDoc as any)?.clinic_id;
+  if (!clinicId) return res.json({ total: 0, entries: [] });
+
+  const { RevenueEntry } = await import("../models/index.js");
+  const entries = await RevenueEntry.find({ clinic_id: clinicId }).sort({ entry_date: -1 }).lean();
+  const total = entries.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+
+  const byMonth: Record<string, number> = {};
+  entries.forEach((e: any) => {
+    const d = new Date(e.entry_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    byMonth[key] = (byMonth[key] || 0) + (e.amount || 0);
+  });
+
+  res.json({
+    total,
+    entry_count: entries.length,
+    by_month: byMonth,
+    entries: entries.slice(0, 50).map((e: any) => ({
+      ...e,
+      id: e._id?.toString(),
+      _id: undefined,
+      __v: undefined,
+    })),
+  });
+});
+
+router.post("/clinic/revenue", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const roleDoc = await UserRole.findOne({ user_id: userId }).lean();
+  const clinicId = (roleDoc as any)?.clinic_id;
+  if (!clinicId) return res.status(403).json({ error: "Clinic access required" });
+
+  const { RevenueEntry } = await import("../models/index.js");
+  const { amount, description, program_id, doctor_id, patient_id, entry_date } = req.body as any;
+  if (!amount) return res.status(400).json({ error: "Amount is required" });
+
+  const entry = await RevenueEntry.create({
+    clinic_id: clinicId,
+    amount,
+    description,
+    program_id,
+    doctor_id,
+    patient_id,
+    entered_by: userId,
+    entry_date: entry_date ? new Date(entry_date) : new Date(),
+  });
+  res.status(201).json(entry);
+});
+
+// ---------- Clinic: doctor program assignments ----------
+
+/** Clinic lists doctors in their team */
+router.get("/clinic/doctors", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.json([]);
+
+  const members = await ClinicMember.find({ clinic_id: clinicId, role: "doctor" }).lean();
+  const doctorUserIds = members.map((m: any) => m.user_id);
+  if (!doctorUserIds.length) return res.json([]);
+
+  const [profiles, authUsers] = await Promise.all([
+    Profile.find({ user_id: { $in: doctorUserIds } }).lean(),
+    AuthUser.find({ user_id: { $in: doctorUserIds } }).select("user_id email").lean(),
+  ]);
+  const profileMap = new Map(profiles.map((p: any) => [p.user_id, p]));
+  const authMap = new Map(authUsers.map((a: any) => [a.user_id, a]));
+
+  res.json(doctorUserIds.map((uid: string) => ({
+    user_id: uid,
+    name: (profileMap.get(uid) as any)?.full_name || "Unknown",
+    email: (authMap.get(uid) as any)?.email || "",
+    specialization: (profileMap.get(uid) as any)?.specialization || "",
+  })));
+});
+
+/** Clinic assigns a doctor to a program */
+router.post("/clinic/programs/:programId/assign-doctor", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Clinic access required" });
+
+  const { doctor_user_id } = req.body as any;
+  if (!doctor_user_id) return res.status(400).json({ error: "doctor_user_id is required" });
+
+  const { DoctorProgramAssignment } = await import("../models/index.js");
+  const existing = await DoctorProgramAssignment.findOne({
+    program_id: req.params.programId, doctor_user_id, clinic_id: clinicId, status: "active",
+  }).lean();
+  if (existing) return res.status(400).json({ error: "Doctor already assigned to this program" });
+
+  const assignment = await DoctorProgramAssignment.create({
+    program_id: req.params.programId,
+    doctor_user_id,
+    clinic_id: clinicId,
+    assigned_by: userId,
+  });
+  res.status(201).json(assignment);
+});
+
+/** Clinic removes a doctor from a program */
+router.delete("/clinic/programs/:programId/assign-doctor/:doctorUserId", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Clinic access required" });
+
+  const { DoctorProgramAssignment } = await import("../models/index.js");
+  await DoctorProgramAssignment.updateOne(
+    { program_id: req.params.programId, doctor_user_id: req.params.doctorUserId, clinic_id: clinicId, status: "active" },
+    { $set: { status: "revoked" } }
+  );
+  res.json({ success: true });
+});
+
+/** Clinic lists doctor assignments for a program */
+router.get("/clinic/programs/:programId/doctors", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.json([]);
+
+  // Find the actual clinic owner from ClinicMember (may be a separate doctor account)
+  const ownerMember = await ClinicMember.findOne({ clinic_id: clinicId, role: "owner" }).lean();
+  const ownerDoctorId = (ownerMember as any)?.user_id;
+  // Fallback: clinic account user_id (from UserRole)
+  const clinicRole = await UserRole.findOne({ clinic_id: clinicId, role: "clinic" }).lean();
+  const clinicAccountId = (clinicRole as any)?.user_id || userId;
+
+  const { DoctorProgramAssignment } = await import("../models/index.js");
+  const assignments = await DoctorProgramAssignment.find({
+    program_id: req.params.programId, clinic_id: clinicId, status: "active",
+  }).lean();
+  const doctorIds = assignments.map((a: any) => a.doctor_user_id);
+  if (!doctorIds.length) return res.json([]);
+
+  const [profiles, authUsers] = await Promise.all([
+    Profile.find({ user_id: { $in: doctorIds } }).lean(),
+    AuthUser.find({ user_id: { $in: doctorIds } }).select("user_id email").lean(),
+  ]);
+  const profileMap = new Map(profiles.map((p: any) => [p.user_id, p]));
+  const authMap = new Map(authUsers.map((a: any) => [a.user_id, a]));
+
+  res.json(assignments.map((a: any) => {
+    const isOwner = a.doctor_user_id === ownerDoctorId || a.doctor_user_id === clinicAccountId;
+    const profile = profileMap.get(a.doctor_user_id) as any;
+    const doctorName = profile?.full_name || (authMap.get(a.doctor_user_id) as any)?.email?.split("@")[0] || "Unknown";
+    return {
+      id: a._id?.toString(),
+      doctor_user_id: a.doctor_user_id,
+      doctor_name: isOwner ? `${doctorName} (Owner)` : doctorName,
+      assigned_at: a.assigned_at,
+      is_owner: isOwner,
+    };
+  }));
+});
+
+// ---------- Doctor: view assigned programs ----------
+
+/** Doctor sees programs assigned to them. Clinic owners see all clinic programs. */
+router.get("/doctor/programs", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+
+  const { DoctorProgramAssignment, ProgramAssignment } = await import("../models/index.js");
+
+  // Collect program IDs from direct doctor assignments (DoctorProgramAssignment)
+  const doctorAssignments = await DoctorProgramAssignment.find({ doctor_user_id: userId, status: "active" }).lean();
+  const programIdSet = new Set(doctorAssignments.map((a: any) => a.program_id));
+
+  // If user is a clinic owner (UserRole "clinic"), also include all programs assigned to their clinic
+  const roleDoc = await UserRole.findOne({ user_id: userId }).lean();
+  if ((roleDoc as any)?.role === "clinic" && (roleDoc as any)?.clinic_id) {
+    const clinicAssignments = await ProgramAssignment.find({
+      clinic_id: (roleDoc as any).clinic_id, status: "active",
+    }).lean();
+    clinicAssignments.forEach((a: any) => programIdSet.add(a.program_id));
+  }
+
+  // Also check if this user is a ClinicMember (owner/doctor) — they may have
+  // a separate doctor account linked to a clinic. Include programs from those clinics.
+  const memberships = await ClinicMember.find({
+    user_id: userId, role: { $in: ["owner", "doctor"] },
+  }).lean();
+  if (memberships.length) {
+    const clinicIds = memberships.map((m: any) => m.clinic_id);
+    const clinicAssignments = await ProgramAssignment.find({
+      clinic_id: { $in: clinicIds }, status: "active",
+    }).lean();
+    clinicAssignments.forEach((a: any) => programIdSet.add(a.program_id));
+  }
+
+  const programIds = [...programIdSet];
+  if (!programIds.length) return res.json([]);
+
+  const programs = await Program.find({ _id: { $in: programIds }, is_active: true }).lean();
+  res.json(programs.map((p: any) => ({
+    ...p,
+    id: p._id?.toString(),
+    _id: undefined,
+    __v: undefined,
+  })));
 });
 
 // ---------- Clinic members ----------
@@ -2779,6 +3467,18 @@ router.patch("/link_requests/:id", requireAuth, async (req, res) => {
   ).lean();
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json({ ...updated, id: updated._id?.toString(), _id: undefined, __v: undefined });
+
+  // Notify doctor by email when a patient links (fire-and-forget)
+  if (body.status === "approved") {
+    try {
+      const docAuth = await AuthUser.findOne({ user_id: doctorId }).select("email").lean();
+      const docProf = await Profile.findOne({ user_id: doctorId }).select("full_name").lean();
+      const patientName = (request as any).patient_name || "A patient";
+      if (docAuth && (docAuth as any).email) {
+        sendNewPatientLinkedEmail((docAuth as any).email, (docProf as any)?.full_name || "Doctor", patientName, doctorId).catch(() => {});
+      }
+    } catch {}
+  }
 });
 
 // ---------- Notifications ----------
@@ -3068,13 +3768,25 @@ router.get("/patients", requireAuth, async (req, res) => {
     if (doctorIds.length === 0) return res.json([]);
     filter.doctor_id = { $in: doctorIds };
   } else {
+    // Collect all doctor IDs this user can see patients for:
+    // 1. Their own patients (doctor_id = userId)
+    // 2. Linked patients (via PatientDoctorLink)
+    // 3. Patients from all clinics the doctor is a member of (via ClinicMember)
+    const allDoctorIds = new Set<string>([userId]);
+    const memberships = await ClinicMember.find({ user_id: userId, role: { $in: ["owner", "admin", "doctor"] } }).select("clinic_id").lean();
+    if (memberships.length) {
+      const memberClinicIds = [...new Set((memberships as any[]).map((m) => m.clinic_id))];
+      const clinicMembers = await ClinicMember.find({ clinic_id: { $in: memberClinicIds } }).select("user_id").lean();
+      (clinicMembers as any[]).forEach((m) => allDoctorIds.add(m.user_id));
+    }
     const links = await PatientDoctorLink.find({ doctor_user_id: userId, status: "active" }).select("patient_user_id").lean();
     const linkedPatientUserIds = [...new Set((links as { patient_user_id: string }[]).map((l) => l.patient_user_id))];
+
+    const orConditions: any[] = [{ doctor_id: { $in: [...allDoctorIds] } }];
     if (linkedPatientUserIds.length > 0) {
-      filter.$or = [{ doctor_id: userId }, { patient_user_id: { $in: linkedPatientUserIds } }];
-    } else {
-      filter.doctor_id = userId;
+      orConditions.push({ patient_user_id: { $in: linkedPatientUserIds } });
     }
+    filter.$or = orConditions;
   }
   if (q.patient_user_id) filter.patient_user_id = q.patient_user_id;
   if (q.status) filter.status = q.status;
@@ -4573,6 +5285,27 @@ Rules:
     logged,
     duration_seconds: duration_seconds || 0,
   });
+
+  // Send consultation summary email (fire-and-forget)
+  try {
+    const userId = (req as AuthRequest).user.id;
+    const authU = await AuthUser.findOne({ user_id: userId }).select("email").lean();
+    const prof = await Profile.findOne({ user_id: userId }).select("full_name").lean();
+    if (authU && (authU as any).email && messages.length > 2) {
+      const docName = DOCTOR_PERSONAS[personaKey]?.name || "AI Doctor";
+      const summaryParts = messages.slice(-6).map((m: { role: string; content: string }) =>
+        `${m.role === "assistant" ? docName : "You"}: ${m.content}`
+      );
+      const loggedSummary = logged.length ? `\n\nHealth data logged: ${logged.map((l: any) => `${l.type}${l.value ? ": " + l.value : ""}`).join(", ")}` : "";
+      sendConsultationSummaryEmail(
+        (authU as any).email,
+        (prof as any)?.full_name || "there",
+        docName,
+        summaryParts.join("\n") + loggedSummary,
+        userId,
+      ).catch(() => {});
+    }
+  } catch {}
 });
 
 // Get voice conversation history
@@ -4612,6 +5345,21 @@ router.post("/contact", async (req, res) => {
 });
 
 // ---------- Health Notes (symptoms etc.) ----------
+router.post("/me/health-notes", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked" });
+  const { note, note_type, severity } = req.body;
+  if (!note || !String(note).trim()) return res.status(400).json({ error: "note text required" });
+  const doc = await HealthNote.create({
+    patient_id: link.patient_id,
+    note: String(note).trim(),
+    note_type: note_type || "symptom",
+    severity: severity || "low",
+    source: "manual",
+  });
+  res.status(201).json({ id: doc._id?.toString(), ...doc.toJSON() });
+});
+
 router.get("/me/health-notes", requireAuth, async (req, res) => {
   const link = await getPatientForCurrentUser(req);
   if (!link) return res.status(404).json({ error: "Patient record not linked" });

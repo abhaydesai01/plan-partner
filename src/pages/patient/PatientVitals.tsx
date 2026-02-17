@@ -164,13 +164,13 @@ const PatientVitals = () => {
       {/* Bulk Upload Modal */}
       {showBulkAdd && (
         <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowBulkAdd(false)}>
-          <div className="glass-card rounded-2xl p-6 w-full max-w-2xl my-8 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="glass-card rounded-2xl p-4 sm:p-6 w-full max-w-[calc(100vw-2rem)] sm:max-w-2xl my-8 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">Bulk upload vitals</h2>
               <button type="button" onClick={() => setShowBulkAdd(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
             </div>
             <div className="border border-border rounded-xl overflow-hidden">
-              <div className="overflow-x-auto max-h-[50vh]">
+              <div className="overflow-x-auto max-h-[60vh] sm:max-h-[50vh]">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 sticky top-0">
                     <tr>
@@ -220,7 +220,7 @@ const PatientVitals = () => {
       {/* Add Vital Modal */}
       {showAdd && (
         <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
-          <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="glass-card rounded-2xl p-4 sm:p-6 w-full max-w-[calc(100vw-2rem)] sm:max-w-md space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">Add Vital</h2>
               <button onClick={() => setShowAdd(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
@@ -293,7 +293,7 @@ const PatientVitals = () => {
 
       {/* Vitals List */}
       {filtered.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
+        <div className="glass-card rounded-xl p-6 sm:p-12 text-center text-muted-foreground">
           <Activity className="w-10 h-10 mx-auto mb-3 opacity-40" />
           No vitals recorded yet.
         </div>

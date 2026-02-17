@@ -245,7 +245,7 @@ const PatientDocuments = () => {
               <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
                 <BarChart3 className="w-4 h-4" /> Analytics
               </h3>
-              <div className="h-64">
+              <div className="h-48 sm:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -286,7 +286,7 @@ const PatientDocuments = () => {
 
       {showUpload && (
         <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowUpload(false)}>
-          <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="glass-card rounded-2xl p-4 sm:p-6 w-full max-w-[calc(100vw-2rem)] sm:max-w-md space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">Upload Document</h2>
               <button onClick={() => setShowUpload(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
@@ -322,7 +322,7 @@ const PatientDocuments = () => {
       )}
 
       {documents.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
+        <div className="glass-card rounded-xl p-6 sm:p-12 text-center text-muted-foreground">
           <Upload className="w-10 h-10 mx-auto mb-3 opacity-40" />
           No documents uploaded yet.
         </div>

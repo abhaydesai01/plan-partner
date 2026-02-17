@@ -106,7 +106,7 @@ const PatientVault = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex-1 bg-muted rounded-xl px-5 py-4 font-mono text-2xl font-bold text-foreground tracking-[0.3em] text-center">
+          <div className="flex-1 bg-muted rounded-xl px-3 sm:px-5 py-4 font-mono text-lg sm:text-2xl font-bold text-foreground tracking-[0.15em] sm:tracking-[0.3em] text-center">
             {vaultCode?.vault_code || "—"}
           </div>
           <button onClick={copyCode} className="p-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-colors" title="Copy">
@@ -136,21 +136,21 @@ const PatientVault = () => {
             <Clock className="w-4 h-4 text-accent" /> Pending Requests ({pendingLinks.length})
           </h2>
           {pendingLinks.map(link => (
-            <div key={link.id} className="glass-card rounded-xl p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+            <div key={link.id} className="glass-card rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
                   <UserPlus className="w-5 h-5 text-accent" />
                 </div>
-                <div>
-                  <p className="font-medium text-sm text-foreground">{link.doctor_name || "Doctor"}</p>
+                <div className="min-w-0">
+                  <p className="font-medium text-sm text-foreground truncate">{link.doctor_name || "Doctor"}</p>
                   <p className="text-xs text-muted-foreground">Wants to view your health records</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => updateLinkStatus(link.id, "approved")} className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1">
+              <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+                <button onClick={() => updateLinkStatus(link.id, "approved")} className="flex-1 sm:flex-none px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1">
                   <Check className="w-3.5 h-3.5" /> Approve
                 </button>
-                <button onClick={() => updateLinkStatus(link.id, "rejected")} className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 transition-colors flex items-center gap-1">
+                <button onClick={() => updateLinkStatus(link.id, "rejected")} className="flex-1 sm:flex-none px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 transition-colors flex items-center justify-center gap-1">
                   <X className="w-3.5 h-3.5" /> Reject
                 </button>
               </div>

@@ -567,7 +567,7 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
             <span className="font-heading font-bold text-foreground truncate text-sm sm:text-base">Mediimate AI</span>
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 min-w-0 overflow-x-auto no-scrollbar">
           {gamification != null && gamification.streak_days > 0 && (
             <StreakBadge data={gamification} compact />
           )}

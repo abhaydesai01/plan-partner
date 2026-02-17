@@ -69,7 +69,7 @@ export default function PatientAccountability() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="w-full sm:max-w-2xl sm:mx-auto space-y-6 sm:space-y-8">
       <div>
         <h1 className="text-xl font-heading font-semibold text-foreground">Accountability & visibility</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Who can see your health activity</p>

@@ -39,13 +39,34 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
+          {
+            urlPattern: /\/api\/auth\/me$/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "auth-session-cache",
+              expiration: { maxEntries: 5, maxAgeSeconds: 86400 },
+              networkTimeoutSeconds: 5,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /\/api\/me\/(gamification|vitals|food_logs|medication-log|appointments|health-notes)/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "patient-data-cache",
+              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
+              networkTimeoutSeconds: 8,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/.*\/api\/.*/i,
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",
-              expiration: { maxEntries: 32, maxAgeSeconds: 60 },
+              expiration: { maxEntries: 64, maxAgeSeconds: 120 },
               networkTimeoutSeconds: 10,
               cacheableResponse: { statuses: [0, 200] },
             },

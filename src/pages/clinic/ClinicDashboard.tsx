@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
-import { Building2, Users, UserPlus, CalendarDays } from "lucide-react";
+import { Building2, Users, UserPlus, CalendarDays, DollarSign, Layers } from "lucide-react";
 
 const ClinicDashboard = () => {
   const { session } = useAuth();
   const clinic = session?.clinic as { id?: string; name?: string; address?: string; phone?: string } | null;
-  const [stats, setStats] = useState({ members: 0, patients: 0, appointments: 0 });
+  const [stats, setStats] = useState({ members: 0, patients: 0, appointments: 0, revenue: 0, programs: 0 });
 
   useEffect(() => {
     if (!clinic?.id) return;
@@ -14,7 +14,9 @@ const ClinicDashboard = () => {
       api.get<any[]>("clinic_members", { clinic_id: clinic.id }).then((m) => (Array.isArray(m) ? m.length : 0)),
       api.get<{ items: unknown[]; total: number }>("patients", { clinic_id: clinic.id, limit: "1", skip: "0" }).then((r) => r?.total ?? 0),
       api.get<any[]>("appointments", { clinic_id: clinic.id }).then((a) => (Array.isArray(a) ? a.length : 0)),
-    ]).then(([members, patients, appointments]) => setStats({ members, patients, appointments }));
+      api.get<{ total: number }>("clinic/revenue").then((r) => r?.total ?? 0).catch(() => 0),
+      api.get<any[]>("clinic/programs").then((p) => (Array.isArray(p) ? p.length : 0)).catch(() => 0),
+    ]).then(([members, patients, appointments, revenue, programs]) => setStats({ members, patients, appointments, revenue, programs }));
   }, [clinic?.id]);
 
   if (!clinic) {
@@ -36,18 +38,18 @@ const ClinicDashboard = () => {
         <p className="text-muted-foreground text-sm">Manage your clinic</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="glass-card rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <Users className="w-6 h-6 text-primary" />
           </div>
           <div>
             <p className="text-2xl font-heading font-bold text-foreground">{stats.members}</p>
-            <p className="text-sm text-muted-foreground">Team members</p>
+            <p className="text-sm text-muted-foreground">Team</p>
           </div>
         </div>
         <div className="glass-card rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <UserPlus className="w-6 h-6 text-primary" />
           </div>
           <div>
@@ -56,12 +58,30 @@ const ClinicDashboard = () => {
           </div>
         </div>
         <div className="glass-card rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <CalendarDays className="w-6 h-6 text-primary" />
           </div>
           <div>
             <p className="text-2xl font-heading font-bold text-foreground">{stats.appointments}</p>
             <p className="text-sm text-muted-foreground">Appointments</p>
+          </div>
+        </div>
+        <div className="glass-card rounded-xl p-4 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+            <DollarSign className="w-6 h-6 text-green-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-heading font-bold text-foreground">{stats.revenue ? `₹${stats.revenue.toLocaleString("en-IN")}` : "₹0"}</p>
+            <p className="text-sm text-muted-foreground">Revenue</p>
+          </div>
+        </div>
+        <div className="glass-card rounded-xl p-4 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+            <Layers className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-heading font-bold text-foreground">{stats.programs}</p>
+            <p className="text-sm text-muted-foreground">Programs</p>
           </div>
         </div>
       </div>

@@ -196,7 +196,7 @@ const PatientAppointments = () => {
       {/* Schedule appointment modal */}
       {showForm && (
         <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
-          <div className="glass-card rounded-2xl p-6 w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="glass-card rounded-2xl p-4 sm:p-6 w-full max-w-[calc(100vw-2rem)] sm:max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-heading font-bold text-foreground">
                 {step === "doctor" && "Who are you visiting?"}
@@ -275,7 +275,7 @@ const PatientAppointments = () => {
                             type="button"
                             disabled={isPast}
                             onClick={() => onSelectDate(dateStr)}
-                            className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${selectedDate === dateStr ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"} ${isPast ? "opacity-50 cursor-not-allowed" : ""}`}
+                            className={`py-2.5 min-h-[44px] rounded-lg border text-sm font-medium transition-colors touch-manipulation ${selectedDate === dateStr ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"} ${isPast ? "opacity-50 cursor-not-allowed" : ""}`}
                           >
                             {format(d, "EEE")}
                             <br />
@@ -310,13 +310,13 @@ const PatientAppointments = () => {
                           : "No free slots on this day. Try another date."}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {slots.map((slot) => (
                           <button
                             key={slot.start}
                             type="button"
                             onClick={() => onSelectSlot(slot)}
-                            className="py-2.5 rounded-lg border border-border hover:border-primary bg-background hover:bg-primary/5 text-sm font-medium transition-colors"
+                            className="py-2.5 min-h-[44px] rounded-lg border border-border hover:border-primary bg-background hover:bg-primary/5 text-sm font-medium transition-colors touch-manipulation"
                           >
                             {formatSlotTime(slot.start)}
                           </button>
@@ -390,7 +390,7 @@ const PatientAppointments = () => {
       )}
 
       {appointments.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
+        <div className="glass-card rounded-xl p-6 sm:p-12 text-center text-muted-foreground">
           <CalendarDays className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p>No appointments yet.</p>
           <p className="text-sm mt-2">Click “Schedule appointment” to choose a doctor and see their available times.</p>

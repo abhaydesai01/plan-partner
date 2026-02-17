@@ -79,18 +79,39 @@ define(['./workbox-6fc00345'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.hngo7f5o53"
+    "revision": "0.qfvqljbkk8o"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
-    allowlist: [/^\/$/]
+    allowlist: [/^\/$/],
+    denylist: [/^\/api/]
   }));
+  workbox.registerRoute(/\/api\/auth\/me$/i, new workbox.NetworkFirst({
+    "cacheName": "auth-session-cache",
+    "networkTimeoutSeconds": 5,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 5,
+      maxAgeSeconds: 86400
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
+  workbox.registerRoute(/\/api\/me\/(gamification|vitals|food_logs|medication-log|appointments|health-notes)/i, new workbox.NetworkFirst({
+    "cacheName": "patient-data-cache",
+    "networkTimeoutSeconds": 8,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 50,
+      maxAgeSeconds: 300
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
   workbox.registerRoute(/^https:\/\/.*\/api\/.*/i, new workbox.NetworkFirst({
     "cacheName": "api-cache",
     "networkTimeoutSeconds": 10,
     plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 32,
-      maxAgeSeconds: 60
+      maxEntries: 64,
+      maxAgeSeconds: 120
     }), new workbox.CacheableResponsePlugin({
       statuses: [0, 200]
     })]

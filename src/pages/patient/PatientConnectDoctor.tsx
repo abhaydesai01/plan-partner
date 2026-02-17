@@ -79,7 +79,7 @@ const PatientConnectDoctor = () => {
   }
 
   return (
-    <div className="w-full max-w-full min-w-0 max-w-lg mx-auto space-y-6">
+    <div className="w-full min-w-0 sm:max-w-lg sm:mx-auto space-y-6">
       <div className="min-w-0">
         <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground truncate">Connect to doctor</h1>
         <p className="text-muted-foreground text-sm mt-1">Link your account to a doctor using their doctor code</p>
@@ -108,7 +108,7 @@ const PatientConnectDoctor = () => {
       )}
 
       {pending && !isLinked && (
-        <div className="glass-card rounded-xl p-6 text-center">
+        <div className="glass-card rounded-xl p-4 sm:p-6 text-center">
           <Clock className="w-12 h-12 text-accent mx-auto mb-3" />
           <h2 className="text-lg font-heading font-bold text-foreground mb-1">Request pending</h2>
           <p className="text-sm text-muted-foreground">Your link request has been sent. You’ll get access once the doctor approves it.</p>
@@ -125,7 +125,7 @@ const PatientConnectDoctor = () => {
         </div>
       )}
 
-      <div className="glass-card rounded-xl p-6 space-y-4">
+      <div className="glass-card rounded-xl p-4 sm:p-6 space-y-4">
         <h2 className="font-heading font-semibold text-foreground flex items-center gap-2">
           <Search className="w-5 h-5" />
           Request link with doctor code
@@ -139,7 +139,7 @@ const PatientConnectDoctor = () => {
               placeholder="e.g. DRABC12"
               value={doctorCode}
               onChange={(e) => setDoctorCode(e.target.value.toUpperCase())}
-              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-center text-lg font-heading tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-center text-base sm:text-lg font-heading tracking-wider sm:tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-primary/50"
               maxLength={12}
             />
           </div>

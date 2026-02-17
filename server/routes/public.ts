@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { Profile, Program, ClinicMember, Clinic, Patient, Enrollment, Notification, ClinicInvite } from "../models/index.js";
+import { Profile, Program, ClinicMember, Clinic, Patient, Enrollment, Notification, ClinicInvite, AuthUser } from "../models/index.js";
 
 const router = Router();
 
@@ -157,6 +157,31 @@ router.post("/patient-enroll", async (req, res) => {
     success: true,
     patient_id: patient._id.toString(),
     enrollment_id: enrollmentId,
+  });
+});
+
+/** GET /api/doctor-by-code?code=ABCD12 - public lookup for QR connect flow */
+router.get("/doctor-by-code", async (req, res) => {
+  const code = (req.query.code as string)?.toUpperCase();
+  if (!code) { res.status(400).json({ error: "Missing code" }); return; }
+
+  const profile = await Profile.findOne({ doctor_code: code }).lean();
+  if (!profile) { res.status(404).json({ error: "Doctor not found" }); return; }
+
+  const userId = (profile as any).user_id;
+  const membership = await ClinicMember.findOne({ user_id: userId }).select("clinic_id").lean();
+  let clinicName: string | null = null;
+  if (membership?.clinic_id) {
+    const c = await Clinic.findById((membership as any).clinic_id).select("name").lean();
+    if (c) clinicName = (c as any).name;
+  }
+
+  res.json({
+    doctor_name: (profile as any).full_name || "Doctor",
+    doctor_code: code,
+    doctor_user_id: userId,
+    specialties: (profile as any).specialties || [],
+    clinic_name: clinicName,
   });
 });
 

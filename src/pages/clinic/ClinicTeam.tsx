@@ -130,12 +130,13 @@ const ClinicTeam = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-heading font-bold text-foreground">Team</h1>
           <p className="text-muted-foreground text-sm">Manage doctors, nurses and staff</p>
+          <p className="text-xs text-amber-600 mt-1">Note: New doctors will need admin approval before accessing the platform</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             onClick={() => setShowAddByCode(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90"

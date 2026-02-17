@@ -98,7 +98,7 @@ const PatientFeedback = () => {
             key={n}
             type="button"
             onClick={() => onChange(n)}
-            className="p-1 rounded focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary/50 touch-manipulation"
             aria-label={`${n} star${n > 1 ? "s" : ""}`}
           >
             <Star
@@ -128,7 +128,7 @@ const PatientFeedback = () => {
       </div>
 
       {requests.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center text-muted-foreground">
+        <div className="glass-card rounded-xl p-6 sm:p-12 text-center text-muted-foreground">
           <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-40" />
           <p className="font-medium text-foreground">No feedback requests right now</p>
           <p className="text-sm mt-2">
@@ -174,7 +174,7 @@ const PatientFeedback = () => {
           onClick={() => !submitting && setModalRequest(null)}
         >
           <div
-            className="glass-card rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4"
+            className="glass-card rounded-2xl p-4 sm:p-6 w-full max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
