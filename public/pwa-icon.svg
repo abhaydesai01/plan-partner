@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="96" fill="hsl(168, 80%, 36%)"/>
-  <path d="M256 152c-28 0-52 18-68 44-16-26-40-44-68-44-48 0-88 42-88 92 0 52 44 100 156 188 112-88 156-136 156-188 0-50-40-92-88-92z" fill="white" opacity=".95"/>
-  <path d="M256 280v152M200 336h112" stroke="white" stroke-width="24" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="108" fill="#0d9488"/>
+  <!-- Subtle inner glow -->
+  <rect x="16" y="16" width="480" height="480" rx="92" fill="#0d9488" stroke="white" stroke-opacity="0.08" stroke-width="2"/>
+  <!-- Stylised M letterform -->
+  <path d="M148 368V192l108 108 108-108v176" stroke="white" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Small health cross at the peak -->
+  <rect x="243" y="128" width="26" height="64" rx="6" fill="white" opacity="0.9"/>
+  <rect x="224" y="147" width="64" height="26" rx="6" fill="white" opacity="0.9"/>
 </svg>

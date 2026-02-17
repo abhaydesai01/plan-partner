@@ -19,7 +19,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["pwa-icon.svg", "placeholder.svg"],
+      includeAssets: ["pwa-icon.svg", "favicon.ico", "apple-touch-icon.png", "placeholder.svg"],
       manifest: {
         name: "Mediimate Patient",
         short_name: "Mediimate",
@@ -31,8 +31,10 @@ export default defineConfig({
         theme_color: "#0d9488",
         scope: "/",
         icons: [
-          { src: "/pwa-icon.svg", type: "image/svg+xml", sizes: "any", purpose: "any" },
-          { src: "/pwa-icon.svg", type: "image/svg+xml", sizes: "512x512", purpose: "maskable" },
+          { src: "/pwa-192.png", type: "image/png", sizes: "192x192", purpose: "any" },
+          { src: "/pwa-512.png", type: "image/png", sizes: "512x512", purpose: "any" },
+          { src: "/pwa-512.png", type: "image/png", sizes: "512x512", purpose: "maskable" },
+          { src: "/pwa-icon.svg", type: "image/svg+xml", sizes: "any" },
         ],
         categories: ["health", "medical", "lifestyle"],
       },
