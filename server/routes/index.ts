@@ -48,6 +48,7 @@ import {
   VoiceConversation,
   ChatConversation,
   HealthNote,
+  ContactLead,
 } from "../models/index.js";
 import {
   sendVitalsLoggedEmail,
@@ -5339,9 +5340,52 @@ router.post("/clinical-evidence", requireAuth, async (req, res) => {
 });
 
 router.post("/contact", async (req, res) => {
-  const { message } = req.body;
-  if (!message) return res.status(400).json({ error: "Message required" });
-  res.json({ ok: true });
+  const { name, email, phone, clinic_name, message, type } = req.body;
+  if (!name || !email) return res.status(400).json({ error: "Name and email are required" });
+
+  try {
+    // Store lead in MongoDB
+    const lead = await ContactLead.create({
+      name: String(name).trim(),
+      email: String(email).trim().toLowerCase(),
+      phone: phone ? String(phone).trim() : undefined,
+      clinic_name: clinic_name ? String(clinic_name).trim() : undefined,
+      message: message ? String(message).trim() : undefined,
+      type: type || "contact",
+      source: "website",
+    });
+
+    // Push to Google Sheet (non-blocking — don't fail the request if sheet sync fails)
+    const sheetUrl = process.env.GSHEET_WEBHOOK_URL;
+    if (sheetUrl) {
+      fetch(sheetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone || "",
+          clinic_name: lead.clinic_name || "",
+          message: lead.message || "",
+          type: lead.type,
+          submitted_at: new Date().toISOString(),
+        }),
+      })
+        .then(async (r) => {
+          if (r.ok) {
+            await ContactLead.updateOne({ _id: lead._id }, { $set: { gsheet_synced: true } });
+          } else {
+            console.error("GSheet sync failed:", r.status, await r.text().catch(() => ""));
+          }
+        })
+        .catch((err) => console.error("GSheet sync error:", err.message));
+    }
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error("Contact form error:", err);
+    res.status(500).json({ error: "Failed to submit. Please try again." });
+  }
 });
 
 // ---------- Health Notes (symptoms etc.) ----------

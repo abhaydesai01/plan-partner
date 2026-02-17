@@ -799,3 +799,21 @@ DoctorProgramAssignmentSchema.index({ clinic_id: 1, status: 1 });
 DoctorProgramAssignmentSchema.index({ doctor_user_id: 1, status: 1 });
 DoctorProgramAssignmentSchema.index({ program_id: 1, doctor_user_id: 1, status: 1 });
 export const DoctorProgramAssignment = mongoose.model("DoctorProgramAssignment", DoctorProgramAssignmentSchema);
+
+// ─── Contact / Lead submissions (website forms) ──
+const ContactLeadSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true },
+    phone: String,
+    clinic_name: String,
+    message: String,
+    type: { type: String, enum: ["free_trial", "demo", "contact", "pricing"], default: "contact" },
+    source: { type: String, default: "website" },
+    gsheet_synced: { type: Boolean, default: false },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+ContactLeadSchema.index({ email: 1 });
+ContactLeadSchema.index({ createdAt: -1 });
+export const ContactLead = mongoose.model("ContactLead", ContactLeadSchema);
