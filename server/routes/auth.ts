@@ -15,9 +15,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
 (async function seedAdmin() {
   try {
     const adminEmail = "admin@mediimate.com";
-    const existing = await AuthUser.findOne({ email: adminEmail }).lean();
+    let existing = await AuthUser.findOne({ email: adminEmail }).lean();
+    let adminUserId: string;
+
     if (!existing) {
-      const adminUserId = crypto.randomUUID();
+      adminUserId = crypto.randomUUID();
       const password_hash = await bcrypt.hash("Test1234!", 10);
       await AuthUser.create({
         email: adminEmail,
@@ -26,9 +28,26 @@ const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
         email_verified: true,
         approval_status: "active",
       });
-      await UserRole.create({ user_id: adminUserId, role: "admin" });
       await Profile.create({ user_id: adminUserId, full_name: "Mediimate Admin" });
-      console.log("Admin account seeded: admin@mediimate.com");
+      console.log("Admin account created: admin@mediimate.com");
+    } else {
+      adminUserId = (existing as any).user_id;
+      // Ensure email is verified and account is active
+      await AuthUser.updateOne(
+        { email: adminEmail },
+        { $set: { email_verified: true, approval_status: "active" } }
+      );
+    }
+
+    // Always ensure admin role exists (fixes cases where user was registered
+    // through normal flow without admin role, or seed ran partially)
+    const existingRole = await UserRole.findOne({ user_id: adminUserId }).lean();
+    if (!existingRole) {
+      await UserRole.create({ user_id: adminUserId, role: "admin" });
+      console.log("Admin role created for:", adminEmail);
+    } else if ((existingRole as any).role !== "admin") {
+      await UserRole.updateOne({ user_id: adminUserId }, { $set: { role: "admin" } });
+      console.log("Admin role fixed for:", adminEmail, "(was:", (existingRole as any).role, ")");
     }
   } catch (err) {
     console.error("Admin seed error (non-fatal):", err);

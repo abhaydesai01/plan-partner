@@ -1,7 +1,7 @@
 import { Building2, CheckCircle2, Quote } from "lucide-react";
 
 const logoBar = [
-  { src: "/logos/manipal.svg", alt: "Manipal Academy of Higher Education" },
+  { src: "/logos/manipal.png", alt: "Manipal Academy of Higher Education" },
   { src: "/logos/karnataka.svg", alt: "Government of Karnataka" },
   { src: "/logos/apollo.svg", alt: "Apollo Hospitals" },
   { src: "/logos/nimhans.svg", alt: "NIMHANS" },
@@ -11,7 +11,7 @@ const logoBar = [
 const partners = [
   {
     category: "Incubation",
-    logo: "/logos/manipal.svg",
+    logo: "/logos/manipal.png",
     name: "Manipal Incubation Centre (MIC)",
     items: ["Incubated: Mediimate", "Mentors: Manipal Hospital CMOs"],
     accent: "border-blue-500/30 bg-blue-500/5",
