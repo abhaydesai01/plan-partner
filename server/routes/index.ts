@@ -125,7 +125,7 @@ Vital: ${label}. Value: ${valueText}${unit ? ` ${unit}` : ""}.
 Reply with only the remark, no quotes or prefix.`;
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1366,10 +1366,104 @@ router.get("/me/food_logs", requireAuth, async (req, res) => {
 router.post("/me/food_logs", requireAuth, async (req, res) => {
   const link = await getPatientForCurrentUser(req);
   if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const rawNotes: string = (req.body?.notes || "").trim();
+  const imagePath: string | undefined = req.body?.image_path;
+  const incomingItems: unknown[] = Array.isArray(req.body?.food_items) ? req.body.food_items : [];
+  const mealType: string = req.body?.meal_type || "other";
+
+  let food_items = incomingItems as { name: string; quantity?: number; unit?: string; calories?: number; protein?: number; carbs?: number; fat?: number }[];
+  let total_calories: number | undefined;
+  let total_protein: number | undefined;
+  let total_carbs: number | undefined;
+  let total_fat: number | undefined;
+
+  // ── AI nutrition parsing ──────────────────────────────────────
+  if (geminiKey && food_items.length === 0) {
+    const systemPrompt = `You are a nutrition parser. Analyze the meal and extract food items with accurate nutritional values.
+Return ONLY valid JSON: { "food_items": [{ "name": "string", "quantity": number, "unit": "string", "calories": number, "protein": number, "carbs": number, "fat": number }] }
+For Indian foods use common serving sizes. Always return valid JSON only.`;
+
+    try {
+      // Case 1: image uploaded → read from disk and send to Gemini Vision
+      if (imagePath) {
+        const absPath = path.join(UPLOAD_DIR, imagePath);
+        if (fs.existsSync(absPath)) {
+          const buf = fs.readFileSync(absPath);
+          const mime = imagePath.match(/\.(png)$/i) ? "image/png" : imagePath.match(/\.(webp)$/i) ? "image/webp" : "image/jpeg";
+          const imageBase64 = buf.toString("base64");
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents: [{ role: "user", parts: [
+                  { text: `Meal type: ${mealType}${rawNotes ? `\nDescription: ${rawNotes}` : ""}. Analyze this meal image.` },
+                  { inlineData: { mimeType: mime, data: imageBase64 } },
+                ]}],
+                generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+              }),
+            }
+          );
+          if (geminiRes.ok) {
+            const aiResult = await geminiRes.json();
+            const content = aiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+            try {
+              const parsed = JSON.parse(jsonMatch[1]!.trim());
+              if (Array.isArray(parsed.food_items) && parsed.food_items.length > 0) {
+                food_items = parsed.food_items;
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+
+      // Case 2: text description provided (and image didn't already populate items)
+      if (rawNotes && food_items.length === 0) {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: "user", parts: [{ text: `Meal type: ${mealType}\nDescription: ${rawNotes}` }] }],
+              generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+            }),
+          }
+        );
+        if (geminiRes.ok) {
+          const aiResult = await geminiRes.json();
+          const content = aiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+          try {
+            const parsed = JSON.parse(jsonMatch[1]!.trim());
+            if (Array.isArray(parsed.food_items) && parsed.food_items.length > 0) {
+              food_items = parsed.food_items;
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch { /* AI failures are non-blocking */ }
+
+    if (food_items.length > 0) {
+      total_calories = food_items.reduce((s, i) => s + (i.calories || 0), 0);
+      total_protein  = food_items.reduce((s, i) => s + (i.protein  || 0), 0);
+      total_carbs    = food_items.reduce((s, i) => s + (i.carbs    || 0), 0);
+      total_fat      = food_items.reduce((s, i) => s + (i.fat      || 0), 0);
+    }
+  }
+
   const body = {
     ...req.body,
     patient_id: link.patient_id,
     doctor_id: link.doctor_id,
+    food_items: food_items.length > 0 ? food_items : (req.body?.food_items ?? []),
+    ...(total_calories !== undefined && { total_calories, total_protein, total_carbs, total_fat }),
   };
   const doc = await FoodLog.create(body);
   const points_earned = POINTS.food;
@@ -1380,10 +1474,85 @@ router.post("/me/food_logs", requireAuth, async (req, res) => {
   try {
     const authU = await AuthUser.findById((req as AuthRequest).user.id).select("email full_name").lean();
     if (authU && (authU as any).email) {
-      sendFoodLoggedEmail((authU as any).email, (authU as any).full_name || "there", req.body?.meal_type || "Meal", req.body?.notes || "", (req as AuthRequest).user.id).catch(() => {});
+      sendFoodLoggedEmail((authU as any).email, (authU as any).full_name || "there", req.body?.meal_type || "Meal", rawNotes || "", (req as AuthRequest).user.id).catch(() => {});
     }
   } catch {}
-  res.status(201).json({ ...doc.toJSON(), points_earned, ...rewards });
+  res.status(201).json({ ...doc.toJSON(), id: (doc as any)._id?.toString(), points_earned, ...rewards });
+});
+
+router.patch("/me/food_logs/:id", requireAuth, async (req, res) => {
+  const link = await getPatientForCurrentUser(req);
+  if (!link) return res.status(404).json({ error: "Patient record not linked to your account" });
+  const { id } = req.params;
+  const existing = await FoodLog.findOne({ _id: id, patient_id: link.patient_id }).lean();
+  if (!existing) return res.status(404).json({ error: "Food log not found" });
+
+  const { notes, meal_type } = req.body as { notes?: string; meal_type?: string };
+  const updatedMealType = meal_type || (existing as any).meal_type || "other";
+  const updatedNotes = notes !== undefined ? notes : (existing as any).notes || "";
+
+  // AI re-assessment: parse nutrition from text description
+  let food_items: { name: string; quantity?: number; unit?: string; calories?: number; protein?: number; carbs?: number; fat?: number }[] = [];
+  let total_calories = 0;
+  let total_protein = 0;
+  let total_carbs = 0;
+  let total_fat = 0;
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey && updatedNotes.trim()) {
+    try {
+      const systemPrompt = `You are a nutrition parser. Analyze the meal description and extract food items with accurate nutritional values.
+Return ONLY valid JSON: { "food_items": [{ "name": "string", "quantity": number, "unit": "string", "calories": number, "protein": number, "carbs": number, "fat": number }] }
+For Indian foods use common serving sizes. Estimate values based on typical portions. Always return valid JSON only.`;
+      const userPrompt = `Meal type: ${updatedMealType}\nDescription: ${updatedNotes}`;
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+          }),
+        }
+      );
+      if (geminiRes.ok) {
+        const aiResult = await geminiRes.json();
+        const content = aiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        try {
+          const parsed = JSON.parse(jsonMatch[1]!.trim());
+          if (Array.isArray(parsed.food_items)) {
+            food_items = parsed.food_items as typeof food_items;
+            total_calories = food_items.reduce((s, i) => s + (i.calories || 0), 0);
+            total_protein = food_items.reduce((s, i) => s + (i.protein || 0), 0);
+            total_carbs = food_items.reduce((s, i) => s + (i.carbs || 0), 0);
+            total_fat = food_items.reduce((s, i) => s + (i.fat || 0), 0);
+          }
+        } catch { /* keep zeros */ }
+      }
+    } catch { /* keep zeros */ }
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    meal_type: updatedMealType,
+    notes: updatedNotes,
+    food_items,
+    total_calories,
+    total_protein,
+    total_carbs,
+    total_fat,
+    updated_at: new Date(),
+  };
+
+  const updated = await FoodLog.findOneAndUpdate(
+    { _id: id, patient_id: link.patient_id },
+    { $set: updatePayload },
+    { new: true }
+  ).lean();
+
+  res.json({ ...updated, id: (updated as any)?._id?.toString(), _id: undefined, __v: undefined });
 });
 
 router.get("/me/medication-log", requireAuth, async (req, res) => {
@@ -4078,7 +4247,7 @@ async function extractLabResultsFromPdf(
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const { fileUri, mimeType } = await uploadPdfToGemini(apiKey, pdfBuffer, fileName || "lab-report.pdf");
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4111,7 +4280,7 @@ async function extractLabResultsFromImage(
 ): Promise<{ tested_at: string | null; results: Array<{ test_name: string; result_value: string; unit?: string; reference_range?: string; status?: string }> }> {
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4193,7 +4362,7 @@ async function analyzeLabResultsForReport(
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const text = results.map((r) => `${r.test_name}: ${r.result_value} ${r.unit || ""} (ref: ${r.reference_range || "—"}) [${r.status || "normal"}]`).join("\n");
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4344,7 +4513,7 @@ async function analyzeDocumentWithGemini(
   }
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4383,7 +4552,7 @@ Return ONLY valid JSON: { "meal_type": "breakfast"|"lunch"|"dinner"|"snack"|"oth
 Infer meal_type from food type. For Indian foods use common serving sizes. Always return valid JSON only.`;
 
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4495,7 +4664,7 @@ router.post("/chat/patient", requireAuth, async (req, res) => {
   const systemPrompt = `You are Mediimate AI — a caring health assistant for patients. You have access to the patient's health records below. You are NOT a doctor; recommend consulting their doctor for medical decisions. Be empathetic and concise.\n\n${contextParts || "No patient records found."}\n\nRespond in a friendly, professional tone.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
   const streamRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents }) }
   );
   if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
@@ -4540,7 +4709,7 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
   const systemPrompt = `You are a clinical copilot for doctors. Patient records:\n\n${contextParts}\n\nBe precise and clinical.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
   const streamRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents }) }
   );
   if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
@@ -4612,7 +4781,7 @@ Rules:
 - Return ONLY the JSON, no explanation`;
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5063,7 +5232,7 @@ Start by greeting ${patientName} warmly IN ${chosenLang || "the patient's langua
     parts: [{ text: m.content || "" }],
   }));
   const streamRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -5162,7 +5331,7 @@ Rules:
 - Return ONLY the JSON, no other text`;
 
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -5330,7 +5499,7 @@ router.post("/clinical-evidence", requireAuth, async (req, res) => {
   const medications = (p.medications || []).join(", ") || "None";
   const prompt = `Patient: ${p.full_name}. Conditions: ${conditions}. Medications: ${medications}. List 3-5 brief, relevant clinical considerations or evidence-based points. Use markdown.`;
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] }) }
   );
   if (!geminiRes.ok) return res.status(500).json({ error: "Evidence search failed" });
