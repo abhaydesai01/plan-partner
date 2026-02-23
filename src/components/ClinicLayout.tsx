@@ -2,10 +2,11 @@ import { ReactNode, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { getStoredDoctorToken } from "@/lib/api";
-import { Building2, LogOut, Stethoscope, LayoutDashboard, Users, UserPlus, CalendarDays, Settings, Menu, X, Star, Layers, DollarSign } from "lucide-react";
+import { Building2, LogOut, Stethoscope, LayoutDashboard, Users, UserPlus, CalendarDays, Settings, Menu, X, Star, Layers, DollarSign, Briefcase } from "lucide-react";
 
 const navItems = [
   { to: "/clinic", icon: LayoutDashboard, label: "Dashboard", end: true },
+  { to: "/clinic/cases", icon: Briefcase, label: "Cases" },
   { to: "/clinic/programs", icon: Layers, label: "Programs" },
   { to: "/clinic/team", icon: Users, label: "Team" },
   { to: "/clinic/patients", icon: UserPlus, label: "Patients" },

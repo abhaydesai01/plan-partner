@@ -20,6 +20,8 @@ import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Contact from "./pages/Contact";
+import ForClinics from "./pages/ForClinics";
+import ForHospitals from "./pages/ForHospitals";
 import { ClinicLayout } from "./components/ClinicLayout";
 import { FamilyLayout } from "./components/FamilyLayout";
 import { AdminLayout } from "./components/AdminLayout";
@@ -34,6 +36,7 @@ const AdminPrograms = lazy(() => import("./pages/admin/AdminPrograms"));
 const AdminProgramDetail = lazy(() => import("./pages/admin/AdminProgramDetail"));
 const AdminRevenue = lazy(() => import("./pages/admin/AdminRevenue"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
+const AdminCases = lazy(() => import("./pages/admin/AdminCases"));
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Patients = lazy(() => import("./pages/Patients"));
@@ -73,8 +76,16 @@ const ClinicSettingsPage = lazy(() => import("./pages/clinic/ClinicSettingsPage"
 const ClinicFeedback = lazy(() => import("./pages/clinic/ClinicFeedback"));
 const ClinicProgramsPage = lazy(() => import("./pages/clinic/ClinicPrograms"));
 const ClinicRevenue = lazy(() => import("./pages/clinic/ClinicRevenue"));
+const ClinicCases = lazy(() => import("./pages/clinic/ClinicCases"));
 const FamilyDashboard = lazy(() => import("./pages/family/FamilyDashboard"));
 const PatientAccountability = lazy(() => import("./pages/patient/PatientAccountability"));
+const PatientIntentCapture = lazy(() => import("./pages/patient/PatientIntentCapture"));
+const PatientHospitalDiscovery = lazy(() => import("./pages/patient/PatientHospitalDiscovery"));
+const PatientHospitalProfile = lazy(() => import("./pages/patient/PatientHospitalProfile"));
+const PatientCases = lazy(() => import("./pages/patient/PatientCases"));
+const PatientCaseDetail = lazy(() => import("./pages/patient/PatientCaseDetail"));
+const PatientCaseSubmit = lazy(() => import("./pages/patient/PatientCaseSubmit"));
+const PatientProgramDashboard = lazy(() => import("./pages/patient/PatientProgramDashboard"));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh]">
@@ -116,7 +127,9 @@ const App = () => (
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/contact" element={<Contact />} />
-            
+            <Route path="/for-clinics" element={<ForClinics />} />
+            <Route path="/for-hospitals" element={<ForHospitals />} />
+
             {/* Admin Portal */}
             <Route path="/admin" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminDashboard /></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/clinics" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminClinics /></AdminLayout></ProtectedRoute>} />
@@ -125,6 +138,7 @@ const App = () => (
             <Route path="/admin/programs/:id" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminProgramDetail /></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/revenue" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminRevenue /></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminAnalytics /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/cases" element={<ProtectedRoute allowedRole="admin"><AdminLayout><AdminCases /></AdminLayout></ProtectedRoute>} />
             
             {/* Clinic Setup */}
             <Route path="/clinic-setup" element={<ProtectedRoute allowedRole="doctor"><ClinicSetup /></ProtectedRoute>} />
@@ -157,6 +171,7 @@ const App = () => (
             <Route path="/clinic/revenue" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicRevenue /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/feedback" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicFeedback /></ClinicLayout></ProtectedRoute>} />
             <Route path="/clinic/settings" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicSettingsPage /></ClinicLayout></ProtectedRoute>} />
+            <Route path="/clinic/cases" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicCases /></ClinicLayout></ProtectedRoute>} />
 
             {/* Family Portal */}
             <Route path="/family" element={<ProtectedRoute allowedRole="family"><FamilyLayout><FamilyDashboard /></FamilyLayout></ProtectedRoute>} />
@@ -181,6 +196,13 @@ const App = () => (
             <Route path="/patient/feedback" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientFeedback /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/food-analysis" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientFoodAnalysis /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/vault" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientVault /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/hospitals/find" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientIntentCapture /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/hospitals" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientHospitalDiscovery /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/hospitals/:id" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientHospitalProfile /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/cases" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCases /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/cases/new" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCaseSubmit /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/cases/:id" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCaseDetail /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/programs" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientProgramDashboard /></PatientLayout></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

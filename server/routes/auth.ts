@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { AuthUser, Clinic, ClinicMember, FamilyConnection, Patient, Profile, UserRole, EmailVerification } from "../models/index.js";
 import { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail } from "../services/email.js";
+import { whatsapp } from "../services/whatsapp.js";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
@@ -367,6 +368,79 @@ router.post("/auth/login-otp-verify", async (req, res) => {
     user: { id: (authUser as any).user_id, email: (authUser as any).email },
     email_verified: true,
     approval_status: otpApprovalStatus,
+  });
+});
+
+/** Request WhatsApp OTP for login */
+router.post("/auth/whatsapp-otp-request", async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: "Phone number required" });
+
+  const phoneNorm = String(phone).replace(/[\s\-\(\)\.]/g, "");
+  const profile = await Profile.findOne({ phone: { $regex: phoneNorm.replace(/^\+/, "\\+?") } }).lean();
+  if (!profile) return res.status(404).json({ error: "No account found with this phone. Please sign up first." });
+
+  const authUser = await AuthUser.findOne({ user_id: (profile as any).user_id }).lean();
+  if (!authUser) return res.status(404).json({ error: "Account not found" });
+
+  const recent = await EmailVerification.findOne({
+    user_id: (authUser as any).user_id,
+    purpose: "whatsapp_otp",
+    created_at: { $gt: new Date(Date.now() - 60 * 1000) },
+  });
+  if (recent) return res.status(429).json({ error: "Please wait 60 seconds before requesting a new code" });
+
+  const code = generateOTP();
+  await EmailVerification.create({
+    email: (authUser as any).email,
+    user_id: (authUser as any).user_id,
+    code,
+    expires_at: new Date(Date.now() + 10 * 60 * 1000),
+    purpose: "whatsapp_otp",
+  });
+
+  whatsapp.sendOTP(phoneNorm, code).catch(() => {});
+
+  return res.json({ message: "OTP sent via WhatsApp", phone: phoneNorm });
+});
+
+/** Verify WhatsApp OTP and login */
+router.post("/auth/whatsapp-otp-verify", async (req, res) => {
+  const { phone, code } = req.body;
+  if (!phone || !code) return res.status(400).json({ error: "Phone and code required" });
+
+  const phoneNorm = String(phone).replace(/[\s\-\(\)\.]/g, "");
+  const profile = await Profile.findOne({ phone: { $regex: phoneNorm.replace(/^\+/, "\\+?") } }).lean();
+  if (!profile) return res.status(404).json({ error: "Account not found" });
+
+  const record = await EmailVerification.findOne({
+    user_id: (profile as any).user_id,
+    code: String(code).trim(),
+    purpose: "whatsapp_otp",
+    used: false,
+    expires_at: { $gt: new Date() },
+  });
+  if (!record) return res.status(400).json({ error: "Invalid or expired code" });
+
+  await record.updateOne({ used: true });
+
+  const authUser = await AuthUser.findOne({ user_id: (profile as any).user_id }).lean();
+  if (!authUser) return res.status(404).json({ error: "Account not found" });
+
+  if (!(authUser as any).email_verified) {
+    await AuthUser.updateOne({ user_id: (profile as any).user_id }, { $set: { email_verified: true } });
+  }
+
+  const approvalStatus = (authUser as any).approval_status || "active";
+  if (approvalStatus === "rejected") return res.status(403).json({ error: "Account rejected", approval_status: "rejected" });
+  if (approvalStatus === "suspended") return res.status(403).json({ error: "Account suspended", approval_status: "suspended" });
+
+  const token = jwt.sign({ sub: (authUser as any).user_id }, JWT_SECRET, { expiresIn: "30d" });
+  return res.json({
+    token,
+    user: { id: (authUser as any).user_id, email: (authUser as any).email },
+    email_verified: true,
+    approval_status: approvalStatus,
   });
 });
 

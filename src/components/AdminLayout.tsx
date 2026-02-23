@@ -1,10 +1,11 @@
 import { ReactNode, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Shield, LogOut, LayoutDashboard, Building2, Stethoscope, Layers, DollarSign, BarChart3, Menu, X } from "lucide-react";
+import { Shield, LogOut, LayoutDashboard, Building2, Stethoscope, Layers, DollarSign, BarChart3, Menu, X, Briefcase } from "lucide-react";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
+  { to: "/admin/cases", icon: Briefcase, label: "Cases" },
   { to: "/admin/clinics", icon: Building2, label: "Clinics" },
   { to: "/admin/doctors", icon: Stethoscope, label: "Doctors" },
   { to: "/admin/programs", icon: Layers, label: "Programs" },

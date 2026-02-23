@@ -9,6 +9,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
 import {
   AuthUser,
+  Case,
   Clinic,
   ClinicMember,
   Enrollment,
@@ -570,10 +571,188 @@ router.get("/all-clinics", async (_req, res) => {
       id: c._id?.toString(),
       name: c.name,
       address: c.address,
+      city: c.city,
     }));
     res.json(result);
   } catch {
     res.status(500).json({ error: "Failed to fetch clinics list" });
+  }
+});
+
+// ─── Case Management ────────────────────────────────────────────
+
+router.get("/cases", async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter: any = {};
+    if (status) filter.status = status;
+    const cases = await Case.find(filter).sort({ createdAt: -1 }).lean();
+    const patientIds = [...new Set(cases.map((c: any) => c.patient_user_id))];
+    const clinicIds = [...new Set(cases.map((c: any) => c.matched_clinic_id).filter(Boolean))];
+    const [profiles, clinics] = await Promise.all([
+      patientIds.length ? Profile.find({ user_id: { $in: patientIds } }).lean() : [],
+      clinicIds.length ? Clinic.find({ _id: { $in: clinicIds } }).lean() : [],
+    ]);
+    const profileMap = new Map((profiles as any[]).map((p: any) => [p.user_id, p]));
+    const clinicMap = new Map((clinics as any[]).map((c: any) => [c._id.toString(), c]));
+    const result = cases.map((c: any) => {
+      const profile = profileMap.get(c.patient_user_id) as any;
+      const selectedHospital = c.matched_clinic_id
+        ? (c.approved_hospitals || []).find((h: any) => h.clinic_id === c.matched_clinic_id)
+        : null;
+      return {
+        ...c,
+        id: c._id?.toString(),
+        _id: undefined,
+        __v: undefined,
+        patient_name: profile?.full_name || "Unknown",
+        patient_profile_phone: profile?.phone || "",
+        matched_clinic_name: c.matched_clinic_id ? (clinicMap.get(c.matched_clinic_id) as any)?.name || null : null,
+        selected_hospital_name: selectedHospital?.clinic_name || null,
+        selected_hospital_price: selectedHospital?.quoted_price || null,
+      };
+    });
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch cases" });
+  }
+});
+
+router.get("/cases/:id", async (req, res) => {
+  try {
+    const c = await Case.findById(req.params.id).lean();
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    let clinic = null;
+    if ((c as any).matched_clinic_id) {
+      clinic = await Clinic.findById((c as any).matched_clinic_id).lean();
+    }
+    const [patient, authUser] = await Promise.all([
+      Profile.findOne({ user_id: (c as any).patient_user_id }).lean(),
+      AuthUser.findOne({ user_id: (c as any).patient_user_id }).select("email").lean(),
+    ]);
+    const selectedHospital = (c as any).matched_clinic_id
+      ? ((c as any).approved_hospitals || []).find((h: any) => h.clinic_id === (c as any).matched_clinic_id)
+      : null;
+    res.json({
+      ...(c as any),
+      id: (c as any)._id?.toString(),
+      _id: undefined,
+      __v: undefined,
+      patient_name: (patient as any)?.full_name || "Unknown",
+      patient_profile_phone: (patient as any)?.phone || "",
+      patient_email: (authUser as any)?.email || "",
+      matched_clinic: clinic ? { id: (clinic as any)._id?.toString(), name: (clinic as any).name, city: (clinic as any).city } : null,
+      selected_hospital_name: selectedHospital?.clinic_name || null,
+      selected_hospital_price: selectedHospital?.quoted_price || null,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch case" });
+  }
+});
+
+router.patch("/cases/:id/assign", async (req, res) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { clinic_id, doctor_id } = req.body;
+    if (!clinic_id) return res.status(400).json({ error: "clinic_id is required" });
+    const c = await Case.findById(req.params.id);
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    (c as any).matched_clinic_id = clinic_id;
+    if (doctor_id) (c as any).matched_doctor_id = doctor_id;
+    (c as any).matched_at = new Date();
+    (c as any).status = "hospital_matched";
+    (c as any).assigned_by = adminId;
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to assign case" });
+  }
+});
+
+router.patch("/cases/:id/notes", async (req, res) => {
+  try {
+    const { admin_notes } = req.body;
+    await Case.updateOne({ _id: req.params.id }, { $set: { admin_notes } });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update notes" });
+  }
+});
+
+router.patch("/cases/:id/status", async (req, res) => {
+  try {
+    const { status, message } = req.body;
+    if (!status) return res.status(400).json({ error: "status is required" });
+    const c = await Case.findById(req.params.id);
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    (c as any).status = status;
+    (c as any).status_history = [
+      ...((c as any).status_history || []),
+      { status, message: message || `Status changed to ${status}`, timestamp: new Date() },
+    ];
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.post("/cases/:id/approved-hospitals", async (req, res) => {
+  try {
+    const { clinic_id, quoted_price, treatment_includes, estimated_duration, notes } = req.body;
+    if (!clinic_id) return res.status(400).json({ error: "clinic_id is required" });
+    const c = await Case.findById(req.params.id);
+    if (!c) return res.status(404).json({ error: "Case not found" });
+
+    const clinic = await Clinic.findById(clinic_id).lean();
+    if (!clinic) return res.status(404).json({ error: "Hospital not found" });
+
+    const existing = ((c as any).approved_hospitals || []).find(
+      (h: any) => h.clinic_id === clinic_id
+    );
+    if (existing) return res.status(400).json({ error: "Hospital already added to this case" });
+
+    const entry = {
+      clinic_id,
+      clinic_name: (clinic as any).name,
+      city: (clinic as any).city || "",
+      quoted_price: quoted_price || 0,
+      treatment_includes: treatment_includes || "",
+      estimated_duration: estimated_duration || "",
+      notes: notes || "",
+      approved_at: new Date(),
+    };
+    (c as any).approved_hospitals = [...((c as any).approved_hospitals || []), entry];
+
+    if ((c as any).status === "submitted" || (c as any).status === "reviewing") {
+      (c as any).status = "hospital_matched";
+      (c as any).status_history = [
+        ...((c as any).status_history || []),
+        {
+          status: "hospital_matched",
+          message: `Mediimate found hospital options for your treatment. Check your dashboard.`,
+          timestamp: new Date(),
+        },
+      ];
+    }
+    await c.save();
+    res.json({ success: true, approved_hospitals: (c as any).approved_hospitals });
+  } catch {
+    res.status(500).json({ error: "Failed to add hospital" });
+  }
+});
+
+router.delete("/cases/:id/approved-hospitals/:clinicId", async (req, res) => {
+  try {
+    const c = await Case.findById(req.params.id);
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    (c as any).approved_hospitals = ((c as any).approved_hospitals || []).filter(
+      (h: any) => h.clinic_id !== req.params.clinicId
+    );
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to remove hospital" });
   }
 });
 

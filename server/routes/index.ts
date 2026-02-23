@@ -49,6 +49,8 @@ import {
   ChatConversation,
   HealthNote,
   ContactLead,
+  Case,
+  HospitalReview,
 } from "../models/index.js";
 import {
   sendVitalsLoggedEmail,
@@ -2638,6 +2640,23 @@ router.post("/internal/send-appointment-reminders", async (req, res) => {
     console.error("Appointment reminder email error:", err);
   }
   res.json({ ok: true, sent });
+});
+
+// ──────────── CRON: Engagement Automation Processing ────────────
+router.post("/internal/process-engagement", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const { processEngagementAutomation, processCompletionCheck } = await import("../services/engagement.js");
+    const [engagement, completed] = await Promise.all([
+      processEngagementAutomation(),
+      processCompletionCheck(),
+    ]);
+    res.json({ ok: true, ...engagement, programs_completed: completed });
+  } catch (err) {
+    console.error("Engagement processing error:", err);
+    res.status(500).json({ error: "Engagement processing failed" });
+  }
 });
 
 const mealUploadDir = path.join(UPLOAD_DIR, "meals");
@@ -5583,6 +5602,379 @@ router.get("/me/health-notes", requireAuth, async (req, res) => {
     : { patient_id: link.patient_id };
   const list = await HealthNote.find(filter).sort({ logged_at: -1 }).skip(skip).limit(limit).lean();
   res.json(list);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Case Management — Patient endpoints
+// ═══════════════════════════════════════════════════════════════
+
+router.post("/me/cases", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const {
+    condition, condition_details, budget_min, budget_max,
+    preferred_location, preferred_country,
+    medical_documents, document_ids, vault_code,
+    consent_terms_accepted, patient_phone, intent_data,
+  } = req.body;
+  if (!condition) return res.status(400).json({ error: "condition is required" });
+  if (!consent_terms_accepted) return res.status(400).json({ error: "You must accept the terms to proceed" });
+  try {
+    const c = await Case.create({
+      patient_user_id: userId,
+      condition,
+      condition_details,
+      budget_min,
+      budget_max,
+      preferred_location,
+      preferred_country,
+      medical_documents: medical_documents || [],
+      document_ids: document_ids || [],
+      vault_code: vault_code || undefined,
+      consent_terms_accepted: true,
+      consent_accepted_at: new Date(),
+      patient_phone: patient_phone || undefined,
+      status: "submitted",
+      intent_data: intent_data || undefined,
+      status_history: [
+        { status: "submitted", message: "Your treatment request has been received. Our team will review it and find the best hospitals for you.", timestamp: new Date() },
+      ],
+    });
+    res.status(201).json(c);
+  } catch {
+    res.status(500).json({ error: "Failed to create case" });
+  }
+});
+
+router.post("/me/cases/:id/documents", requireAuth, upload.single("file"), async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  try {
+    const c = await Case.findOne({ _id: req.params.id, patient_user_id: userId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const filePath = req.file.filename;
+    const docIds = (c as any).document_ids || [];
+    docIds.push(filePath);
+    (c as any).document_ids = docIds;
+
+    const medDocs = (c as any).medical_documents || [];
+    medDocs.push(req.file.originalname);
+    (c as any).medical_documents = medDocs;
+
+    await c.save();
+    res.json({ success: true, file: filePath, name: req.file.originalname });
+  } catch {
+    res.status(500).json({ error: "Failed to upload document" });
+  }
+});
+
+router.get("/me/cases", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  try {
+    const cases = await Case.find({ patient_user_id: userId }).sort({ createdAt: -1 }).lean();
+    const clinicIds = [...new Set(cases.map((c: any) => c.matched_clinic_id).filter(Boolean))];
+    const clinics = clinicIds.length ? await Clinic.find({ _id: { $in: clinicIds } }).lean() : [];
+    const clinicMap = new Map(clinics.map((c: any) => [c._id.toString(), c]));
+    const result = cases.map((c: any) => ({
+      ...c,
+      id: c._id?.toString(),
+      _id: undefined,
+      __v: undefined,
+      matched_clinic_name: c.matched_clinic_id ? (clinicMap.get(c.matched_clinic_id) as any)?.name || null : null,
+      approved_hospital_count: (c.approved_hospitals || []).length,
+    }));
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch cases" });
+  }
+});
+
+router.get("/me/cases/:id", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  try {
+    const c = await Case.findOne({ _id: req.params.id, patient_user_id: userId }).lean();
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    let clinic = null;
+    if ((c as any).matched_clinic_id) {
+      clinic = await Clinic.findById((c as any).matched_clinic_id).lean();
+    }
+    let doctor = null;
+    if ((c as any).matched_doctor_id) {
+      doctor = await Profile.findOne({ user_id: (c as any).matched_doctor_id }).lean();
+    }
+    let coordinator = null;
+    if ((c as any).coordinator_id) {
+      const coordProfile = await Profile.findOne({ user_id: (c as any).coordinator_id }).lean();
+      if (coordProfile) coordinator = { id: (c as any).coordinator_id, name: (coordProfile as any).full_name, phone: (coordProfile as any).phone };
+    }
+
+    res.json({
+      ...(c as any),
+      id: (c as any)._id?.toString(),
+      _id: undefined,
+      __v: undefined,
+      matched_clinic: clinic ? { id: (clinic as any)._id?.toString(), name: (clinic as any).name, city: (clinic as any).city, specialties: (clinic as any).specialties } : null,
+      matched_doctor: doctor ? { name: (doctor as any).full_name, specialties: (doctor as any).specialties } : null,
+      coordinator,
+      status_history: (c as any).status_history || [],
+      approved_hospitals: (c as any).approved_hospitals || [],
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch case" });
+  }
+});
+
+router.patch("/me/cases/:id/cancel", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  try {
+    const c = await Case.findOne({ _id: req.params.id, patient_user_id: userId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    if (["treatment_in_progress", "treatment_completed"].includes((c as any).status)) {
+      return res.status(400).json({ error: "Cannot cancel a case that is in progress or completed" });
+    }
+    (c as any).status = "cancelled";
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to cancel case" });
+  }
+});
+
+router.patch("/me/cases/:id/select-hospital", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const { clinic_id } = req.body;
+  if (!clinic_id) return res.status(400).json({ error: "clinic_id is required" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, patient_user_id: userId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    if ((c as any).status !== "hospital_matched") {
+      return res.status(400).json({ error: "Hospital can only be selected when options are available" });
+    }
+    const approved = ((c as any).approved_hospitals || []).find(
+      (h: any) => h.clinic_id === clinic_id
+    );
+    if (!approved) return res.status(400).json({ error: "This hospital is not in your approved options" });
+
+    (c as any).matched_clinic_id = clinic_id;
+    (c as any).matched_at = new Date();
+    (c as any).status = "hospital_accepted";
+    (c as any).status_history = [
+      ...((c as any).status_history || []),
+      {
+        status: "hospital_accepted",
+        message: `You selected ${approved.clinic_name}. Our Mediimate coordinator will contact you shortly to guide you through the next steps.`,
+        timestamp: new Date(),
+      },
+    ];
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to select hospital" });
+  }
+});
+
+router.post("/me/hospital-reviews", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const { clinic_id, case_id, rating, review_text } = req.body;
+  if (!clinic_id || !rating) return res.status(400).json({ error: "clinic_id and rating are required" });
+  if (case_id) {
+    const c = await Case.findOne({ _id: case_id, patient_user_id: userId, status: "treatment_completed" }).lean();
+    if (!c) return res.status(400).json({ error: "Can only review after treatment is completed" });
+  }
+  try {
+    const review = await HospitalReview.create({
+      clinic_id,
+      patient_user_id: userId,
+      case_id,
+      rating: Math.min(5, Math.max(1, Number(rating))),
+      review_text,
+      is_verified: !!case_id,
+    });
+    const agg = await HospitalReview.aggregate([
+      { $match: { clinic_id } },
+      { $group: { _id: null, avg: { $avg: "$rating" }, count: { $sum: 1 } } },
+    ]);
+    if (agg.length) {
+      await Clinic.updateOne({ _id: clinic_id }, { $set: { rating_avg: Math.round(agg[0].avg * 10) / 10, total_reviews: agg[0].count } });
+    }
+    res.status(201).json(review);
+  } catch {
+    res.status(500).json({ error: "Failed to submit review" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Case Management — Clinic/Hospital endpoints
+// ═══════════════════════════════════════════════════════════════
+
+router.get("/clinic/cases", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const cases = await Case.find({ matched_clinic_id: clinicId }).sort({ createdAt: -1 }).lean();
+    const patientIds = [...new Set(cases.map((c: any) => c.patient_user_id))];
+    const profiles = patientIds.length ? await Profile.find({ user_id: { $in: patientIds } }).lean() : [];
+    const profileMap = new Map(profiles.map((p: any) => [p.user_id, p]));
+    const result = cases.map((c: any) => ({
+      ...c,
+      id: c._id?.toString(),
+      _id: undefined,
+      __v: undefined,
+      patient_name: (profileMap.get(c.patient_user_id) as any)?.full_name || "Unknown",
+    }));
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch clinic cases" });
+  }
+});
+
+router.patch("/clinic/cases/:id/accept", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, matched_clinic_id: clinicId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    if ((c as any).status !== "hospital_matched") return res.status(400).json({ error: "Case is not in hospital_matched status" });
+    (c as any).status = "hospital_accepted";
+    (c as any).accepted_at = new Date();
+    await c.save();
+    await Notification.create({
+      user_id: (c as any).patient_user_id,
+      title: "Hospital Accepted Your Case",
+      message: "A hospital has accepted your treatment request. View details in your cases.",
+      type: "success",
+      category: "case",
+      related_id: c._id?.toString(),
+      related_type: "case",
+    });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to accept case" });
+  }
+});
+
+router.patch("/clinic/cases/:id/reject", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, matched_clinic_id: clinicId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    (c as any).status = "submitted";
+    (c as any).rejection_reason = req.body.reason || "";
+    (c as any).matched_clinic_id = undefined;
+    (c as any).matched_doctor_id = undefined;
+    (c as any).matched_at = undefined;
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to reject case" });
+  }
+});
+
+router.patch("/clinic/cases/:id/treatment-plan", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, matched_clinic_id: clinicId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    const { description, estimated_cost, estimated_duration, file_path } = req.body;
+    (c as any).treatment_plan = {
+      description,
+      estimated_cost,
+      estimated_duration,
+      uploaded_by: userId,
+      uploaded_at: new Date(),
+      file_path,
+    };
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update treatment plan" });
+  }
+});
+
+router.patch("/clinic/cases/:id/schedule", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, matched_clinic_id: clinicId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    const { treatment_start_date, treatment_end_date } = req.body;
+    (c as any).status = "treatment_scheduled";
+    (c as any).treatment_start_date = new Date(treatment_start_date);
+    if (treatment_end_date) (c as any).treatment_end_date = new Date(treatment_end_date);
+    await c.save();
+    await Notification.create({
+      user_id: (c as any).patient_user_id,
+      title: "Treatment Scheduled",
+      message: `Your treatment has been scheduled starting ${new Date(treatment_start_date).toLocaleDateString()}.`,
+      type: "info",
+      category: "case",
+      related_id: c._id?.toString(),
+      related_type: "case",
+    });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to schedule treatment" });
+  }
+});
+
+router.patch("/clinic/cases/:id/start", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, matched_clinic_id: clinicId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    (c as any).status = "treatment_in_progress";
+    if (!(c as any).treatment_start_date) (c as any).treatment_start_date = new Date();
+    await c.save();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to start treatment" });
+  }
+});
+
+router.patch("/clinic/cases/:id/complete", requireAuth, async (req, res) => {
+  const userId = (req as AuthRequest).user.id;
+  const clinicId = await getClinicIdForUser(userId);
+  if (!clinicId) return res.status(403).json({ error: "Not a clinic user" });
+  try {
+    const c = await Case.findOne({ _id: req.params.id, matched_clinic_id: clinicId });
+    if (!c) return res.status(404).json({ error: "Case not found" });
+    (c as any).status = "treatment_completed";
+    (c as any).treatment_end_date = new Date();
+    await c.save();
+    const { program_id, doctor_id } = req.body;
+    if (program_id) {
+      const enrollment = await Enrollment.create({
+        patient_id: (c as any).patient_user_id,
+        program_id,
+        doctor_id: doctor_id || (c as any).matched_doctor_id || userId,
+        clinic_id: clinicId,
+        status: "active",
+      });
+      (c as any).enrollment_id = enrollment._id.toString();
+      await c.save();
+    }
+    await Notification.create({
+      user_id: (c as any).patient_user_id,
+      title: "Treatment Completed",
+      message: "Your treatment has been marked as completed. Thank you for choosing Mediimate!",
+      type: "success",
+      category: "case",
+      related_id: c._id?.toString(),
+      related_type: "case",
+    });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Failed to complete case" });
+  }
 });
 
 export default router;

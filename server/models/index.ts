@@ -123,9 +123,42 @@ const ClinicSchema = new mongoose.Schema(
     phone: String,
     specialties: [String],
     whatsapp_number: String,
+    city: String,
+    country: { type: String, default: "India" },
+    description: String,
+    price_range_min: Number,
+    price_range_max: Number,
+    accreditations: [String],
+    gallery_urls: [String],
+    website: String,
+    is_public_listed: { type: Boolean, default: false },
+    rating_avg: { type: Number, default: 0 },
+    total_reviews: { type: Number, default: 0 },
+    established_year: Number,
+    treatments_offered: [String],
+    success_rates: { type: Map, of: Number, default: {} },
+    patient_volume: Number,
+    facilities: [String],
+    international_patient_count: Number,
+    international_support: {
+      travel_assistance: { type: Boolean, default: false },
+      airport_pickup: { type: Boolean, default: false },
+      translator_available: { type: Boolean, default: false },
+      visa_assistance: { type: Boolean, default: false },
+      remote_followup: { type: Boolean, default: false },
+      supported_countries: [String],
+    },
+    program_ids: [String],
+    average_cost_by_treatment: { type: Map, of: Number, default: {} },
+    completion_rate: Number,
+    patient_satisfaction: Number,
+    response_time_hours: Number,
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
+ClinicSchema.index({ is_public_listed: 1, city: 1 });
+ClinicSchema.index({ specialties: 1 });
+ClinicSchema.index({ treatments_offered: 1 });
 
 const DoctorAvailabilitySchema = new mongoose.Schema(
   {
@@ -351,6 +384,11 @@ const PatientSchema = new mongoose.Schema(
     patient_user_id: String,
     phone: { type: String, required: true, default: "" },
     status: { type: String, default: "active" },
+    country: String,
+    city: String,
+    preferred_treatment_location: String,
+    budget_range: String,
+    medical_condition_summary: String,
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
@@ -366,6 +404,12 @@ const ProfileSchema = new mongoose.Schema(
     phone: String,
     specialties: [String],
     user_id: { type: String, required: true, unique: true },
+    bio: String,
+    experience_years: Number,
+    education: String,
+    languages: [String],
+    consultation_fee: Number,
+    is_public_listed: { type: Boolean, default: false },
   },
   { timestamps: true, toJSON: toJsonOptions }
 );
@@ -382,7 +426,16 @@ const ProgramSchema = new mongoose.Schema(
       name: String,
       phase_type: { type: String, enum: ["onboarding", "engagement", "monitoring", "completion"] },
       duration_days: Number,
-      tasks: [{ title: String, frequency: String, description: String }],
+      tasks: [{
+        title: String,
+        frequency: String,
+        description: String,
+        automation_triggers: [{
+          trigger_type: { type: String, enum: ["whatsapp", "voice", "notification", "email"] },
+          template_id: String,
+          delay_hours: { type: Number, default: 0 },
+        }],
+      }],
     }],
     is_active: { type: Boolean, default: true },
     name: { type: String, required: true },
@@ -781,9 +834,7 @@ EmailNotificationLogSchema.index({ template: 1, sent_at: -1 });
 export const EmailVerification = mongoose.model("EmailVerification", EmailVerificationSchema);
 export const EmailNotificationLog = mongoose.model("EmailNotificationLog", EmailNotificationLogSchema);
 export const ProgramAssignment = mongoose.model("ProgramAssignment", ProgramAssignmentSchema);
-export const RevenueEntry = mongoose.model("RevenueEntry", RevenueEntrySchema);
-
-// ─── Doctor Program Assignment (clinic assigns doctors to programs) ──
+export const RevenueEntry = mongoose.model("RevenueEntry", RevenueEntrySchema);// ─── Doctor Program Assignment (clinic assigns doctors to programs) ──
 const DoctorProgramAssignmentSchema = new mongoose.Schema(
   {
     program_id: { type: String, required: true },
@@ -799,6 +850,110 @@ DoctorProgramAssignmentSchema.index({ clinic_id: 1, status: 1 });
 DoctorProgramAssignmentSchema.index({ doctor_user_id: 1, status: 1 });
 DoctorProgramAssignmentSchema.index({ program_id: 1, doctor_user_id: 1, status: 1 });
 export const DoctorProgramAssignment = mongoose.model("DoctorProgramAssignment", DoctorProgramAssignmentSchema);
+
+// ─── Treatment Case (patient treatment request matched to hospital) ──
+const caseStatusEnum = [
+  "submitted", "reviewing", "hospital_matched", "hospital_accepted",
+  "treatment_scheduled", "treatment_in_progress", "treatment_completed", "cancelled",
+];
+const CaseSchema = new mongoose.Schema(
+  {
+    patient_user_id: { type: String, required: true },
+    condition: { type: String, required: true },
+    condition_details: String,
+    budget_min: Number,
+    budget_max: Number,
+    preferred_location: String,
+    preferred_country: String,
+    medical_documents: [String],
+    document_ids: [String],
+    vault_code: String,
+    consent_terms_accepted: { type: Boolean, default: false },
+    consent_accepted_at: Date,
+    patient_phone: String,
+    status: { type: String, enum: caseStatusEnum, default: "submitted" },
+    matched_clinic_id: String,
+    matched_doctor_id: String,
+    matched_at: Date,
+    accepted_at: Date,
+    treatment_start_date: Date,
+    treatment_end_date: Date,
+    treatment_plan: {
+      description: String,
+      estimated_cost: Number,
+      estimated_duration: String,
+      uploaded_by: String,
+      uploaded_at: Date,
+      file_path: String,
+    },
+    rejection_reason: String,
+    admin_notes: String,
+    assigned_by: String,
+    enrollment_id: String,
+    coordinator_id: String,
+    coordinator_notes: [{ note: String, created_at: { type: Date, default: Date.now } }],
+    status_history: [{
+      status: String,
+      message: String,
+      timestamp: { type: Date, default: Date.now },
+    }],
+    approved_hospitals: [{
+      clinic_id: { type: String, required: true },
+      clinic_name: String,
+      city: String,
+      quoted_price: Number,
+      treatment_includes: String,
+      estimated_duration: String,
+      notes: String,
+      approved_at: { type: Date, default: Date.now },
+    }],
+    intent_data: {
+      condition: String,
+      budget_min: Number,
+      budget_max: Number,
+      preferred_location: String,
+      preferred_country: String,
+      timeline: String,
+      travel_type: String,
+    },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+CaseSchema.index({ patient_user_id: 1, createdAt: -1 });
+CaseSchema.index({ matched_clinic_id: 1, status: 1 });
+CaseSchema.index({ status: 1, createdAt: -1 });
+
+// ─── Hospital Review (patient reviews for public hospital profiles) ──
+const HospitalReviewSchema = new mongoose.Schema(
+  {
+    clinic_id: { type: String, required: true },
+    patient_user_id: { type: String, required: true },
+    case_id: String,
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    review_text: String,
+    is_verified: { type: Boolean, default: false },
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+HospitalReviewSchema.index({ clinic_id: 1, createdAt: -1 });
+HospitalReviewSchema.index({ patient_user_id: 1 });
+
+export const Case = mongoose.model("Case", CaseSchema);
+export const HospitalReview = mongoose.model("HospitalReview", HospitalReviewSchema);
+
+// ─── Treatment Condition (lookup for matching engine) ──
+const TreatmentConditionSchema = new mongoose.Schema(
+  {
+    condition: { type: String, required: true, unique: true },
+    specialty: { type: String, required: true },
+    keywords: [String],
+    category: String,
+  },
+  { timestamps: true, toJSON: toJsonOptions }
+);
+TreatmentConditionSchema.index({ condition: "text", keywords: "text" });
+TreatmentConditionSchema.index({ specialty: 1 });
+export const TreatmentCondition = mongoose.model("TreatmentCondition", TreatmentConditionSchema);
 
 // ─── Contact / Lead submissions (website forms) ──
 const ContactLeadSchema = new mongoose.Schema(

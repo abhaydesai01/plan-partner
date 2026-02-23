@@ -49,5 +49,8 @@ export function startScheduler(): void {
   // Once per day at 09:00 UTC: process reminder escalations (Day 1 → 2 → 3 → 5)
   cron.schedule("0 9 * * *", () => trigger("/internal/process-reminder-escalations"), { timezone: "UTC" });
 
-  if (process.env.NODE_ENV !== "production") console.log("[scheduler] Routine pushes: hourly (UTC); Reminder escalations: daily 09:00 UTC");
+  // Every 6 hours: process engagement automation triggers for active enrollments
+  cron.schedule("0 */6 * * *", () => trigger("/internal/process-engagement"), { timezone: "UTC" });
+
+  if (process.env.NODE_ENV !== "production") console.log("[scheduler] Routine pushes: hourly; Escalations: daily 09:00 UTC; Engagement: every 6h");
 }
