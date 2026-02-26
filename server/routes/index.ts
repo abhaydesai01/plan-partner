@@ -4683,6 +4683,7 @@ async function buildPatientContext(patientIdOrIds: string | string[], patient?: 
 }
 
 router.post("/chat/patient", requireAuth, async (req, res) => {
+  try {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: "GEMINI_API_KEY not configured" });
   const { messages } = req.body;
   const userId = (req as AuthRequest).user.id;
@@ -4694,11 +4695,16 @@ router.post("/chat/patient", requireAuth, async (req, res) => {
   }
   const systemPrompt = `You are Mediimate AI — a caring health assistant for patients. You have access to the patient's health records below. You are NOT a doctor; recommend consulting their doctor for medical decisions. Be empathetic and concise.\n\n${contextParts || "No patient records found."}\n\nRespond in a friendly, professional tone.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
+  if (geminiContents.length === 0) return res.status(400).json({ error: "No messages provided" });
   const streamRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents }) }
   );
-  if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
+  if (!streamRes.ok) {
+    const errBody = await streamRes.json().catch(() => ({}));
+    console.error("[chat/patient] Gemini error", streamRes.status, JSON.stringify(errBody));
+    return res.status(500).json({ error: "AI service error", gemini_status: streamRes.status, detail: (errBody as any)?.error?.message || JSON.stringify(errBody) });
+  }
   res.setHeader("Content-Type", "text/event-stream");
   const reader = streamRes.body!.getReader();
   const decoder = new TextDecoder();
@@ -4726,9 +4732,14 @@ router.post("/chat/patient", requireAuth, async (req, res) => {
   } finally {
     res.end();
   }
+  } catch (err: any) {
+    console.error("[chat/patient] Unexpected error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "AI service error", detail: err?.message || "Unknown error" });
+  }
 });
 
 router.post("/chat/doctor", requireAuth, async (req, res) => {
+  try {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: "GEMINI_API_KEY not configured" });
   const { messages, patient_id } = req.body;
   if (!patient_id) return res.status(400).json({ error: "patient_id required" });
@@ -4739,11 +4750,16 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
   const contextParts = await buildPatientContext(pid, patient);
   const systemPrompt = `You are a clinical copilot for doctors. Patient records:\n\n${contextParts}\n\nBe precise and clinical.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
+  if (geminiContents.length === 0) return res.status(400).json({ error: "No messages provided" });
   const streamRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents }) }
   );
-  if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
+  if (!streamRes.ok) {
+    const errBody = await streamRes.json().catch(() => ({}));
+    console.error("[chat/doctor] Gemini error", streamRes.status, JSON.stringify(errBody));
+    return res.status(500).json({ error: "AI service error", gemini_status: streamRes.status, detail: (errBody as any)?.error?.message || JSON.stringify(errBody) });
+  }
   res.setHeader("Content-Type", "text/event-stream");
   const reader = streamRes.body!.getReader();
   const decoder = new TextDecoder();
@@ -4770,6 +4786,10 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
     res.write("data: [DONE]\n\n");
   } finally {
     res.end();
+  }
+  } catch (err: any) {
+    console.error("[chat/doctor] Unexpected error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "AI service error", detail: err?.message || "Unknown error" });
   }
 });
 
