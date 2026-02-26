@@ -10,6 +10,22 @@ export interface FoodLogForAnalysis {
 }
 
 /**
+ * Strips verbal prefixes and quantity phrases from a free-text note to extract
+ * just the food name. E.g. "i ate 1 plate batata chiwda" → "batata chiwda"
+ */
+function extractFoodName(raw: string): string {
+  return raw
+    // Remove leading filler phrases like "i ate", "i had", "i drank", "had", "ate", "drank", "consumed"
+    .replace(/^(i\s+)?(ate|had|drank|consumed|eaten|took|eaten)\s+/i, "")
+    // Remove leading quantity+unit patterns like "1 plate", "2 roti", "3/4 cup", "half a bowl"
+    .replace(/^(a\s+|an\s+|half\s+a?\s+|quarter\s+a?\s+|\d+[\d./]*\s*)(full\s+)?(plate|bowl|cup|glass|piece|slice|serving|roti|chapati|paratha|piece|scoop|tablespoon|tbsp|tsp|ml|g|kg|oz|litre|liter|can|bottle)s?\s+of\s+/i, "")
+    .replace(/^(a\s+|an\s+|half\s+a?\s+|quarter\s+a?\s+|\d+[\d./]*\s*)(full\s+)?(plate|bowl|cup|glass|piece|slice|serving|roti|chapati|paratha|piece|scoop|tablespoon|tbsp|tsp|ml|g|kg|oz|litre|liter|can|bottle)s?\s+/i, "")
+    // Remove standalone leading numbers/fractions
+    .replace(/^\d+[\d./]*\s+/, "")
+    .trim();
+}
+
+/**
  * Derives AI Nutrition Insights from food logs.
  * Can be replaced later with a Gemini API call for richer analysis.
  */
@@ -23,12 +39,14 @@ export function computeNutritionInsights(logs: FoodLogForAnalysis[]): NutritionI
     if (log.food_items?.length) {
       log.food_items.forEach((item: any) => {
         const name = (item.name || item).toString().trim() || "Other";
-        foodCount[name] = (foodCount[name] || 0) + 1;
+        const cleaned = extractFoodName(name);
+        if (cleaned) foodCount[cleaned] = (foodCount[cleaned] || 0) + 1;
       });
     } else if (log.notes) {
       const parts = log.notes.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
       parts.forEach((p) => {
-        foodCount[p] = (foodCount[p] || 0) + 1;
+        const cleaned = extractFoodName(p);
+        if (cleaned) foodCount[cleaned] = (foodCount[cleaned] || 0) + 1;
       });
     }
   });

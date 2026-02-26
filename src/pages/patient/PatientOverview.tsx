@@ -428,10 +428,17 @@ const PatientOverview = () => {
               const names = items.map((i: { name?: string }) => i?.name).filter(Boolean).join(", ");
               const summary = names || log.notes || "—";
               return (
-                <div key={log.id} className="p-3 rounded-lg border border-border/50 bg-muted/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <div key={log.id} className="p-3 rounded-lg border border-border/50 bg-muted/20 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-foreground capitalize">{log.meal_type || "Meal"}</p>
                     <p className="text-xs text-muted-foreground truncate" title={summary}>{summary}</p>
+                    {(log.total_calories != null && log.total_calories > 0) && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                        🔥 {Math.round(log.total_calories)} kcal
+                        {log.total_protein != null && log.total_protein > 0 && ` · ${Math.round(log.total_protein)}g protein`}
+                        {log.total_carbs != null && log.total_carbs > 0 && ` · ${Math.round(log.total_carbs)}g carbs`}
+                      </p>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground shrink-0">{format(new Date(log.logged_at), "MMM d, yyyy 'at' HH:mm")}</p>
                 </div>

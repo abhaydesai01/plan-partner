@@ -127,7 +127,7 @@ Vital: ${label}. Value: ${valueText}${unit ? ` ${unit}` : ""}.
 Reply with only the remark, no quotes or prefix.`;
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1396,7 +1396,7 @@ For Indian foods use common serving sizes. Always return valid JSON only.`;
           const mime = imagePath.match(/\.(png)$/i) ? "image/png" : imagePath.match(/\.(webp)$/i) ? "image/webp" : "image/jpeg";
           const imageBase64 = buf.toString("base64");
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1427,7 +1427,7 @@ For Indian foods use common serving sizes. Always return valid JSON only.`;
       // Case 2: text description provided (and image didn't already populate items)
       if (rawNotes && food_items.length === 0) {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1508,7 +1508,7 @@ Return ONLY valid JSON: { "food_items": [{ "name": "string", "quantity": number,
 For Indian foods use common serving sizes. Estimate values based on typical portions. Always return valid JSON only.`;
       const userPrompt = `Meal type: ${updatedMealType}\nDescription: ${updatedNotes}`;
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1537,14 +1537,16 @@ For Indian foods use common serving sizes. Estimate values based on typical port
     } catch { /* keep zeros */ }
   }
 
+  // If AI re-assessment returned nothing, preserve the existing stored nutrition
+  const hasNewNutrition = food_items.length > 0 && total_calories > 0;
   const updatePayload: Record<string, unknown> = {
     meal_type: updatedMealType,
     notes: updatedNotes,
-    food_items,
-    total_calories,
-    total_protein,
-    total_carbs,
-    total_fat,
+    food_items: hasNewNutrition ? food_items : ((existing as any).food_items ?? []),
+    total_calories: hasNewNutrition ? total_calories : ((existing as any).total_calories ?? 0),
+    total_protein: hasNewNutrition ? total_protein : ((existing as any).total_protein ?? 0),
+    total_carbs: hasNewNutrition ? total_carbs : ((existing as any).total_carbs ?? 0),
+    total_fat: hasNewNutrition ? total_fat : ((existing as any).total_fat ?? 0),
     updated_at: new Date(),
   };
 
@@ -4266,7 +4268,7 @@ async function extractLabResultsFromPdf(
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const { fileUri, mimeType } = await uploadPdfToGemini(apiKey, pdfBuffer, fileName || "lab-report.pdf");
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4299,7 +4301,7 @@ async function extractLabResultsFromImage(
 ): Promise<{ tested_at: string | null; results: Array<{ test_name: string; result_value: string; unit?: string; reference_range?: string; status?: string }> }> {
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4381,7 +4383,7 @@ async function analyzeLabResultsForReport(
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
   const text = results.map((r) => `${r.test_name}: ${r.result_value} ${r.unit || ""} (ref: ${r.reference_range || "—"}) [${r.status || "normal"}]`).join("\n");
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4532,7 +4534,7 @@ async function analyzeDocumentWithGemini(
   }
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4571,7 +4573,7 @@ Return ONLY valid JSON: { "meal_type": "breakfast"|"lunch"|"dinner"|"snack"|"oth
 Infer meal_type from food type. For Indian foods use common serving sizes. Always return valid JSON only.`;
 
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4683,7 +4685,7 @@ router.post("/chat/patient", requireAuth, async (req, res) => {
   const systemPrompt = `You are Mediimate AI — a caring health assistant for patients. You have access to the patient's health records below. You are NOT a doctor; recommend consulting their doctor for medical decisions. Be empathetic and concise.\n\n${contextParts || "No patient records found."}\n\nRespond in a friendly, professional tone.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
   const streamRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents }) }
   );
   if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
@@ -4728,7 +4730,7 @@ router.post("/chat/doctor", requireAuth, async (req, res) => {
   const systemPrompt = `You are a clinical copilot for doctors. Patient records:\n\n${contextParts}\n\nBe precise and clinical.`;
   const geminiContents = (messages || []).map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content || "" }] }));
   const streamRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents }) }
   );
   if (!streamRes.ok) return res.status(500).json({ error: "AI service error" });
@@ -4800,7 +4802,7 @@ Rules:
 - Return ONLY the JSON, no explanation`;
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5251,7 +5253,7 @@ Start by greeting ${patientName} warmly IN ${chosenLang || "the patient's langua
     parts: [{ text: m.content || "" }],
   }));
   const streamRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -5350,7 +5352,7 @@ Rules:
 - Return ONLY the JSON, no other text`;
 
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -5518,7 +5520,7 @@ router.post("/clinical-evidence", requireAuth, async (req, res) => {
   const medications = (p.medications || []).join(", ") || "None";
   const prompt = `Patient: ${p.full_name}. Conditions: ${conditions}. Medications: ${medications}. List 3-5 brief, relevant clinical considerations or evidence-based points. Use markdown.`;
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] }) }
   );
   if (!geminiRes.ok) return res.status(500).json({ error: "Evidence search failed" });
