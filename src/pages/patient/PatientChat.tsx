@@ -228,7 +228,8 @@ const PatientChat = ({ onOpenMenu }: { onOpenMenu: () => void }) => {
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Failed to connect" }));
-        toast({ title: "Error", description: err.error || "Something went wrong", variant: "destructive" });
+        const description = err.detail ? `${err.error}: ${err.detail}` : (err.error || "Something went wrong");
+        toast({ title: "Error", description, variant: "destructive" });
         setIsLoading(false);
         return;
       }
