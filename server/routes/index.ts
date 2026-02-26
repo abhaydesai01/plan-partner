@@ -1381,11 +1381,19 @@ router.post("/me/food_logs", requireAuth, async (req, res) => {
   let total_carbs: number | undefined;
   let total_fat: number | undefined;
 
+  // Run AI if: no food_items sent, OR food_items have no calorie data (e.g. just names from quick log)
+  const incomingHasCalories = food_items.some((i) => (i.calories || 0) > 0);
+  const needsAI = geminiKey && (food_items.length === 0 || !incomingHasCalories);
+
   // ── AI nutrition parsing ──────────────────────────────────────
-  if (geminiKey && food_items.length === 0) {
+  if (needsAI) {
     const systemPrompt = `You are a nutrition parser. Analyze the meal and extract food items with accurate nutritional values.
 Return ONLY valid JSON: { "food_items": [{ "name": "string", "quantity": number, "unit": "string", "calories": number, "protein": number, "carbs": number, "fat": number }] }
 For Indian foods use common serving sizes. Always return valid JSON only.`;
+
+    // Build a description from incoming item names if notes aren't available
+    const itemNamesText = food_items.map((i) => i.name).filter(Boolean).join(", ");
+    const descriptionText = rawNotes || itemNamesText;
 
     try {
       // Case 1: image uploaded → read from disk and send to Gemini Vision
@@ -1403,7 +1411,7 @@ For Indian foods use common serving sizes. Always return valid JSON only.`;
               body: JSON.stringify({
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 contents: [{ role: "user", parts: [
-                  { text: `Meal type: ${mealType}${rawNotes ? `\nDescription: ${rawNotes}` : ""}. Analyze this meal image.` },
+                  { text: `Meal type: ${mealType}${descriptionText ? `\nDescription: ${descriptionText}` : ""}. Analyze this meal image.` },
                   { inlineData: { mimeType: mime, data: imageBase64 } },
                 ]}],
                 generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
@@ -1424,8 +1432,9 @@ For Indian foods use common serving sizes. Always return valid JSON only.`;
         }
       }
 
-      // Case 2: text description provided (and image didn't already populate items)
-      if (rawNotes && food_items.length === 0) {
+      // Case 2: text/name description provided (and image didn't already populate items with calories)
+      const stillNeedsText = food_items.length === 0 || !food_items.some((i) => (i.calories || 0) > 0);
+      if (descriptionText && stillNeedsText) {
         const geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
           {
@@ -1433,7 +1442,7 @@ For Indian foods use common serving sizes. Always return valid JSON only.`;
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [{ role: "user", parts: [{ text: `Meal type: ${mealType}\nDescription: ${rawNotes}` }] }],
+              contents: [{ role: "user", parts: [{ text: `Meal type: ${mealType}\nDescription: ${descriptionText}` }] }],
               generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
             }),
           }
@@ -1451,13 +1460,14 @@ For Indian foods use common serving sizes. Always return valid JSON only.`;
         }
       }
     } catch { /* AI failures are non-blocking */ }
+  }
 
-    if (food_items.length > 0) {
-      total_calories = food_items.reduce((s, i) => s + (i.calories || 0), 0);
-      total_protein  = food_items.reduce((s, i) => s + (i.protein  || 0), 0);
-      total_carbs    = food_items.reduce((s, i) => s + (i.carbs    || 0), 0);
-      total_fat      = food_items.reduce((s, i) => s + (i.fat      || 0), 0);
-    }
+  // Always compute totals from whatever food_items we have (from AI or pre-sent by client)
+  if (food_items.length > 0) {
+    total_calories = food_items.reduce((s, i) => s + (i.calories || 0), 0);
+    total_protein  = food_items.reduce((s, i) => s + (i.protein  || 0), 0);
+    total_carbs    = food_items.reduce((s, i) => s + (i.carbs    || 0), 0);
+    total_fat      = food_items.reduce((s, i) => s + (i.fat      || 0), 0);
   }
 
   const body = {
