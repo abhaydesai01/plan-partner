@@ -53,13 +53,48 @@ export default function PatientFoodAnalysis() {
     api
       .get<FoodLog[]>("me/food_logs")
       .then((data) => {
-        if (!cancelled) setLogs(Array.isArray(data) ? data : []);
+        const fetched = Array.isArray(data) ? data : [];
+        if (!cancelled) {
+          setLogs(fetched);
+          setLoading(false);
+        }
+
+        // Silently reassess any logs that have notes but no calorie data
+        const stale = fetched.filter(
+          (l) =>
+            (l.total_calories == null || l.total_calories === 0) &&
+            (l.notes || (Array.isArray(l.food_items) && l.food_items.length > 0)),
+        );
+        if (stale.length === 0) return;
+
+        Promise.allSettled(
+          stale.map((l) =>
+            api.patch<FoodLog>(`me/food_logs/${l.id}`, {
+              meal_type: l.meal_type,
+              notes:
+                l.notes ||
+                (Array.isArray(l.food_items)
+                  ? l.food_items.map((i) => i?.name).filter(Boolean).join(", ")
+                  : ""),
+            }),
+          ),
+        ).then((results) => {
+          if (cancelled) return;
+          setLogs((prev) => {
+            const updated = [...prev];
+            results.forEach((r, idx) => {
+              if (r.status === "fulfilled") {
+                const fresh = r.value;
+                const pos = updated.findIndex((l) => l.id === stale[idx].id);
+                if (pos !== -1) updated[pos] = { ...fresh, id: fresh.id || stale[idx].id };
+              }
+            });
+            return updated;
+          });
+        });
       })
       .catch(() => {
-        if (!cancelled) setLogs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) { setLogs([]); setLoading(false); }
       });
     return () => { cancelled = true; };
   }, []);
