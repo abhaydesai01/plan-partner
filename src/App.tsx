@@ -53,6 +53,8 @@ const DoctorAvailability = lazy(() => import("./pages/DoctorAvailability"));
 const Alerts = lazy(() => import("./pages/Alerts"));
 const DoctorVaultAccess = lazy(() => import("./pages/DoctorVaultAccess"));
 const DoctorFeedback = lazy(() => import("./pages/DoctorFeedback"));
+const DoctorCarePlans = lazy(() => import("./pages/DoctorCarePlans"));
+const DoctorCarePlanDetail = lazy(() => import("./pages/DoctorCarePlanDetail"));
 const ClinicSetup = lazy(() => import("./pages/ClinicSetup"));
 const ClinicSettings = lazy(() => import("./pages/ClinicSettings"));
 const JoinClinic = lazy(() => import("./pages/JoinClinic"));
@@ -86,6 +88,10 @@ const PatientCases = lazy(() => import("./pages/patient/PatientCases"));
 const PatientCaseDetail = lazy(() => import("./pages/patient/PatientCaseDetail"));
 const PatientCaseSubmit = lazy(() => import("./pages/patient/PatientCaseSubmit"));
 const PatientProgramDashboard = lazy(() => import("./pages/patient/PatientProgramDashboard"));
+const PatientCarePlan = lazy(() => import("./pages/patient/PatientCarePlan"));
+const PatientCarePlanLeaderboard = lazy(() => import("./pages/patient/PatientCarePlanLeaderboard"));
+const PatientCarePlanChannel = lazy(() => import("./pages/patient/PatientCarePlanChannel"));
+const MarketplacePlanDetail = lazy(() => import("./pages/patient/MarketplacePlanDetail"));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh]">
@@ -161,6 +167,8 @@ const App = () => (
             <Route path="/dashboard/alerts" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><Alerts /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/vault-access" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorVaultAccess /></DashboardLayout></ProtectedRoute>} />
             <Route path="/dashboard/feedback" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorFeedback /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/care-plans" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorCarePlans /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/dashboard/care-plans/:id" element={<ProtectedRoute allowedRole="doctor"><DashboardLayout><DoctorCarePlanDetail /></DashboardLayout></ProtectedRoute>} />
             
             {/* Clinic Portal */}
             <Route path="/clinic" element={<ProtectedRoute allowedRole="clinic"><ClinicLayout><ClinicDashboard /></ClinicLayout></ProtectedRoute>} />
@@ -203,6 +211,10 @@ const App = () => (
             <Route path="/patient/cases/new" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCaseSubmit /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/cases/:id" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCaseDetail /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/programs" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientProgramDashboard /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/care-plan" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCarePlan /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/care-plan/leaderboard" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCarePlanLeaderboard /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/care-plan/channel" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCarePlanChannel /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/care-plan/channel/:id" element={<ProtectedRoute allowedRole="patient"><PatientLayout><MarketplacePlanDetail /></PatientLayout></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

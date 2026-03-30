@@ -79,23 +79,13 @@ define(['./workbox-6fc00345'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.b3m3p2ccb5o"
+    "revision": "0.qf7mejfurh"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
     allowlist: [/^\/$/],
     denylist: [/^\/api/]
   }));
-  workbox.registerRoute(/\/api\/auth\/me$/i, new workbox.NetworkFirst({
-    "cacheName": "auth-session-cache",
-    "networkTimeoutSeconds": 5,
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 5,
-      maxAgeSeconds: 86400
-    }), new workbox.CacheableResponsePlugin({
-      statuses: [0, 200]
-    })]
-  }), 'GET');
   workbox.registerRoute(/\/api\/me\/(gamification|vitals|food_logs|medication-log|appointments|health-notes)/i, new workbox.NetworkFirst({
     "cacheName": "patient-data-cache",
     "networkTimeoutSeconds": 8,

@@ -12,7 +12,7 @@ export default defineConfig({
       overlay: false,
     },
     proxy: {
-      "/api": { target: "http://localhost:3001", changeOrigin: true },
+      "/api": { target: "http://localhost:3002", changeOrigin: true },
     },
   },
   plugins: [
@@ -43,16 +43,7 @@ export default defineConfig({
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
-          {
-            urlPattern: /\/api\/auth\/me$/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "auth-session-cache",
-              expiration: { maxEntries: 5, maxAgeSeconds: 86400 },
-              networkTimeoutSeconds: 5,
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
+          // auth/me is intentionally NOT cached — stale tokens cause phantom logouts
           {
             urlPattern: /\/api\/me\/(gamification|vitals|food_logs|medication-log|appointments|health-notes)/i,
             handler: "NetworkFirst",

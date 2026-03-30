@@ -1,0 +1,938 @@
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+ 
+
+MEDIIMATE 
+
+Platform Architecture Document 
+
+ 
+
+ 
+
+Planner System  ·  WhatsApp CTWA Flow  ·  Voice Call Flow  ·  Admin Logging  ·  Community 
+Engine 
+Version 1.0  ·  Internal  ·  Confidential 
+
+ 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+1. System Overview 
+Mediimate is a health journey platform that enrolls users into structured multi-day planners 
+delivered across three engagement surfaces — the Mediimate App, WhatsApp, and voice calls. 
+Users are grouped into cohorts (Batches) and progress together through a guided program. 
+Every interaction — WhatsApp message, call, app check-in — feeds a central logging engine 
+that keeps the admin dashboard current and the user planner alive. 
+
+ 
+
+Core premise: Mediimate takes users on a journey for N days. The planner is not just a checklist — 
+it is the living record of that journey, updated from every channel the user touches. 
+
+ 
+
+1.1 High-Level Architecture 
+
+Three User Channels 
+
+     App (iOS / Android / Web)  —  Tasks, leaderboard, feed, resources 
+
+     WhatsApp  —  Daily nudges, task logging, CTWA acquisition, voice-note updates 
+
+     Voice Call  —  Counsellor check-ins, AI-transcribed & auto-logged to planner 
+
+ 
+
+ 
+
+Three System Layers 
+
+     Planner Engine  —  Journey config, day-by-day task schema, push scheduling 
+
+     Logging Engine  —  Unified event store; all channels write here 
+     Admin Dashboard  —  Call log, member view, planner management, push controls 
+
+ 
+
+ 
+
+Community Layer 
+
+     Batch grouping  —  Users enrolled into cohorts (Batch 1, Batch 2 …) 
+     Leaderboard  —  Points, streaks, task completion, ranked live 
+
+     Group feed  —  Anonymous activity stream (Priya completed Day 9, etc.) 
+     Momentum score  —  Batch-level compliance % pushed to all members 
+
+ 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+2. Planner Structure 
+A Planner is a reusable journey template. Each time a batch of users is enrolled, a Planner 
+Instance is created from the template. The admin configures the planner once; all batches 
+running it share the same day structure but have their own logging and leaderboard. 
+
+ 
+
+2.1 Planner Template Schema 
+
+Field Type Description 
+
+planner_id UUID Unique identifier 
+
+name String e.g. 21-Day Gut Reset 
+
+duration_days Integer Total journey days (e.g. 21) 
+
+category Enum diet / fitness / mental / combo 
+
+description Text Shown to user on enrollment 
+
+cover_image_url String Banner image 
+
+max_batch_size Integer Cap per batch (e.g. 20) 
+
+is_active Boolean Admin can pause/archive 
+
+days[] Array<DayConfig> One entry per day (see 2.2) 
+
+scoring_rules JSON Points per task type 
+
+call_schedule JSON Which days have mandatory 
+calls 
+
+whatsapp_flows JSON Message templates per day 
+
+created_at / updated_at Timestamp Audit fields 
+
+ 
+
+2.2 Day Config Schema (per day in planner) 
+
+Field Type Description 
+
+day_number Integer 1 to duration_days 
+
+theme String e.g. Gut Repair, Sugar Detox 
+
+motivational_message Text Push notification + WA 
+message 
+
+tasks[] Array<Task> Day-specific task list (see 2.3) 
+
+resources[] Array<Resource> PDFs, audio guides, video links 
+
+diet_guide_url String Meal plan for the day 
+
+call_required Boolean Whether counsellor must call 
+
+call_slot_hint String e.g. Evening 5-7 PM 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+push_time Time When day content gets pushed 
+(e.g. 07:00) 
+
+whatsapp_message_id String Template ID for WA broadcast 
+
+ 
+
+2.3 Task Schema 
+
+Field Type Description 
+
+task_id UUID Unique per planner-day 
+
+title String e.g. Morning lemon water 
+(500ml) 
+
+description Text Instructions for the user 
+
+type Enum diet / exercise / hydration / 
+supplement / mindfulness / log 
+
+points Integer Points awarded on completion 
+
+completion_source Enum app / whatsapp / voice / auto 
+
+required Boolean If true, affects streak 
+
+time_hint String e.g. Before 8 AM 
+
+verification_type Enum self-report / photo / numeric-
+input 
+
+ 
+
+2.4 Batch (Planner Instance) Schema 
+
+Field Type Description 
+
+batch_id UUID Unique per enrollment run 
+
+planner_id FK Links to Planner Template 
+
+batch_name String e.g. Batch 4 
+
+start_date Date Day 1 for this cohort 
+
+end_date Date Computed: start + duration - 1 
+
+status Enum upcoming / active / completed 
+
+enrolled_users[] Array<UserBatch> Members + their progress 
+
+counsellor_id FK Assigned Mediimate counsellor 
+
+current_day Integer Today's day number (computed) 
+
+group_momentum_pct Float % users on track today 
+
+ 
+
+2.5 User Daily Log Schema 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+This is the single source of truth written to by all three channels — app, WhatsApp, and voice 
+call. 
+
+Field Type Description 
+
+log_id UUID  
+
+user_id FK  
+
+batch_id FK  
+
+day_number Integer  
+
+log_date Date  
+
+tasks_completed[] Array<TaskLog> One entry per completed task 
+
+points_earned Integer Sum of completed task points 
+
+streak_active Boolean All required tasks done 
+
+mood Enum great / good / neutral / low 
+
+symptoms[] Array<String> Free text from call/WA 
+
+diet_notes Text Auto-extracted from call/WA 
+
+exercise_notes Text Auto-extracted 
+
+counsellor_notes Text Admin adds manually post-call 
+
+call_id FK nullable Links to call record if applicable 
+
+wa_session_id FK nullable Links to WA session if 
+applicable 
+
+log_source Enum app / whatsapp / voice / mixed 
+
+created_at Timestamp  
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+3. WhatsApp CTWA Flow (Click-to-WhatsApp Ads) 
+CTWA is Mediimate's primary user acquisition channel. A user sees a Meta ad (Instagram / 
+Facebook), taps it, and lands directly in a WhatsApp conversation with Mediimate. From that 
+first message to being enrolled in a planner batch, every step is automated. 
+
+ 
+
+3.1 CTWA Acquisition Flow 
+ 
+
+Ad Impression 
+
+1 User sees Mediimate ad on Instagram / Facebook Reels / Stories. Ad creative highlights the 
+ 
+
+specific planner (e.g. '21-Day Gut Reset — Start Free'). The ad CTA is 'Send Message' — 
+triggers WhatsApp. 
+
+ 
+
+WhatsApp Conversation Opens 
+
+2 User lands in WA chat with Mediimate's Business number. A pre-filled opening message is 
+ 
+
+sent automatically (configured in Meta Ads Manager). Example: 'Hi! I want to join the 21-Day 
+Gut Reset.' 
+
+ 
+
+Welcome Bot Response (Automated) 
+3 Mediimate's WhatsApp bot (via 360dialog / Wati / Interakt) instantly responds. Sends a 
+
+welcome message + quick-reply buttons: [Tell me more] [I'm ready to join] [Speak to someone]. 
+
+ 
+
+Qualification Flow 
+
+4 Bot collects: Name, Age, City, Primary health goal, Any active medical conditions (gating 
+ 
+
+question). This is a guided WhatsApp form using interactive list messages and buttons — no 
+typing required. 
+
+ 
+
+Lead Created in CRM 
+5 On qualification complete, a Lead record is created in Mediimate's CRM/backend. Lead status: 
+
+QUALIFIED. Assigned to next available counsellor queue. 
+
+ 
+
+Counsellor Outreach Call 
+6 Counsellor calls the lead within 2-4 hours. This call is the human touchpoint — explains the 
+
+program, answers doubts, and converts to enrollment. 
+
+ 
+
+Enrollment + Batch Assignment 
+7 Post-call, counsellor clicks 'Enroll' in admin. User is added to the next available batch. User 
+
+receives a WhatsApp confirmation: batch name, start date, what to expect on Day 1. 
+
+ 
+
+8 Day 1 Kickoff Push 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+On the batch start date at 7:00 AM, Mediimate auto-broadcasts the Day 1 WhatsApp message 
+to all enrolled batch members. Journey begins. 
+
+ 
+
+3.2 CTWA WhatsApp Message Architecture 
+Once enrolled, WhatsApp serves as a parallel logging and nudge channel alongside the app. 
+
+ 
+
+3.2.1 Daily Broadcast (D+1 onwards) 
+
+Sent every morning at the configured push_time (default 7:00 AM). Contains: 
+
+• Day number and theme (e.g. Day 9: Gut Repair) 
+• Motivational message from the Mediimate team 
+• Today's task list (formatted as a checklist) 
+• Diet guide link or PDF 
+• Quick reply buttons: [Mark tasks done] [I have a question] [Log my update] 
+
+ 
+
+3.2.2 Task Logging via WhatsApp 
+
+A user can log their entire day's activity without opening the app. Flow: 
+
+1. User replies 'Log my update' or taps the quick reply button 
+2. Bot sends a guided sequence: 'What did you eat for breakfast?' → free text 
+3. 'Did you complete your walk? [Yes] [No] [Partial]' 
+4. 'How are you feeling? [Great] [Good] [Low energy] [Bloated]' 
+5. 'Any symptoms today?' → free text 
+6. Bot confirms: 'Got it! Your Day 9 log is saved. You earned 80 points today.' 
+7. NLP engine parses the free-text responses and writes structured entries to User Daily 
+
+Log 
+ 
+
+3.2.3 WhatsApp Reminder Flow 
+
+If a user has not logged by 5:00 PM, an automated reminder is sent: 
+
+Reminder message: Hey [Name]! You haven't logged Day 9 yet. It takes 2 minutes. How did your 
+day go? [Log now] 
+
+ 
+
+3.2.4 Community Nudges via WhatsApp 
+
+• Leaderboard update pushed to batch at 9:00 PM daily: 'Batch 4 Day 9 wrap-up: 8/12 
+members completed all tasks! Top scorer: Priya (580 pts). Keep going tomorrow!' 
+
+• Streak milestone alerts: 'You just hit a 7-day streak! You're in the top 3 of your batch.' 
+• Batch momentum drop alert: 'Only 5/12 members have logged today. Let's keep the 
+
+group on track!' 
+ 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+3.3 WhatsApp Bot Tech Stack 
+
+Component Technology 
+
+Component Option 
+
+BSP (Business Solution Provider) 360dialog / Wati / Interakt / Gupshup 
+
+Bot Framework Node.js (custom) or BotPress 
+
+NLP Engine OpenAI GPT-4o / Claude API 
+
+Message Templates Meta-approved HSM templates 
+
+Webhook Handler Node.js REST API (Mediimate backend) 
+
+Media Storage AWS S3 / Cloudflare R2 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+4. Voice Call Flow 
+Voice calls are the highest-trust touchpoint in the Mediimate journey. Every call is an opportunity 
+to capture the user's daily progress. The system is designed so that the counsellor just has a 
+conversation — the AI does the logging. 
+
+ 
+
+4.1 Call Types 
+
+Call Type When Purpose 
+
+Onboarding Call Pre-enrollment Convert CTWA lead to enrolled 
+user. Counsellor-initiated. 10-15 
+min. 
+
+Day Check-in Call During journey (scheduled days) Progress review, motivation, 
+problem-solving. 5-10 min. 
+Auto-logged. 
+
+Escalation Call Triggered by at-risk flag User missed 2+ days, low mood 
+logged, symptom flag. 
+Unscheduled. 
+
+Completion Call Final day of planner Celebrate completion, upsell 
+next planner, gather testimonial. 
+
+ 
+
+4.2 Check-in Call Flow (Step by Step) 
+ 
+
+Call Scheduled by System 
+
+1 On days marked call_required: true in planner config, the system creates a Call Task for the 
+ 
+
+batch counsellor. User is notified via WhatsApp + app: 'Your Day 9 check-in is scheduled for 
+today between 5-7 PM.' 
+
+ 
+
+Counsellor Opens Call Screen in Admin 
+
+2 Admin dashboard shows the Call Queue. Counsellor selects the user, sees their full context: 
+ 
+
+Day number, tasks completed so far today, last 3 days log, any flags or symptoms, and a call 
+guide with suggested questions. 
+
+ 
+
+Call Initiated 
+3 Counsellor clicks 'Call'. System dials via Exotel / Twilio / Plivo. Call is auto-recorded (with user 
+
+consent obtained at enrollment). 
+
+ 
+
+Conversation Happens 
+4 Counsellor asks about: What the user ate today, any supplements taken, exercise, energy 
+
+levels, mood, symptoms, challenges. User answers naturally — no forms. 
+
+ 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+Real-Time Transcription 
+
+5 The call audio is streamed to Deepgram / AssemblyAI / Whisper (OpenAI). Real-time transcript 
+ 
+
+appears in the admin UI alongside the active call. Counsellor can see it being written as the 
+user speaks. 
+
+ 
+
+Post-Call NLP Extraction (Auto-Log) 
+
+6 When the call ends, an NLP pipeline (GPT-4o / Claude API) processes the transcript. It 
+ 
+
+extracts structured entities: diet entries, exercise data, supplement compliance, mood, 
+symptoms, adherence vs plan. These are written directly to User Daily Log. 
+
+ 
+
+Counsellor Review + Notes 
+7 Admin UI shows the auto-extracted log for the counsellor to verify. Counsellor can add manual 
+
+notes, flag symptoms, and trigger a protocol (e.g. change diet on Day 10, escalate to doctor). 
+
+ 
+
+Post-Call WhatsApp Summary 
+
+8 System sends the user a WA message summarising what was logged: 'Great call today, 
+ 
+
+[Name]! We've noted your Day 9 update. Remember to take your probiotic before bed. See you 
+tomorrow at Day 10.' 
+
+ 
+
+4.3 NLP Extraction Schema (from voice transcript) 
+
+The NLP engine is prompted with the transcript and the day's task list. It returns structured 
+JSON written to the User Daily Log. 
+
+ 
+
+NLP Output Fields: diet_breakfast / diet_lunch / diet_dinner / diet_snacks / supplements_taken[] / 
+exercise_type / exercise_duration_min / water_intake_ml / mood / energy_level / symptoms[] / 
+adherence_score (0-100) / counsellor_flags[] 
+
+ 
+
+4.4 Call Outcome States 
+
+Call Outcome System Action 
+
+Completed + Auto-logged Full transcript, NLP extraction complete, log 
+written 
+
+Completed + Partial log Transcript partial, counsellor fills gaps manually 
+
+No answer — 1st attempt WA reminder sent, rescheduled +2 hrs 
+
+No answer — 2nd attempt Marked as Missed Call, at-risk flag triggered 
+
+User cancelled Rescheduled for next day, log marked pending 
+
+Escalated Forwarded to senior counsellor or medical team 
+
+ 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+4.5 Voice Call Tech Stack 
+
+Component Technology 
+
+Calling Infrastructure Exotel (India) / Twilio / Plivo 
+
+Call Recording Encrypted S3 storage (90-day retention) 
+
+Transcription Deepgram / AssemblyAI / OpenAI Whisper 
+
+NLP Extraction GPT-4o / Claude API with structured output 
+
+Counsellor UI Mediimate Admin Dashboard (Web) 
+
+Call Scheduling Mediimate backend — cron job per batch day 
+config 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+5. Admin Dashboard — Logging & Management 
+ 
+
+5.1 Call Log Module 
+The Call Log is the nerve centre for counsellors. Every call is auto-created when a batch day 
+with call_required: true is triggered. 
+
+ 
+
+• Call queue view — all calls for today sorted by batch and time slot 
+• Per-call record — transcript, auto-extracted log entries, counsellor notes 
+• Status filters — Pending / In Progress / Completed / Missed / Escalated 
+• Edit mode — counsellor can correct any auto-extracted field before saving 
+• Flag mode — mark users as 'at risk', 'diet deviation', 'symptoms of concern' 
+• One-click post-call WA summary — auto-generates and sends 
+
+ 
+
+5.2 Member View (Per Batch) 
+
+• Full list of enrolled users with today's task completion % 
+• Mood indicator (from last log — app, WA, or call) 
+• Streak counter and points rank 
+• Call status for today (Done / Pending / Missed) 
+• 3-day trend sparkline per user (quick visual of momentum) 
+• At-risk flag — auto-triggered if: 2+ missed tasks in a row, low mood 2+ days, missed call 
+• Click into any user — full 360 view: all logs by day, all calls, all WA sessions 
+
+ 
+
+5.3 Planner Management Module 
+
+• Create / edit planner templates 
+• Clone an existing planner and modify days 
+• Preview day-by-day content before going live 
+• Create a new Batch from any template — set start date, cap size, assign counsellor 
+• Push content to a batch at any time (emergency updates, protocol changes) 
+• Leaderboard and momentum view per batch 
+
+ 
+
+5.4 Push Content Module 
+Admins can push content to any active batch at any time, on any channel. 
+
+Content Type Channel Use Case 
+
+Day Task Update App + WA Modify or add a task for a 
+specific day mid-journey 
+
+Motivational Broadcast WA Broadcast Send a custom message to 
+entire batch 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+Diet Protocol Change App + WA + PDF Update diet guide (e.g. based 
+on symptoms logged in calls) 
+
+Audio / Video Resource App + WA Push educational content tied to 
+the current day 
+
+Emergency Alert App + WA + Push Notification Critical health flag — push to 
+specific users 
+
+Leaderboard Update App + WA Push current standings to batch 
+at any time 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+6. Community & Competitiveness Engine 
+ 
+
+6.1 Batch as Community Unit 
+Every batch is a closed group. Users know they are on the same journey as 10-20 others who 
+started the same day. Competition and solidarity within the batch drives compliance. 
+
+ 
+
+6.2 Points System 
+
+Action Points Notes 
+
+Required task completed 20 pts Per task 
+
+Optional task completed 10 pts Per task 
+
+Full day (all required tasks) 50 pts bonus Same-day bonus 
+
+7-day streak 100 pts bonus Milestone 
+
+Call attended 30 pts Per check-in call 
+
+WA log submitted 15 pts Per WA session 
+
+Photo verification upload 25 pts If task requires photo 
+
+Mood logged 5 pts Any channel 
+
+ 
+
+6.3 Leaderboard Rules 
+
+• Leaderboard resets per batch — no cross-batch comparison 
+• Updated in real time as logs are written (app, WA, call) 
+• Top 3 positions highlighted with gold / silver / bronze 
+• User sees their own rank prominently — creates urgency 
+• Daily leaderboard snapshot pushed to all batch members at 9:00 PM via WA 
+
+ 
+
+6.4 Group Feed 
+Anonymous activity stream visible to all batch members. Events auto-published: 
+
+• [Name] completed all 6 tasks today 
+• [Name] extended their streak to N days 
+• Mediimate pushed Day N guide for your batch 
+• [Name] logged their check-in call — keep going! 
+• Batch momentum: 8/12 members on track today 
+
+ 
+
+6.5 Streak & Motivation Mechanics 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+• Streak = consecutive days where all required tasks are marked done 
+• Streak broken if required tasks missed — resets to 0 
+• Streak milestones at 3, 7, 14 days — WA + app celebration message 
+• 'Comeback' mechanic — if user misses a day, counsellor call auto-triggered to re-
+
+engage 
+• Batch momentum score (% of batch on track) shared daily — social accountability 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+7. End-to-End Data Flow 
+ 
+
+7.1 Logging Unification 
+Regardless of channel, all activity writes to the same User Daily Log record. The log_source 
+field tracks origin. Multiple sources can contribute to the same day's log. 
+
+ 
+
+Example: User logs breakfast via WhatsApp at 9 AM (log_source: whatsapp). Counsellor calls at 6 
+PM — NLP adds exercise and supplement data (log_source: voice). User marks the final task done 
+in app at 9 PM (log_source: app). Day log = complete, log_source: mixed. 
+
+ 
+
+7.2 Event Sequence — Full Day 
+
+1. 07:00 AM — System pushes Day N content to all batch members (App notification + WA 
+broadcast) 
+
+2. 07:05 AM — Each user receives WA message with tasks and motivational note 
+3. Throughout the day — Users complete tasks, log in app or via WA 
+4. 05:00 PM — Reminder sent to users who have not logged via WA 
+5. 05:00–07:00 PM — Counsellor makes check-in calls (on call_required days) 
+6. Call ends — NLP extraction runs, User Daily Log updated within 60 seconds 
+7. 07:00 PM — Post-call WA summary sent to users who were called 
+8. 09:00 PM — Daily leaderboard + group momentum WA push to entire batch 
+9. 11:59 PM — Day lock — User Daily Log record finalised, streak computed 
+
+ 
+
+7.3 At-Risk Escalation Logic 
+The system automatically flags users and creates escalation tasks for counsellors. 
+
+Trigger System Action 
+
+2 consecutive days with < 50% tasks done Auto-create counsellor escalation task 
+
+Missed check-in call (no answer x2) WA message + manager alert 
+
+Mood logged as 'low' for 2+ days Escalation call + empathy message 
+
+Symptoms flagged in NLP extraction Flag to senior counsellor / medical team 
+
+No WA or app activity for 48 hours Emergency outreach + at-risk tag on member 
+card 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+8. Recommended Tech Stack 
+ 
+
+8.1 Backend 
+
+• Runtime: Node.js (Express / Fastify) or Python (FastAPI) 
+• Database: PostgreSQL (primary relational store) + Redis (sessions, leaderboard cache) 
+• Queue: BullMQ / AWS SQS for async NLP jobs and scheduled pushes 
+• ORM: Prisma (Node) or SQLAlchemy (Python) 
+• Auth: Supabase Auth or Auth0 (users) + JWT (counsellors) 
+
+ 
+
+8.2 AI / NLP 
+
+• Primary: OpenAI GPT-4o or Anthropic Claude API — structured output extraction from 
+call transcripts and WA messages 
+
+• Transcription: Deepgram (real-time streaming) or OpenAI Whisper (post-call batch) 
+• Prompt design: System prompt contains the day's task list and user's known profile, 
+
+ensuring extraction is grounded in context 
+ 
+
+8.3 WhatsApp 
+
+• BSP: 360dialog (recommended for India, cost-effective) or Interakt / Wati (managed) 
+• Bot engine: Custom Node.js webhook handler + state machine per user session 
+• Template management: Meta Business Manager — all outbound messages use pre-
+
+approved HSM templates 
+• CTWA setup: Meta Ads Manager — ad creative + click-to-WhatsApp CTA + pre-filled 
+
+opening message 
+
+ 
+
+8.4 Calling 
+
+• India: Exotel (most reliable, call recording + webhook support) 
+• Global: Twilio Voice 
+• Recording storage: Encrypted S3 bucket, 90-day retention, counsellor-accessible via 
+
+signed URLs 
+ 
+
+8.5 App 
+
+• Mobile: React Native (single codebase iOS + Android) 
+• Web: Next.js (admin dashboard + user web app) 
+• Push notifications: Firebase Cloud Messaging (FCM) 
+• File delivery: Cloudflare R2 or AWS S3 for diet guides, audio, video 
+
+ 
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+8.6 Infrastructure 
+
+• Cloud: AWS (recommended) or GCP 
+• CI/CD: GitHub Actions 
+• Monitoring: Sentry (errors) + Datadog / Grafana (metrics) 
+• HIPAA / DPDPA compliance: Encryption at rest + in transit, audit logs for all PII access 
+
+ 
+
+  
+
+Mediimate Internal — Architecture Document v1.0 Page N 
+
+
+
+Mediimate — Platform Architecture CONFIDENTIAL 
+
+9. Phased Rollout Plan 
+ 
+
+Phase Timeline Deliverables 
+
+Phase 1 — Foundation Weeks 1–6 Planner engine + batch 
+management, app (basic), 
+manual WhatsApp broadcasts, 
+call log (manual notes only) 
+
+Phase 2 — Automation Weeks 7–12 WhatsApp bot + CTWA flow, 
+auto-scheduled day pushes, 
+NLP call extraction (v1) 
+
+Phase 3 — Community Weeks 13–18 Leaderboard, group feed, streak 
+mechanics, WA community 
+nudges, momentum score 
+
+Phase 4 — Intelligence Weeks 19–24 Real-time transcription in admin 
+UI, at-risk auto-escalation, 
+advanced NLP (protocol change 
+suggestions), counsellor 
+coaching assist 
+
+ 
+
+ 
+
+ 
+
+Mediimate — Internal Architecture Document v1.0  ·  Confidential 
+
+Mediimate Internal — Architecture Document v1.0 Page N

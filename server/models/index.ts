@@ -381,6 +381,11 @@ const PatientSchema = new mongoose.Schema(
     language_preference: String,
     last_check_in: Date,
     medications: [String],
+    active_reminders: [mongoose.Schema.Types.Mixed],
+    daily_med_status: {
+      date: String,
+      statuses: [{ medicine: String, status: String }]
+    },
     patient_user_id: String,
     phone: { type: String, required: true, default: "" },
     status: { type: String, default: "active" },
@@ -972,3 +977,113 @@ const ContactLeadSchema = new mongoose.Schema(
 ContactLeadSchema.index({ email: 1 });
 ContactLeadSchema.index({ createdAt: -1 });
 export const ContactLead = mongoose.model("ContactLead", ContactLeadSchema);
+
+// ─── Care Plan (template/blueprint for 30-day programs) ──
+const CarePlanSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    slug: { type: String, required: true, unique: true },
+    condition: String,
+    duration_days: { type: Number, default: 30 },
+    is_active: { type: Boolean, default: true },
+    description: String,
+    cover_color: { type: String, default: "#16a34a" },
+    created_by: String, // doctor user_id who created this plan
+    scoring_rules: { type: mongoose.Schema.Types.Mixed, default: {} },
+    reward_tiers: [
+      {
+        name: String,
+        min_mhp: Number,
+        reward: String,
+        color: String,
+      },
+    ],
+    week_themes: [
+      {
+        week: Number,
+        theme: String,
+        goal: String,
+      },
+    ],
+  },
+  { timestamps: { createdAt: "created_at" }, toJSON: toJsonOptions }
+);
+export const CarePlan = mongoose.model("CarePlan", CarePlanSchema);
+
+// ─── Care Plan Assignment (per-patient enrollment in a care plan) ──
+const CarePlanAssignmentSchema = new mongoose.Schema(
+  {
+    careplan_id: { type: String, required: true },
+    patient_id: { type: String, required: true },
+    doctor_id: { type: String, required: true },
+    clinic_id: String,
+    status: { type: String, enum: ["active", "paused", "completed", "converted"], default: "active" },
+    enrolled_at: { type: Date, default: Date.now },
+    start_date: { type: Date, required: true },
+    current_day: { type: Number, default: 0 },
+    // Onboarding
+    onboarding_complete: { type: Boolean, default: false },
+    onboarding_step: { type: Number, default: 0 },
+    diabetes_type: String,
+    medicines: [String],
+    baseline_sugar: Number,
+    baseline_timing: String,
+    complications: [String],
+    caregiver_phone: String,
+    // MHP (Mediimate Health Points)
+    mhp_balance: { type: Number, default: 0 },
+    mhp_tier: String,
+    mhp_history: [
+      {
+        action: String,
+        points: Number,
+        date: { type: Date, default: Date.now },
+        day: Number,
+      },
+    ],
+    // Streak
+    streak_days: { type: Number, default: 0 },
+    last_log_date: String, // YYYY-MM-DD
+    // Day logs
+    day_logs: [
+      {
+        day: Number,
+        date: Date,
+        fasting_sugar: Number,
+        postmeal_sugar: Number,
+        meds_taken: { type: Boolean, default: false },
+        meds_taken_list: [{ type: String }],
+        meals_logged: { type: Number, default: 0 },
+        foot_check_done: { type: Boolean, default: false },
+        workout_logged: { type: Boolean, default: false },
+        mhp_earned_today: { type: Number, default: 0 },
+        escalation_triggered: { type: Boolean, default: false },
+        notes: String,
+      },
+    ],
+    // Complications screening
+    complications_screened: {
+      eye: { type: Boolean, default: false },
+      kidney: { type: Boolean, default: false },
+      nerve: { type: Boolean, default: false },
+      heart: { type: Boolean, default: false },
+    },
+    // Appointment
+    appointment_booked: { type: Boolean, default: false },
+    appointment_booked_at: Date,
+    // Escalations
+    escalations_count: { type: Number, default: 0 },
+    escalation_log: [mongoose.Schema.Types.Mixed],
+    // Rewards claimed
+    rewards_claimed: {
+      bronze: { type: Boolean, default: false },
+      silver: { type: Boolean, default: false },
+      gold: { type: Boolean, default: false },
+    },
+  },
+  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" }, toJSON: toJsonOptions }
+);
+CarePlanAssignmentSchema.index({ patient_id: 1, status: 1 });
+CarePlanAssignmentSchema.index({ careplan_id: 1, mhp_balance: -1 });
+CarePlanAssignmentSchema.index({ careplan_id: 1, status: 1 });
+export const CarePlanAssignment = mongoose.model("CarePlanAssignment", CarePlanAssignmentSchema);

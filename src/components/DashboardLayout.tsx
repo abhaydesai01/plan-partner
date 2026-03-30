@@ -24,11 +24,13 @@ import {
   ChevronDown,
   Clock,
   Star,
+  ClipboardList,
 } from "lucide-react";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/dashboard/patients", icon: Users, label: "Patients" },
+  { to: "/dashboard/care-plans", icon: ClipboardList, label: "Care Plans" },
   { to: "/dashboard/programs", icon: Layers, label: "Programs" },
   { to: "/dashboard/enrollments", icon: UserPlus, label: "Enrollments" },
   { to: "/dashboard/appointments", icon: CalendarDays, label: "Appointments" },

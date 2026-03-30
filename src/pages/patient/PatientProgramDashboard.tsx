@@ -3,24 +3,33 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Link } from "react-router-dom";
 import {
   Layers,
   Activity,
   CheckCircle2,
   TrendingUp,
   Calendar,
+  Trophy,
+  ArrowRight,
 } from "lucide-react";
 
 type Enrollment = {
   id: string;
   program_id: string;
   program_name?: string;
+  condition?: string;
+  duration_days?: number;
   status: string;
   adherence_percentage?: number;
   enrolled_at?: string;
   completed_at?: string;
+  current_day?: number;
+  mhp_balance?: number;
+  mhp_tier?: string | null;
 };
 
 const formatDate = (d?: string) =>
@@ -113,18 +122,32 @@ export default function PatientProgramDashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {enrollments.map((e) => (
-            <Card key={e.id} className="overflow-hidden">
+            <Card key={e.id} className="overflow-hidden hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">
+                  <CardTitle className="text-base leading-snug">
                     {e.program_name || `Program ${e.program_id.slice(0, 8)}`}
                   </CardTitle>
-                  <Badge variant={e.status === "active" ? "default" : "secondary"} className="capitalize">
+                  <Badge variant={e.status === "active" ? "default" : "secondary"} className="capitalize shrink-0 ml-2">
                     {e.status}
                   </Badge>
                 </div>
+                {e.condition && (
+                  <p className="text-xs text-muted-foreground">{e.condition}</p>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Day Progress */}
+                {e.duration_days && (
+                  <div>
+                    <div className="flex items-center justify-between text-sm mb-1.5">
+                      <span className="text-muted-foreground">Day Progress</span>
+                      <span className="font-medium">Day {e.current_day ?? 0} / {e.duration_days}</span>
+                    </div>
+                    <Progress value={((e.current_day ?? 0) / e.duration_days) * 100} className="h-2" />
+                  </div>
+                )}
+
                 {/* Adherence */}
                 <div>
                   <div className="flex items-center justify-between text-sm mb-1.5">
@@ -134,8 +157,14 @@ export default function PatientProgramDashboard() {
                   <Progress value={e.adherence_percentage ?? 0} className="h-2" />
                 </div>
 
-                {/* Dates */}
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                {/* MHP + Dates row */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  {e.mhp_balance != null && (
+                    <span className="flex items-center gap-1 font-medium text-amber-600">
+                      <Trophy className="h-3.5 w-3.5" />
+                      {e.mhp_balance} MHP{e.mhp_tier ? ` · ${e.mhp_tier}` : ""}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5" />
                     Enrolled: {formatDate(e.enrolled_at)}
@@ -147,6 +176,16 @@ export default function PatientProgramDashboard() {
                     </span>
                   )}
                 </div>
+
+                {/* CTA */}
+                {e.status === "active" && (
+                  <Link to="/patient/care-plan">
+                    <Button size="sm" className="w-full gap-2 mt-1">
+                      Open Program Dashboard
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </Link>
+                )}
               </CardContent>
             </Card>
           ))}

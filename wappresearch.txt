@@ -1,0 +1,81 @@
+# WhatsApp Super App - Implementation Checklist & Core Flow
+
+## 📋 Development Checklist for WhatsApp Bot
+
+### 1. Onboarding & Acquisition (CTWA Flow)
+- [ ] **Webhook Infrastructure:** Connect WA Business Provider (Interakt/Wati/360dialog) to the backend.
+- [ ] **Automated CTWA Greeting:** Configure pre-filled ad click response.
+- [ ] **Interactive Intake Form:** Build a quick-reply flow capturing Name, City, and Primary Condition.
+- [ ] **Recommendation Engine:** Auto-suggest the correct program based on intake condition.
+- [ ] **In-Chat Payments:** Integrate Razorpay payment links directly into the conversation.
+- [ ] **Auto-Enrollment:** Post-payment webhook to enroll user in the backend Batch and trigger Day 1 kickoff.
+
+### 2. Proactive Messaging Engine (Outbound)
+- [ ] **Morning Broadcasts:** CRON job driving 7:00 AM daily content pushes based on batch progress.
+- [ ] **Incomplete Task Nudges:** 5:00 PM automated reminder if the user hasn't logged tasks.
+- [ ] **Community & Leaderboard Push:** 9:00 PM broadcast showing Batch Momentum and rank updates.
+- [ ] **Medication Alarms:** Time-specific push notifications based on user's prescription.
+- [ ] **Call Reminders:** Notify user of scheduled counsellor calls.
+
+### 3. Reactive AI Engine (Inbound Natural Language)
+- [ ] **NLP Intent Router:** Pass incoming messages to an LLM (GPT-4o/Claude) to determine intent (Log, Query, Menu).
+- [ ] **Vitals Parser:** Identify and extract BP (e.g., "130/85"), Blood Sugar, Weight, Heart Rate.
+- [ ] **Workout Parser:** Detect exercise type and duration from conversational text.
+- [ ] **Meal Macro Estimator:** Leverage LLM to estimate calories, carbs, protein, fat from text descriptions like "2 rotis and dal".
+- [ ] **Database Writers:** Sync all extracted NLP entities securely to the unified `User Daily Log` Postgres database.
+
+### 4. Rich Media & Computer Vision Integration
+- [ ] **Food Photo Recognition:** Google Vision API pipeline to identify food items from sent images and estimate calories.
+- [ ] **Prescription OCR Vault:** OCR pipeline (Google Vision / Tesseract) to read handwritten prescriptions/lab reports and save structured data into the Health Vault.
+
+### 5. Utility & Queries
+- [ ] **Appointment Booking Flow:** Fetch available slots from backend and confirm bookings.
+- [ ] **Vector Query on Health Records:** RAG pipeline allowing users to ask "What was my last HbA1c?" and get answers from their vault.
+- [ ] **Fallback Menu System:** Hardcoded master menu for users who prefer tapping over typing.
+
+---
+
+## 👥 User Story: Day-in-the-Life WhatsApp Interaction
+
+**User Profile:** Rajiv, 55, enrolled in 90-Day Blood Pressure Management Program (Day 12).
+
+---
+*(Proactive Push at 7:00 AM)*
+**Mediimate Bot:** 
+"Good morning Rajiv 🌅! Welcome to Day 12: Stress & Heart Rate. 
+Check out today's short 3-min audio guide on breathing here: [Link].
+You have 4 tasks to hit your streak today. How are you feeling this morning?"
+
+*(Reactive Natural Language)*
+**Rajiv:** "Feeling a bit tired today but BP is normal... 128/82. Walked for 20 mins."
+
+*(NLP Engine processes: intent=log, mood=tired, vitals={bp_systolic: 128, bp_diastolic: 82}, exercise={type: walk, duration: 20})*
+**Mediimate Bot:** 
+"✅ BP: 128/82 mmHg logged at 7:15 AM.
+📊 Status: Perfectly within target! Great job stabilizing it.
+✅ Walking — 20 mins logged 🔥 ~80 kcal burned.
+Sorry to hear you're feeling tired! Try taking a 10-minute rest after lunch today. You've earned 50 MHP so far."
+
+---
+*(Later at 1:30 PM - Proactive Reminder based on uploaded prescription)*
+**Mediimate Bot:** 
+"💊 Quick reminder Rajiv: Time for your Telmisartan 40mg. Take it after your meal."
+
+*(Reactive Media Upload)*
+**Rajiv:** *(Sends a photo of his lunch plate)*
+
+*(Google Vision API processes the image)*
+**Mediimate Bot:** 
+"📸 Analyzing... Looks like: Rice + Mixed Veg Curry + Curd (~320 cal)
+1️⃣ ✅ Correct, log it
+2️⃣ ✏️ Let me edit"
+
+**Rajiv:** "1"
+
+**Mediimate Bot:**
+"✅ Meal logged! You're at 950 calories for the day. Perfect balance for your BP targets."
+
+---
+*(9:00 PM - Community Broadcast)*
+**Mediimate Bot:**
+"🏆 Batch Wrap-Up! Rajiv, you hit an 8-day streak today. You are currently Rank #3 in your batch. Keep the momentum going for tomorrow!"

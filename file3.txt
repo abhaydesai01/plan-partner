@@ -1,0 +1,361 @@
+MEDIIMATE — WhatsApp Super App
+Product Specification v1.0
+
+THE CORE INSIGHT
+Most health apps fail because they ask patients to change behavior. Mediimate doesn't. It meets 
+patients where they already are — WhatsApp — and makes health management feel like texting a 
+knowledgeable friend.
+
+Every interaction is either:
+
+• Proactive — Mediimate messages the patient first (reminders, check-ins, alerts)
+• Reactive — Patient messages anytime, in plain language, and gets an instant intelligent 
+
+response
+
+USER STATES
+Before designing flows, there are 3 types of users hitting WhatsApp:
+
+State Who Entry Point
+New Never used Mediimate CTWA Ad click
+
+Enrolled Active in a care program Direct WhatsApp 
+open
+
+Returnin Used before, not in active 
+g program Organic / reminder
+
+Each state gets a different experience.
+
+STATE 1 — NEW USER (CTWA Entry)
+1.1 First Touch — Auto Welcome
+
+"Hi! 👋  I'm Yoda, your personal health assistant from Mediimate.
+
+I help you manage your health entirely on WhatsApp — no app downloads, no complicated portals.
+
+What brings you here today?
+
+1⃣  I have a health condition I'm managing 2⃣  My doctor recommended Mediimate 3⃣  I just want 
+to explore"
+
+1.2 Quick Signup — 60 Seconds
+
+
+
+"Let's set up your profile. What's your name?"
+
+→ Name captured
+
+"Which city are you in?"
+
+→ City captured
+
+"What condition are you managing?
+
+1⃣  Diabetes / Blood Sugar 2⃣  Blood Pressure / Heart 3⃣  Joint / Knee / Back Pain 4⃣  Women's 
+Health 5⃣  General Wellness 6⃣  Something else"
+
+→ Condition captured → Profile created instantly
+
+Product note: Name + city + condition is all you need. Don't ask for DOB, email, address at 
+signup. Collect those later, contextually. Fewer fields = higher completion.
+
+1.3 Intelligent Program Recommendation
+
+"Based on what you've shared, here's what I recommend:
+
+🩺  90-Day Diabetes Chronic Care Program
+
+What's included: ✅  Daily medication reminders ✅  Weekly blood sugar logging ✅  Personalised 
+diet guidance ✅  Monthly doctor check-in ✅  Emergency escalation to your clinic
+
+₹999 for 90 days — that's ₹11/day
+
+1⃣  Enroll now 2⃣  Try free for 7 days 3⃣  Tell me more first"
+
+1.4 Payment — In Chat
+
+"Enrolling you in the 90-Day Diabetes Care Program ✅
+
+Pay securely 👇  💳  [Razorpay Link — UPI / Card / Net Banking]
+
+Takes 30 seconds. Your program starts the moment payment clears."
+
+→ Payment confirmed →
+
+"🎉  You're in, [Name]!
+
+Your 90-Day Chronic Care Program starts NOW. I'll check in tomorrow morning at 9am.
+
+Anytime you need something — just type. I'm always here 🙏 "
+
+
+
+STATE 2 — RETURNING / ENROLLED USER
+Master Menu
+
+(Triggered when patient opens chat or types "menu" / "help")
+
+"Welcome back, [Name] 👋  Mediimate — Your Health Assistant
+
+What would you like to do?
+
+📅  1 — Appointments 🍎  2 — Log Meal 💓  3 — Log Vitals 🏃  4 — Log Workout 📋  5 — 
+Medical Records 💊  6 — My Care Program 💳  7 — Plans & Payments"*
+
+Product note: Patient doesn't need to use the menu. Natural language always works. Menu is a 
+fallback for less tech-savvy users — critical for Tier 2/3.
+
+FEATURE FLOWS
+
+FEATURE 1 — APPOINTMENTS
+
+Trigger: "1" / "appointment" / "book" / "doctor visit"
+
+"📅  What do you need?
+
+1⃣  Book a new appointment 2⃣  View upcoming appointments 3⃣  Cancel or reschedule"
+
+Book flow:
+
+"Which doctor? 1⃣  Dr. [Name] — your regular doctor 2⃣  Find a new doctor near me"
+
+→ Preferred date →
+
+"✅  Appointment confirmed! 📅  Dr. [Name] | [Date] | [Time] 📍  [Clinic Name & Address]
+
+I'll remind you 24 hours before and 2 hours before. See you there! 🙏 "
+
+FEATURE 2 — MEAL LOGGING
+
+Trigger: "2" / "I ate..." / "just had..." / food photo
+
+Text:
+
+"What did you eat? Describe it naturally — I'll handle the rest."
+
+
+
+Patient: "2 rotis with dal and aloo sabzi"
+
+"✅  Logged! ~480 cal | Carbs: 72g | Protein: 16g | Fat: 8g
+
+Today's total: 860 / 1,800 cal Remaining: 940 cal
+
+💡  Good carb balance for a diabetic meal. Add a small protein snack this evening."
+
+Photo: Patient sends food photo →
+
+"📸  Analyzing... Looks like: Idli (3) + Sambar + Coconut Chutney ~280 cal | Carbs: 52g | Protein: 
+9g
+
+1⃣  ✅  Correct, log it 2⃣  ✏  Let me edit"
+
+Product note: Photo logging is the killer feature for Tier 2/3 — patients who can't type well can 
+just photograph their thali. Keep this prominent.
+
+FEATURE 3 — VITALS LOGGING
+
+Trigger: "3" / "BP" / "sugar" / "weight" / raw numbers like "130/85"
+
+"💓  What would you like to log?
+
+1⃣  Blood Pressure 2⃣  Blood Sugar 3⃣  Weight 4⃣  Heart Rate 5⃣  SpO2 6⃣  Temperature"
+
+Smart detection: If patient types "130/85" directly — system recognizes BP format and logs 
+without asking. If patient types "sugar 145" — logs blood sugar instantly.
+
+Blood Pressure response:
+
+"✅  BP: 130/85 mmHg logged ⏰  9:15 AM today
+
+📊  Status: Slightly elevated — Stage 1 range 💡  Try a 10-minute walk today and reduce salt at 
+lunch.
+
+Trend (last 3 days): Yesterday: 128/83 | 2 days ago: 132/87 | 3 days ago: 135/88 📈  Slowly 
+improving ✅
+
+Your doctor will see this at next check-in."
+
+Blood Sugar response:
+
+"✅  Blood Sugar: 145 mg/dL (post-meal) logged
+
+📊  Status: Within acceptable range (target: under 180) 💡  A 15-min walk after meals helps bring 
+this down.
+
+
+
+Estimated HbA1c based on recent logs: ~6.8% Target: under 7% ✅  You're on track."
+
+FEATURE 4 — WORKOUT LOGGING
+
+Trigger: "4" / "workout" / "walked" / "exercised" / "gym"
+
+"🏃  What did you do?
+
+1⃣  Walking 2⃣  Running 3⃣  Yoga 4⃣  Gym / Weights 5⃣  Swimming 6⃣  Cycling 7⃣  Other"
+
+→ Duration →
+
+"✅  Walking — 45 mins logged 🔥  ~180 kcal burned
+
+Weekly streak: 3 of 5 days 💪  Great consistency — keep going!"
+
+Smart detection: "I walked for 30 mins" → logs directly without asking any questions.
+
+FEATURE 5 — MEDICAL RECORDS
+
+Trigger: "5" / "prescription" / "report" / "upload" / patient sends a photo unprompted
+
+"📋  What do you need?
+
+1⃣  Upload prescription 2⃣  Upload lab report 3⃣  Ask about my test results 4⃣  View medication 
+history 5⃣  View all records"
+
+Upload prescription:
+
+"Send me a clear photo of your prescription 📸 "
+
+→ AI reads prescription →
+
+"✅  Saved to your health vault!
+
+I found: 💊  Metformin 500mg — twice daily 💊  Glimepiride 1mg — once daily (morning)
+
+Set up reminders for these? 1⃣  Yes 2⃣  No 3⃣  Edit details first"
+
+Ask about results — conversational AI:
+
+Patient: "What was my hemoglobin?"
+
+"📊  Your last hemoglobin (Feb 12, 2026): 11.8 g/dL Previous (Nov 8, 2025): 10.9 g/dL
+
+
+
+✅  Improving — normal range for women: 12–16 g/dL Still slightly below target. Your doctor may 
+discuss iron supplements at your next visit.
+
+Want to book an appointment? Type 'book appointment'."
+
+FEATURE 6 — CARE PROGRAM DASHBOARD
+
+Trigger: "6" / "my program" / "how am I doing"
+
+"💊  Your Care Program 90-Day Diabetes Chronic Care — Day 23 of 90
+
+📊  Your Progress: ✅  Vitals logged: 18/23 days ✅  Medications: 89% adherence ✅  Meals 
+logged: 14/23 days ⚠  Workouts: 2/23 days — needs attention
+
+📅  Next: Day 30 check-in with Dr. [Name] in 7 days 📈  Health Score: 74/100 (+8 from last week)
+
+1⃣  Log today's vitals 2⃣  This week's tasks 3⃣  Message my doctor 4⃣  Full program details"
+
+FEATURE 7 — PLANS & PAYMENTS
+
+Trigger: "7" / "pay" / "renew" / "upgrade" / "plans"
+
+"💳  Your current plan: Free Trial (4 days left)
+
+Continue with:
+
+1⃣  Basic Care — ₹499/month
+
+• Vitals + reminders + meal logging*
+2⃣  Chronic Care — ₹999 / 90 days ⭐  Most popular
+
+• Full program + doctor check-ins + records*
+3⃣  Premium — ₹1,999/month
+
+• Everything + unlimited doctor messaging*
+4⃣  View payment history"
+
+→ Patient selects plan →
+
+"✅  [Plan name] selected. Pay securely 👇  💳  [Razorpay Link]
+
+Your program continues without interruption after payment."
+
+PROACTIVE MESSAGES
+
+
+
+(Mediimate messages the patient first — this is where retention lives)
+
+Trigger Message
+Morning (daily) "Good morning [Name] 🌅  Time to log your BP. How are you feeling 
+Post-meal (2hrs after meal today?"
+logged) "How did that meal sit? Any post-meal blood sugar to log?"
+
+Medication reminder "💊  Time for your Metformin 500mg. Take it with food."
+Missed vitals "Haven't heard from you today, [Name]. 2 seconds — what's your BP 
+
+today?"
+Pre-appointment "📅  Reminder: Dr. [Name] tomorrow at 11am. Anything to discuss? I 
+
+can help you prepare."
+Weekly summary "📊  Your week in review: 5/7 days logged, BP trending down ✅ , 
+Program milestone H" bA1c estimate: 6.8%"
+
+🎉  Day 30! You've logged vitals 22 out of 30 days. That's top 10% of 
+our users."
+
+NATURAL LANGUAGE TRIGGER MAP
+Patient types What fires
+
+"I ate 2 rotis" Meal log → direct
+"130/85" BP log → direct
+"sugar 145" Blood sugar log → direct
+"walked 30 mins" Workout log → direct
+
+Sends food photo Meal log → photo 
+analysis
+
+Sends prescription photo Medical records → OCR
+"what was my last 
+HbA1c" Records → AI answer
+
+"book appointment" Appointment flow
+"how am I doing" Program dashboard
+"renew" / "pay" Payments flow
+"help" / "menu" Master menu
+Anything else AI responds naturally
+
+Product principle: Zero commands required. If a patient types something the system doesn't 
+recognize, the AI responds helpfully and guides them — never a dead end.
+
+TECH STACK
+Layer Tool Why
+
+WhatsApp API Interakt or Wati India-friendly, affordable, good flow 
+builder
+
+
+
+AI / NLP GPT-4 via webhook Natural language understanding
+Food photo analysis Google Vision API Meal recognition
+OCR for Google Vision / 
+prescriptions Tesseract Read handwritten Rx
+
+Payments Razorpay UPI-first, instant payment links
+Automation n8n You already run this at Connectify
+
+Database Your backend + 
+AES-256 DPDP Act 2023 compliant
+
+PRODUCT PRINCIPLES
+1. Zero dead ends — every unrecognized message gets an intelligent response, never an error.
+
+2. Minimum inputs — never ask for information you don't need right now. Signup is 3 fields. 
+Everything else is collected contextually.
+
+3. Proactive over reactive — the product's job is to reach out first. Patients who only respond are 
+retained. Patients who initiate are advocates.
+
+4. Tier 2/3 first — voice notes, photo inputs, Kannada/Hindi responses, simple language. Never 
+assume smartphone literacy.
+
+5. Chronic care is the core — every feature exists to serve the long-term patient relationship. 
+Appointments, meals, vitals, records — all feed the chronic care program and make the doctor 
+relationship stickier.

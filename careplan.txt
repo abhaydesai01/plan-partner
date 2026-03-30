@@ -1,0 +1,403 @@
+﻿MEDIIMATE — 30-DAY DIABETIC CHRONIC CARE PROGRAM 
+Final Version v3.0 | Clinical + CMO + CEO Reviewed | Rewards System Integrated 
+================================================================ 
+ 
+EXECUTIVE SUMMARY 
+----------------- 
+This program proves three things to Dr. Suman in 30 days: 
+1. Patient return rate goes up 
+2. Medication adherence improves 
+3. Zero extra work required from clinic staff 
+ 
+A rewards system drives consistent logging — patients earn Mediimate Health Points (MHP) for 
+every action, unlock real benefits, and feel recognised for their effort. 
+ 
+What Dr. Suman does: Share 20-30 patient numbers. Read one report on Day 29. That's it. 
+What Mediimate does: Everything else. 
+ 
+ 
+REWARDS SYSTEM — MEDIIMATE HEALTH POINTS (MHP) 
+----------------------------------------------- 
+HOW PATIENTS EARN POINTS: 
+- Log fasting blood sugar: +10 MHP (daily) 
+- Log post-meal blood sugar: +10 MHP (daily) 
+- Confirm medicine taken: +5 MHP (per dose) 
+- Log a meal: +5 MHP (daily) 
+- Complete foot check: +10 MHP (weekly) 
+- Log workout: +10 MHP (daily) 
+- Complete complication screen: +20 MHP (one-time per screen) 
+- Book follow-up appointment: +50 MHP (one-time) 
+- Refer a friend who joins: +100 MHP (per referral) 
+- 3-day logging streak bonus: +25 MHP 
+- 7-day logging streak bonus: +75 MHP 
+- Complete all 30 days: +200 MHP 
+ 
+REWARD TIERS: 
+BRONZE (200 MHP): Free lab test at partner clinic + 10% off next plan 
+SILVER (500 MHP): Free HbA1c test + 1 free teleconsult with Dr. Suman 
+GOLD (1000 MHP): 90-day plan at 50% off + Mediimate Premium badge + Priority doctor 
+access 
+ 
+HOW REWARDS ARE COMMUNICATED: 
+- Points balance shown in every weekly summary 
+- Instant notification after every action logged 
+- Milestone alert when a new tier is reached 
+
+
+
+- Leaderboard position weekly ("You're in the top 20%") 
+- Expiry pressure at Day 25: "Points expire if program ends without redemption" 
+ 
+ 
+PATIENT ONBOARDING — 3 MESSAGES, 2 MINUTES 
+------------------------------------------- 
+MESSAGE 1 — Welcome + Diabetes Type: 
+"Hi [Name] Welcome to Mediimate — your personal diabetes care assistant from Dr. Suman's 
+clinic. 
+I'll check in with you every day for 30 days — reminders, tips, and progress reports. All on 
+WhatsApp. No app needed. 
+You'll also earn Mediimate Health Points (MHP) for every action — redeem for free lab tests, 
+discounts, and more. 
+Quick question: How is your diabetes managed? 
+A — Tablets only | B — Insulin injections only | C — Both tablets and insulin" 
+ 
+MESSAGE 2 — Medicines + Baseline: 
+"What medicines are you currently taking? Just type the names from your strip or prescription. 
+(Example: Metformin, Glimepiride) 
+Also — what was your last blood sugar reading and was it fasting (before food) or after food? 
+(Example: 145, after food)" 
+ 
+MESSAGE 3 — Complications Screen + Confirm: 
+"Last one — do any of these apply? Let them choose multiple option ​
+1 — Eye problems related to diabetes 
+2 — Kidney issues 
+3 — Numbness or pain in feet 
+4 — Heart condition 
+5 — None of the above 
+That's it! Your 30-day Diabetes Care Program starts tomorrow. 
+You start with 0 MHP. Log your first vital tomorrow morning to earn your first 10 points. 
+Patients who complete all 30 days earn enough for a FREE test." 
+ 
+ 
+ESCALATION PROTOCOL — RUNS EVERY DAY FROM DAY 1 
+------------------------------------------------- 
+Below 54 mg/dL     — CRITICAL EMERGENCY: Eat sugar immediately. Call someone. Hospital 
+if no improvement in 15 mins. 
+54-70 mg/dL        — URGENT: Dangerously LOW. Eat 2 tsp sugar in water or banana. Sit. Don't 
+drive. Reply when done. 
+70-99 fasting      — NORMAL: Positive reinforcement + points awarded 
+100-130 fasting    — SLIGHTLY ABOVE: Personalised diet tip 
+131-250            — ELEVATED: Lifestyle reminder + points awarded for logging 
+251-300            — HIGH: Drink water, avoid sweets, take medicine, log again in 2 hours 
+
+
+
+Above 300          — VERY HIGH: Visit Dr. Suman or nearest doctor TODAY. Flagged 
+automatically. 
+ 
+ 
+WEEK 1 — FOUNDATION & ACTIVATION (DAY 1-7) 
+------------------------------------------- 
+Goal: Activate every patient. Build logging habit. Introduce rewards. Build trust. 
+ 
+DAY 1 
+Morning: "Good morning [Name] Day 1 of your Diabetes Care Program! 
+Medicine reminder: Time for your [medicine]. Take it [before/with/after] breakfast. 
+Reply DONE when taken — earn your first 5 MHP!" 
+Evening: "Please share your blood sugar reading today. 
+Format: number + when taken. Example: '138, after lunch' 
+Logging earns you 10 MHP — your health vault is building!" 
+ 
+DAY 2 — CAREGIVER INVITE 
+"Good morning [Name]! Medicine reminder: [medicine + timing] 
+Would you like to add a family member to your care circle? They get weekly summaries and can 
+help with reminders. 
+1 — Yes, add a family member | 2 — No thanks" 
+Evening: "What did you eat for breakfast today? Describe naturally — I'll tell you if it's good for 
+your sugar. +5 MHP" 
+ 
+DAY 3 — DOCTOR TRUST SIGNAL 
+"[Name], Dr. Suman's team reviewed your first two readings. Your morning sugar of [X] is 
+[observation]. 
+Keep logging — Dr. Suman will adjust your plan based on what I collect this month. 
+Current MHP balance: [X] points" 
+Evening Foot Check: "Foot check — Day 3: Look at both feet. Any redness, swelling, sores, or 
+wounds? 
+Reply: ALL CLEAR or describe what you see. +10 MHP for your first foot check!" 
+ 
+DAY 4 
+"Medicine reminder + How's your sleep been? Poor sleep directly raises blood sugar. 
+Good / Average / Poor 
+Tip: A 10-15 min walk after every meal reduces blood sugar by up to 20%. Log the walk for +10 
+MHP!" 
+ 
+DAY 5 — ADHERENCE CHECK 
+"Mid-week check — are you taking all your medicines? 
+Yes, every dose (+5 bonus MHP) / Missed one or two / Struggling to remember 
+[If struggling]: What time do you wake up and have breakfast? I'll reset your reminders to match 
+your routine." 
+
+
+
+ 
+DAY 6 
+"Tip: Fruit juices spike blood sugar faster than eating the whole fruit. Eat the orange — skip the 
+juice. 
+Any unusual symptoms this week? 
+1-Excessive thirst / 2-Frequent urination / 3-Fatigue / 4-Blurry vision / 5-Tingling in feet / 6-None 
+Answering this earns +5 MHP — your health data matters." 
+ 
+DAY 7 — WEEK 1 SUMMARY + STREAK BONUS + REFERRAL 
+"Week 1 Complete, [Name]! 
+Medicines taken: [X]/7 days | Blood sugar logs: [X] readings | Average sugar: [X] mg/dL | Foot 
+checks: [X] 
+MHP earned this week: [X] | Total: [X] MHP 
+[If 5+ days logged]: 7-day streak bonus: +75 MHP added! 
+This week, one of our members reduced fasting sugar from 178 to 134 in 3 weeks — just by 
+walking 15 mins after meals. 
+Know someone managing diabetes? Share this program — earn +100 MHP when they join: 
+[referral link]" 
+ 
+ 
+WEEK 2 — PATTERN RECOGNITION (DAY 8-14) 
+----------------------------------------- 
+Goal: Fasting vs post-meal distinction. Personal patterns. Habit deepening. 
+ 
+DAY 8 — TWO READINGS PER DAY STARTS 
+"This week we go deeper on blood sugar patterns. 
+Starting today — log TWO readings daily: 
+Morning fasting sugar (before eating anything) — +10 MHP 
+Evening: 2 hours after your biggest meal — +10 MHP 
+Double readings = double points = double insights. 
+Morning fasting reading now — what is it?" 
+ 
+DAY 9 — UNDERSTANDING NUMBERS 
+"Your targets this week: 
+Fasting target: below 130 mg/dL | Post-meal target (2 hrs after food): below 180 mg/dL 
+Your fasting average this week: [X] | Your post-meal average: [X] 
+[Personalised comment based on trend] 
+You've earned [X] MHP so far. Bronze tier at 200 MHP — [X] more to go!" 
+ 
+DAY 10 — STRESS CHECK 
+"Stress check — how are you feeling mentally? Stress raises blood sugar directly through 
+cortisol. 
+Calm / Some stress / High stress 
++5 MHP for answering — this directly affects your readings." 
+
+
+
+ 
+DAY 11 — PORTION CONTROL + REFILL 
+"Tip: Use a smaller plate. Same food, 20% less quantity = meaningful blood sugar improvement. 
+Medicine refill check: 
+1 — Have enough stock | 2 — Running low | 3 — Already out 
++5 MHP for checking in." 
+ 
+DAY 12 — LIFESTYLE 
+"[If smokes/drinks]: Each cigarette raises insulin resistance. Alcohol causes unpredictable sugar 
+swings. 
+[If No from Day 0]: You don't smoke or drink — already working in your favour. Keep it up! 
++5 MHP for reading and acknowledging." 
+ 
+DAY 13 — WEEKEND + FOOT CHECK 
+"Weekend tip: A 20-minute morning walk improves fasting sugar for the next 24 hours. Log it for 
++10 MHP. 
+Weekly foot check — both feet, any issues? All clear (+10 MHP) / Something to mention" 
+ 
+DAY 14 — WEEK 2 SUMMARY 
+"2 Weeks Done, [Name]! 
+Fasting avg — Week 1: [X] — Week 2: [X] 
+Post-meal avg — Week 1: [X] — Week 2: [X] 
+Medication adherence: [X]% | Estimated HbA1c: ~[X]% 
+Total MHP: [X] points 
+[If 200+ MHP]: BRONZE TIER UNLOCKED! You've earned a free lab test at partner clinic. 
+You're in the top 30% of program members for consistency. 
+Week 3 focus: protecting your future, not just managing today's sugar." 
+ 
+ 
+WEEK 3 — COMPLICATIONS PREVENTION (DAY 15-21) 
+---------------------------------------------- 
+Goal: Screen for complications. Flag high-risk patients early. Deepen clinical value. 
+ 
+DAY 15 — EYE SCREEN (+20 MHP) 
+"This week is about protecting your future. Diabetes can silently damage eyes, kidneys, nerves, 
+and heart. 
+Eyes: When did you last get a retinopathy screen? 
+1-Within the last year / 2-1-2 years ago / 3-Never/More than 2 years / 4-Didn't know I needed 
+one 
++20 MHP for completing this screen." 
+ 
+DAY 16 — KIDNEY SCREEN (+20 MHP) 
+"Kidney check: Have you had a kidney function test (creatinine + urine microalbumin) in the last 
+year? 
+
+
+
+1-Yes, normal / 2-Yes, doctor mentioned something / 3-No/Not sure 
++20 MHP. Early detection means it can be reversed." 
+ 
+DAY 17 — NERVE SCREEN (+20 MHP) 
+"Nerve health: Any of these regularly? 
+1-Tingling/burning in feet / 2-Numbness (like asleep) / 3-Sharp stabbing pain at night 
+4-Wounds that heal slowly / 5-None 
++20 MHP for completing this screen." 
+ 
+DAY 18 — HEART SCREEN (+20 MHP) 
+"Heart check: Any of these? 
+1-Chest discomfort / 2-Shortness of breath / 3-Irregular heartbeat / 4-Swelling in legs / 5-None 
++20 MHP. [If 1-4 selected]: Please see Dr. Suman this week — flagged in your care file." 
+ 
+DAY 19 — INDIA-SPECIFIC DIET TIP 
+"Ragi, bajra, and jowar are better for diabetics than white rice or even brown rice. 
+Log today's meals for +5 MHP each." 
+ 
+DAY 20 — RE-ENGAGEMENT FOR SILENT PATIENTS 
+"[Name], we haven't heard from you in a few days. Everything okay? 
+You have [X] MHP — don't let your streak break. Even a quick reply earns points. Reply 
+anything." 
+ 
+DAY 21 — WEEK 3 SUMMARY 
+"3 Weeks Done, [Name]! 
+Blood sugar trend: [improving/stable/needs attention] 
+Medication adherence: [X]% | Complications screened: Eye / Kidney / Nerve / Heart 
+Estimated HbA1c: ~[X]% 
+Total MHP: [X] points 
+[If 500+ MHP]: SILVER TIER UNLOCKED! Free HbA1c test + 1 teleconsult with Dr. Suman. 
+[If close]: You need just [X] more MHP for Silver. Log tomorrow morning to get there! 
+One week left. Final push." 
+ 
+ 
+WEEK 4 — CONVERSION & RESULTS (DAY 22-30) 
+------------------------------------------ 
+Goal: Get patients back to clinic. Deliver proof. Convert to paid plan. 
+ 
+DAY 22 — APPOINTMENT BOOKING (+50 MHP) 
+"Your 30-day program ends in 8 days. Dr. Suman should review your progress in person. 
+Book now and earn +50 MHP — your biggest single points reward! 
+1-Book this week / 2-Book next week / 3-I'll call the clinic directly" 
+ 
+DAY 23 — LAB TEST NUDGE 
+
+
+
+"Before your visit, get these done: 
+HbA1c — your 3-month sugar average 
+Kidney function — if not done this year 
+Lipid profile — if not done this year 
+WhatsApp me the reports — I'll summarise for Dr. Suman. +15 MHP per report uploaded." 
+ 
+DAY 24 — PROGRESS COMPARISON 
+"Look how far you've come: 
+Day 1 fasting sugar: [X] mg/dL — Today: [X] mg/dL — Change: [+/-X] 
+Medication adherence: [X]% — top [X]% of program members. 
+You're [X] MHP away from Gold tier — 50% discount on your 90-day program." 
+ 
+DAY 25 — FINAL FOOT CHECK + POINTS URGENCY 
+"Final foot check: both feet — any issues? +10 MHP 
+Points reminder: You have [X] MHP. Unredeemed points expire when the program ends. 
+Redeem before Day 30 — reply REDEEM and I'll show your options." 
+ 
+DAY 26 — FAMILY SHARE + REFERRAL 
+"Show your 30-day progress report to one family member. 
+Patients with family support have 40% better outcomes. 
+Share this program with one person who needs it — earn +100 MHP when they join: [referral 
+link]" 
+ 
+DAY 27 — PRE-VISIT PREP 
+"Your Dr. Suman appointment is coming up. Bring: 
+- All medicine strips or bottles 
+- Lab reports from this month 
+- Your 30-day summary (sending tomorrow) 
+Questions to ask: Is my HbA1c on track? Do I need medicine adjustments? Should I get 
+eye/kidney checks? 
++5 MHP for confirming you've seen this." 
+ 
+DAY 28 — FULL 30-DAY REPORT TO PATIENT 
+"Your 30-Day Diabetes Care Report: 
+Fasting sugar — Start: [X] — End: [X] — Change: [+/-X] 
+Post-meal sugar — Start: [X] — End: [X] 
+Estimated HbA1c: ~[X]% 
+Medication adherence: [X]% | Days logged: [X]/28 
+Escalations flagged: [X] | Complications screened: Eye / Kidney / Nerve / Heart 
+Final MHP balance: [X] points — [Bronze/Silver/Gold] tier achieved. 
+Show this to Dr. Suman at your visit." 
+ 
+DAY 29 — CLINICAL + REVENUE REPORT TO DR. SUMAN 
+Metric                              | Baseline | Day 30 | Change 
+
+
+
+Average fasting sugar               | X mg/dL  | X mg/dL | +/-X 
+Average post-meal sugar             | X mg/dL  | X mg/dL | +/-X 
+Estimated HbA1c                     | X%       | X%      | +/-X% 
+Medication adherence                | Unknown  | X%      | — 
+Patients escalated — high sugar     | 0        | X       | Caught early 
+Patients escalated — low sugar      | 0        | X       | Crisis prevented 
+Complications flagged               | 0        | X       | Detected early 
+Appointments booked via WhatsApp    | 0        | X       | Direct revenue 
+Prescription refill requests        | 0        | X       | Additional revenue 
+Lab test referrals generated        | 0        | X       | Additional revenue 
+Patient NPS                         | —        | X/10    | — 
+Referrals generated by patients     | 0        | X       | Organic growth 
+Estimated revenue from appointments | Rs 0     | Rs X    | Direct impact 
+ 
+Note: If [X] patients generated Rs [X] in 30 days — 200 patients generate 10x every month. 
+ 
+DAY 30 — NPS + CONVERSION + GOLD TIER PUSH 
+"You completed your 30-day Diabetes Care Program! 
+In 30 days you: 
+- Reduced fasting sugar from [X] to [Y] 
+- Took medicines [X]% of the time 
+- Logged [X] readings | Earned [X] MHP 
+ 
+Continue with the 90-Day Chronic Care Program — Rs 999 for 90 days (Rs 11/day) 
+[If Gold tier]: GOLD TIER! You get 50% off — pay just Rs 499 for 90 days. 
+[If Silver]: Your Silver reward includes 1 teleconsult with Dr. Suman — use it to decide. 
+[Payment link — expires in 48 hours] 
+1-Continue my program / 2-Discuss with Dr. Suman / 3-Pause for now" 
+ 
+NPS + Qualitative Feedback: 
+"Rate 1-10: How useful was this program? 
+What was most useful? 
+1-Medicine reminders / 2-Blood sugar tracking / 3-Diet tips 
+4-Knowing doctor could see my data / 5-Weekly summaries / 6-The rewards and points system" 
+ 
+ 
+POST-PROGRAM RE-ENGAGEMENT (DAY 33-45) 
+--------------------------------------- 
+For patients who said "pause for now" on Day 30. 
+ 
+Day 33: "It's been 3 days since your program ended. How are you managing your sugar 
+logging? 
+Your [X] MHP are still valid for 7 more days." 
+ 
+
+
+
+Day 37: "Have you had your follow-up with Dr. Suman? Your Day 28 report is saved — take it to 
+your visit. 
+Your Silver reward (teleconsult) expires in 3 days." 
+ 
+Day 45: "Patients who continue after 30 days reduce HbA1c by 0.8% more than those who stop. 
+Your 90-day slot is still available. Rs 999 — or Rs 499 if Gold tier. Reply CONTINUE to restart." 
+ 
+ 
+WHAT DR. SUMAN DOES 
+------------------- 
+Day 0 Action: Share 20-30 patient WhatsApp numbers (5 minutes) 
+Day 29 Action: Read the clinical + revenue report (10 minutes) 
+Daily tasks: ZERO 
+ 
+THE PITCH TO DR. SUMAN 
+----------------------- 
+"Give me 20 patients and 30 days. I'll tell you which ones are taking their medicines, 
+which ones have dangerous sugar levels you didn't know about, which ones have early kidney 
+or eye complications, which ones are at hypoglycemia risk — and I'll get them back into 
+your clinic with lab reports in hand. Your patients will be competing to log their readings 
+to earn free HbA1c tests. You read one report on Day 29 and see exactly how much revenue 
+this program generated. Zero work from your side." 
+ 
+--- 
+Mediimate | JIVAYOI WELLNESS AND LIVING PRIVATE LIMITED 
+www.mediimate.com | Backed by Manipal Incubation Centre | Startup Karnataka Certified 
+DPDP Act 2023 Compliant | Live with 6+ clinics including Manipal Hospitals

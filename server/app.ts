@@ -7,6 +7,7 @@ import apiRoutes from "./routes/index.js";
 import publicRoutes from "./routes/public.js";
 import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
+import careplanRoutes from "./routes/careplans.js";
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use("/api", (_req, res, next) => {
 app.use("/api", authRoutes);
 app.use("/api", publicRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api", careplanRoutes);
 app.use("/api", apiRoutes);
 
 export default app;
