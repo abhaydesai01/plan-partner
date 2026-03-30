@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { HeartPulse, ArrowLeft, Trophy, Info, Flame, ChevronRight, Calendar, Zap, Users, TrendingUp } from "lucide-react";
+import { HeartPulse, ArrowLeft, Trophy, Info, Flame, ChevronRight, Calendar, Zap, Users, TrendingUp, Sparkles, Activity } from "lucide-react";
 import { Link } from "react-router-dom";
 import { TierProgressBar } from "@/components/care-plans/TierProgressBar";
 import { DayTimeline } from "@/components/care-plans/DayTimeline";
@@ -127,9 +127,17 @@ function TierBadge({ tier }: { tier: string }) {
 function PlanSelectionGrid({ plans, onSelect }: { plans: PlanSummary[]; onSelect: (id: string) => void }) {
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-2">
-        <HeartPulse className="h-6 w-6 text-green-600" />
-        <h1 className="text-xl font-heading font-semibold">My Care Plans</h1>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3">
+          <HeartPulse className="h-6 w-6 text-green-600" />
+          <h1 className="text-xl font-heading font-semibold">My Care Plans</h1>
+        </div>
+        <Button asChild variant="outline" size="sm" className="rounded-full border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-bold">
+          <Link to="/patient/care-plan/channel" className="flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Explore Channel
+          </Link>
+        </Button>
       </div>
       <p className="text-sm text-muted-foreground">You're enrolled in {plans.length} care plans. Select one to view details.</p>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -278,8 +286,16 @@ export default function PatientCarePlan() {
           </div>
         </div>
         
-        {/* Interactive Top MHP Pill */}
-        <TopMhpPill balance={a.mhp_balance || 0} tier={a.mhp_tier} />
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" size="sm" className="hidden md:flex rounded-full border-slate-200 text-slate-600 font-bold hover:bg-slate-50">
+            <Link to="/patient/care-plan/channel" className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              Explore Channel
+            </Link>
+          </Button>
+          {/* Interactive Top MHP Pill */}
+          <TopMhpPill balance={a.mhp_balance || 0} tier={a.mhp_tier} />
+        </div>
       </div>
 
       {/* Main Dashboard Grid */}

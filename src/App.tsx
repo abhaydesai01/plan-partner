@@ -90,6 +90,8 @@ const PatientCaseSubmit = lazy(() => import("./pages/patient/PatientCaseSubmit")
 const PatientProgramDashboard = lazy(() => import("./pages/patient/PatientProgramDashboard"));
 const PatientCarePlan = lazy(() => import("./pages/patient/PatientCarePlan"));
 const PatientCarePlanLeaderboard = lazy(() => import("./pages/patient/PatientCarePlanLeaderboard"));
+const PatientCarePlanChannel = lazy(() => import("./pages/patient/PatientCarePlanChannel"));
+const MarketplacePlanDetail = lazy(() => import("./pages/patient/MarketplacePlanDetail"));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh]">
@@ -211,6 +213,8 @@ const App = () => (
             <Route path="/patient/programs" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientProgramDashboard /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/care-plan" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCarePlan /></PatientLayout></ProtectedRoute>} />
             <Route path="/patient/care-plan/leaderboard" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCarePlanLeaderboard /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/care-plan/channel" element={<ProtectedRoute allowedRole="patient"><PatientLayout><PatientCarePlanChannel /></PatientLayout></ProtectedRoute>} />
+            <Route path="/patient/care-plan/channel/:id" element={<ProtectedRoute allowedRole="patient"><PatientLayout><MarketplacePlanDetail /></PatientLayout></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>
